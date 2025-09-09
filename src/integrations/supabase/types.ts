@@ -14,7 +14,252 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      ajudantes: {
+        Row: {
+          created_at: string
+          data: string
+          hora_final: string | null
+          hora_inicial: string | null
+          id: string
+          local: string | null
+          nome: string
+          observacao: string | null
+          registro_operacoes_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          data: string
+          hora_final?: string | null
+          hora_inicial?: string | null
+          id?: string
+          local?: string | null
+          nome: string
+          observacao?: string | null
+          registro_operacoes_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          data?: string
+          hora_final?: string | null
+          hora_inicial?: string | null
+          id?: string
+          local?: string | null
+          nome?: string
+          observacao?: string | null
+          registro_operacoes_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ajudantes_registro_operacoes_id_fkey"
+            columns: ["registro_operacoes_id"]
+            isOneToOne: false
+            referencedRelation: "registro_operacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ausencias: {
+        Row: {
+          created_at: string
+          data: string
+          hora_final: string | null
+          hora_inicial: string | null
+          id: string
+          justificado: boolean | null
+          local: string | null
+          nome: string
+          obs: string | null
+          registro_operacoes_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          data: string
+          hora_final?: string | null
+          hora_inicial?: string | null
+          id?: string
+          justificado?: boolean | null
+          local?: string | null
+          nome: string
+          obs?: string | null
+          registro_operacoes_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          data?: string
+          hora_final?: string | null
+          hora_inicial?: string | null
+          id?: string
+          justificado?: boolean | null
+          local?: string | null
+          nome?: string
+          obs?: string | null
+          registro_operacoes_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ausencias_registro_operacoes_id_fkey"
+            columns: ["registro_operacoes_id"]
+            isOneToOne: false
+            referencedRelation: "registro_operacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      equipamentos: {
+        Row: {
+          carga: string | null
+          created_at: string
+          horas_operando: number | null
+          id: string
+          local: string
+          motorista_operador: string | null
+          registro_operacoes_id: string
+          tag: string
+          updated_at: string
+        }
+        Insert: {
+          carga?: string | null
+          created_at?: string
+          horas_operando?: number | null
+          id?: string
+          local: string
+          motorista_operador?: string | null
+          registro_operacoes_id: string
+          tag: string
+          updated_at?: string
+        }
+        Update: {
+          carga?: string | null
+          created_at?: string
+          horas_operando?: number | null
+          id?: string
+          local?: string
+          motorista_operador?: string | null
+          registro_operacoes_id?: string
+          tag?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "equipamentos_registro_operacoes_id_fkey"
+            columns: ["registro_operacoes_id"]
+            isOneToOne: false
+            referencedRelation: "registro_operacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      navios: {
+        Row: {
+          berco: string | null
+          carga: string
+          cbs: number | null
+          concluido: boolean | null
+          created_at: string
+          final: string | null
+          id: string
+          inicio: string | null
+          media_cb: number | null
+          nome_navio: string
+          quantidade: number | null
+          updated_at: string
+        }
+        Insert: {
+          berco?: string | null
+          carga: string
+          cbs?: number | null
+          concluido?: boolean | null
+          created_at?: string
+          final?: string | null
+          id?: string
+          inicio?: string | null
+          media_cb?: number | null
+          nome_navio: string
+          quantidade?: number | null
+          updated_at?: string
+        }
+        Update: {
+          berco?: string | null
+          carga?: string
+          cbs?: number | null
+          concluido?: boolean | null
+          created_at?: string
+          final?: string | null
+          id?: string
+          inicio?: string | null
+          media_cb?: number | null
+          nome_navio?: string
+          quantidade?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          active: boolean | null
+          created_at: string
+          full_name: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          active?: boolean | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          active?: boolean | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      registro_operacoes: {
+        Row: {
+          created_at: string
+          data: string
+          hora_final: string | null
+          hora_inicial: string | null
+          id: string
+          op: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          data: string
+          hora_final?: string | null
+          hora_inicial?: string | null
+          id?: string
+          op: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          data?: string
+          hora_final?: string | null
+          hora_inicial?: string | null
+          id?: string
+          op?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
