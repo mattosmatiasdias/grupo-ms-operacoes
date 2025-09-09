@@ -11,6 +11,10 @@ import NovoLancamento from "./pages/NovoLancamento";
 import Operacao from "./pages/Operacao";
 import NotFound from "./pages/NotFound";
 
+// --- IMPORTS FALTANTES ADICIONADOS AQUI ---
+import Notificacao from "./pages/Notificacao";
+import Navios from "./pages/Navios";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -26,7 +30,12 @@ const App = () => (
             <Route path="/relatorio-transporte" element={<RelatorioTransporte />} />
             <Route path="/novo-lancamento" element={<NovoLancamento />} />
             <Route path="/operacao/:tipo" element={<Operacao />} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+            
+            {/* --- ROTAS FALTANTES ADICIONADAS AQUI --- */}
+            <Route path="/notificacao" element={<Notificacao />} />
+            <Route path="/navios" element={<Navios />} />
+            
+            {/* Rota de erro 404 sempre por último */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
