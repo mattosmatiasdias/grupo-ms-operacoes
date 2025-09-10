@@ -6,28 +6,20 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Plus, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 
 interface RegistroProducao {
   id?: string;
-  data: string;
+  porao: string;
   tons_t1?: number; vols_t1?: number;
   tons_t2?: number; vols_t2?: number;
   tons_t3?: number; vols_t3?: number;
   tons_t4?: number; vols_t4?: number;
   observacao?: string;
 }
-
-const initialState: Omit<RegistroProducao, 'id' | 'data'> = {
-  tons_t1: 0, vols_t1: 0,
-  tons_t2: 0, vols_t2: 0,
-  tons_t3: 0, vols_t3: 0,
-  tons_t4: 0, vols_t4: 0,
-  observacao: '',
-};
 
 const ProducaoDiaria = () => {
   const { id: navioId } = useParams();
@@ -37,11 +29,11 @@ const ProducaoDiaria = () => {
   
   const [navio, setNavio] = useState<{ nome_navio: string } | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [registro, setRegistro] = useState<RegistroProducao | Omit<RegistroProducao, 'id' | 'data'>>(initialState);
+  const [registros, setRegistros] = useState<RegistroProducao[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
-  const fetchRegistroDoDia = useCallback(async (data: string) => {
+  const fetchRegistrosDoDia = useCallback(async (data: string) => {
     setLoading(true);
     try {
       if (!navioId) return;
@@ -49,11 +41,14 @@ const ProducaoDiaria = () => {
       if (navioError) throw navioError;
       setNavio(navioData);
 
-      const { data: registroData, error } = await supabase.from('registros_producao').select('*').eq('navio_id', navioId).eq('data', data).single();
-      if (error && error.code !== 'PGRST116') throw error;
+      const { data: registrosData, error } = await supabase.from('registros_producao').select('*').eq('navio_id', navioId).eq('data', data);
+      if (error) throw error;
 
-      if (registroData) setRegistro(registroData);
-      else setRegistro(initialState);
+      if (registrosData && registrosData.length > 0) {
+        setRegistros(registrosData);
+      } else {
+        setRegistros([{ id: `new-${Date.now()}`, porao: '#01', tons_t1: 0, vols_t1: 0, tons_t2: 0, vols_t2: 0, tons_t3: 0, vols_t3: 0, tons_t4: 0, vols_t4: 0, observacao: '' }]);
+      }
     } catch (error) {
       toast({ title: "Erro", description: "Não foi possível carregar os dados.", variant: "destructive" });
     } finally {
@@ -62,39 +57,35 @@ const ProducaoDiaria = () => {
   }, [navioId, toast]);
 
   useEffect(() => {
-    fetchRegistroDoDia(selectedDate);
-  }, [selectedDate, fetchRegistroDoDia]);
+    fetchRegistrosDoDia(selectedDate);
+  }, [selectedDate, fetchRegistrosDoDia]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setRegistro(prev => ({ ...prev, [name]: valueAsNumberOrString(value) }));
+  const handleRegistroChange = (id: string, field: keyof RegistroProducao, value: string) => {
+    setRegistros(prev => prev.map(r => r.id === id ? { ...r, [field]: isNaN(Number(value)) || value === '' ? value : Number(value) } : r));
   };
-  
-  const valueAsNumberOrString = (value: string) => {
-    return isNaN(Number(value)) || value === '' ? value : Number(value);
-  }
+
+  const addPorao = () => {
+    const nextPoraoNumber = registros.length + 1;
+    setRegistros(prev => [...prev, { id: `new-${Date.now()}`, porao: `#${String(nextPoraoNumber).padStart(2, '0')}`, tons_t1: 0, vols_t1: 0, tons_t2: 0, vols_t2: 0, tons_t3: 0, vols_t3: 0, tons_t4: 0, vols_t4: 0, observacao: '' }]);
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !navioId) return;
     setIsSaving(true);
     
-    const dadosParaSalvar = {
-      ...registro,
+    const dadosParaSalvar = registros.map(({ id, ...rest }) => ({
+      ...rest,
       navio_id: navioId,
       data: selectedDate,
       user_id: user.id,
-    };
-    
-    // Remove o ID local do objeto se ele existir, para o upsert funcionar corretamente
-    if ('id' in dadosParaSalvar) {
-      delete (dadosParaSalvar as any).id;
-    }
+    }));
 
     try {
-      const { error } = await supabase.from('registros_producao').upsert(dadosParaSalvar, { onConflict: 'navio_id, data' });
+      const { error } = await supabase.from('registros_producao').upsert(dadosParaSalvar, { onConflict: 'navio_id, data, porao' });
       if (error) throw error;
-      toast({ title: "Sucesso!", description: "Registro do dia salvo com sucesso." });
+      toast({ title: "Sucesso!", description: "Registros do dia salvos com sucesso." });
+      fetchRegistrosDoDia(selectedDate); // Recarrega os dados para obter os IDs corretos
     } catch (error) {
       console.error(error);
       toast({ title: "Erro", description: "Não foi possível salvar os dados.", variant: "destructive" });
@@ -131,21 +122,28 @@ const ProducaoDiaria = () => {
             <CardContent>
               {loading ? <p>Carregando...</p> : (
                 <div className="space-y-6">
-                  {turnos.map(turno => (
-                    <div key={turno.id} className="space-y-2">
-                      <h3 className="font-semibold text-lg">{turno.label}</h3>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div><Label htmlFor={turno.tonsKey}>Toneladas</Label><Input id={turno.tonsKey} name={turno.tonsKey} type="number" step="0.01" value={(registro as any)[turno.tonsKey] || 0} onChange={handleChange} /></div>
-                        <div><Label htmlFor={turno.volsKey}>Volumes</Label><Input id={turno.volsKey} name={turno.volsKey} type="number" step="0.01" value={(registro as any)[turno.volsKey] || 0} onChange={handleChange} /></div>
+                  {registros.map(registro => (
+                    <Card key={registro.id} className="p-4">
+                      <div className="space-y-4">
+                        <div>
+                          <Label>Porão</Label>
+                          <Input value={registro.porao} onChange={(e) => handleRegistroChange(registro.id!, 'porao', e.target.value)} />
+                        </div>
+                        {turnos.map(turno => (
+                          <div key={turno.id} className="space-y-2">
+                            <h4 className="font-semibold text-md border-b pb-1">{turno.label}</h4>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div><Label htmlFor={`${registro.id}-${turno.tonsKey}`}>Toneladas</Label><Input id={`${registro.id}-${turno.tonsKey}`} type="number" step="0.01" value={registro[turno.tonsKey as keyof RegistroProducao] as number || 0} onChange={(e) => handleRegistroChange(registro.id!, turno.tonsKey as keyof RegistroProducao, e.target.value)} /></div>
+                              <div><Label htmlFor={`${registro.id}-${turno.volsKey}`}>Volumes</Label><Input id={`${registro.id}-${turno.volsKey}`} type="number" step="0.01" value={registro[turno.volsKey as keyof RegistroProducao] as number || 0} onChange={(e) => handleRegistroChange(registro.id!, turno.volsKey as keyof RegistroProducao, e.target.value)} /></div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    </div>
+                    </Card>
                   ))}
-                  <div className="space-y-2 pt-4">
-                    <Label htmlFor="observacao">Observação Geral do Dia</Label>
-                    <Textarea id="observacao" name="observacao" value={(registro as any).observacao || ''} onChange={handleChange} placeholder="Alguma anotação sobre o dia..." />
-                  </div>
+                  <Button variant="outline" type="button" onClick={addPorao} className="w-full">Adicionar Porão</Button>
                   <Button type="submit" className="w-full mt-4" disabled={isSaving}>
-                    {isSaving ? 'Salvando...' : 'Salvar Registro do Dia'}
+                    {isSaving ? 'Salvando...' : 'Salvar Registros do Dia'}
                   </Button>
                 </div>
               )}

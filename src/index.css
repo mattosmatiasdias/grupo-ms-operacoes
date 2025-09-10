@@ -2,45 +2,32 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
-
 @layer base {
   :root {
-    /* Main app colors - Teal/Blue theme matching the design */
+    /* Main app colors - Teal/Blue theme */
     --background: 0 0% 100%;
-    --foreground: 185 100% 15%; /* Dark teal for text */
-
+    --foreground: 185 100% 15%;
     --card: 0 0% 100%;
     --card-foreground: 185 100% 15%;
-
     --popover: 0 0% 100%;
     --popover-foreground: 185 100% 15%;
-
     /* Primary - Main teal background */
-    --primary: 193 100% 25%; /* Deep teal background */
-    --primary-foreground: 0 0% 100%; /* White text */
-
+    --primary: 193 100% 25%;
+    --primary-foreground: 0 0% 100%;
     /* Secondary - Button teal */
-    --secondary: 192 100% 45%; /* Bright teal for buttons */
-    --secondary-foreground: 0 0% 100%; /* White text */
-
+    --secondary: 192 100% 45%;
+    --secondary-foreground: 0 0% 100%;
     /* Accent - Success green */
-    --accent: 142 71% 45%; /* Green for success buttons */
+    --accent: 142 71% 45%;
     --accent-foreground: 0 0% 100%;
-
     --muted: 210 40% 98%;
     --muted-foreground: 185 10% 45%;
-
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
-
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
     --ring: 192 100% 45%;
-
-    --radius: 1rem; /* More rounded for modern look */
+    --radius: 1rem;
 
     /* Gradient backgrounds */
     --gradient-primary: linear-gradient(135deg, hsl(193, 100%, 25%), hsl(193, 100%, 20%));
@@ -49,54 +36,29 @@ All colors MUST be HSL.
     /* Shadows */
     --shadow-card: 0 4px 20px hsl(193, 100%, 25%, 0.1);
     --shadow-button: 0 4px 15px hsl(192, 100%, 45%, 0.3);
-
-    /* Sidebar - keep existing for consistency */
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
   .dark {
+    /* Suas variáveis de tema escuro aqui */
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
-
     --card: 222.2 84% 4.9%;
     --card-foreground: 210 40% 98%;
-
     --popover: 222.2 84% 4.9%;
     --popover-foreground: 210 40% 98%;
-
     --primary: 210 40% 98%;
     --primary-foreground: 222.2 47.4% 11.2%;
-
     --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
-
     --muted: 217.2 32.6% 17.5%;
     --muted-foreground: 215 20.2% 65.1%;
-
     --accent: 217.2 32.6% 17.5%;
     --accent-foreground: 210 40% 98%;
-
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
-
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
   }
 }
 
@@ -104,8 +66,21 @@ All colors MUST be HSL.
   * {
     @apply border-border;
   }
-
   body {
     @apply bg-background text-foreground;
+  }
+
+  /* --- REGRA ADICIONADA PARA LETRAS MAIÚSCULAS --- */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  textarea {
+    @apply uppercase;
+  }
+
+  /* Garante que o texto de placeholder (dica) não fique maiúsculo */
+  ::placeholder {
+    @apply normal-case;
   }
 }

@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Plus, ChevronsUpDown } from 'lucide-react';
+import { ArrowLeft, Plus, ChevronsUpDown, Pencil } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -20,6 +20,7 @@ interface OperacaoCompleta {
   id: string;
   op: string;
   data: string;
+  created_at: string;
   hora_inicial: string;
   hora_final: string;
   observacao: string | null;
@@ -116,24 +117,52 @@ const RelatorioTransporte = () => {
                             <TabsContent value="operacoes" className="p-4">
                                 <div className="overflow-x-auto">
                                     <Table>
-                                        <TableHeader><TableRow><TableHead className="w-[50px]"></TableHead><TableHead>Operação</TableHead><TableHead>Data</TableHead><TableHead>Horário</TableHead><TableHead>Local</TableHead></TableRow></TableHeader>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead className="w-[50px]"></TableHead>
+                                                <TableHead>Operação</TableHead>
+                                                <TableHead>Data</TableHead>
+                                                <TableHead>Horário</TableHead>
+                                                <TableHead>Local</TableHead>
+                                                <TableHead className="text-right">Ações</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
                                         <TableBody>
-                                            {loading ? <TableRow><TableCell colSpan={5} className="text-center">Carregando...</TableCell></TableRow> : operacoes.length === 0 ? <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">Nenhum registro encontrado.</TableCell></TableRow> : operacoes.map((op) => (
-                                                <Collapsible key={op.id} asChild>
-                                                    <>
-                                                        <TableRow>
-                                                            <TableCell><CollapsibleTrigger asChild><Button variant="ghost" size="sm" disabled={op.equipamentos.length === 0}><ChevronsUpDown className="h-4 w-4" /><span className="sr-only">Toggle</span></Button></CollapsibleTrigger></TableCell>
-                                                            <TableCell className="font-medium">{op.op === 'NAVIO' && op.navios ? `${op.navios.nome_navio} (${op.navios.carga})` : op.op}</TableCell>
-                                                            <TableCell>{new Date(op.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</TableCell>
-                                                            <TableCell>{op.hora_inicial} - {op.hora_final}</TableCell>
-                                                            <TableCell>{op.equipamentos[0]?.local || 'N/A'}</TableCell>
-                                                        </TableRow>
-                                                        <CollapsibleContent asChild>
-                                                            <TableRow><TableCell colSpan={5} className="p-0"><div className="p-4 bg-muted/50"><h4 className="font-semibold mb-2">Equipamentos da Operação:</h4><Table><TableHeader><TableRow><TableHead>Grupo</TableHead><TableHead>TAG</TableHead><TableHead>Operador/Motorista</TableHead></TableRow></TableHeader><TableBody>{op.equipamentos.map((eq, index) => (<TableRow key={index}><TableCell>{eq.grupo_operacao || 'N/A'}</TableCell><TableCell>{eq.tag}</TableCell><TableCell>{eq.motorista_operador}</TableCell></TableRow>))}</TableBody></Table></div></TableCell></TableRow>
-                                                        </CollapsibleContent>
-                                                    </>
-                                                </Collapsible>
-                                            ))}
+                                            {loading ? <TableRow><TableCell colSpan={6} className="text-center">Carregando...</TableCell></TableRow> 
+                                            : operacoes.length === 0 ? <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">Nenhum registro encontrado.</TableCell></TableRow> 
+                                            : operacoes.map((op) => {
+                                                const createdAt = new Date(op.created_at).getTime();
+                                                const now = new Date().getTime();
+                                                const isEditable = (now - createdAt) < 24 * 60 * 60 * 1000;
+
+                                                return (
+                                                    <Collapsible key={op.id} asChild>
+                                                        <>
+                                                            <TableRow>
+                                                                <TableCell><CollapsibleTrigger asChild><Button variant="ghost" size="sm" disabled={op.equipamentos.length === 0}><ChevronsUpDown className="h-4 w-4" /><span className="sr-only">Toggle</span></Button></CollapsibleTrigger></TableCell>
+                                                                <TableCell className="font-medium">{op.op === 'NAVIO' && op.navios ? `${op.navios.nome_navio} (${op.navios.carga})` : op.op}</TableCell>
+                                                                <TableCell>{new Date(op.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</TableCell>
+                                                                <TableCell>{op.hora_inicial} - {op.hora_final}</TableCell>
+                                                                <TableCell>{op.equipamentos[0]?.local || 'N/A'}</TableCell>
+                                                                <TableCell className="text-right">
+                                                                    <Button 
+                                                                        variant="outline" 
+                                                                        size="sm" 
+                                                                        disabled={!isEditable}
+                                                                        onClick={() => navigate(`/operacao/${op.id}/editar`)}
+                                                                        title={isEditable ? 'Editar lançamento' : 'Edição bloqueada após 24 horas'}
+                                                                    >
+                                                                        <Pencil className="h-4 w-4"/>
+                                                                    </Button>
+                                                                </TableCell>
+                                                            </TableRow>
+                                                            <CollapsibleContent asChild>
+                                                                <TableRow><TableCell colSpan={6} className="p-0"><div className="p-4 bg-muted/50"><h4 className="font-semibold mb-2">Equipamentos da Operação:</h4><Table><TableHeader><TableRow><TableHead>Grupo</TableHead><TableHead>TAG</TableHead><TableHead>Operador/Motorista</TableHead></TableRow></TableHeader><TableBody>{op.equipamentos.map((eq, index) => (<TableRow key={index}><TableCell>{eq.grupo_operacao || 'N/A'}</TableCell><TableCell>{eq.tag}</TableCell><TableCell>{eq.motorista_operador}</TableCell></TableRow>))}</TableBody></Table></div></TableCell></TableRow>
+                                                            </CollapsibleContent>
+                                                        </>
+                                                    </Collapsible>
+                                                )
+                                            })}
                                         </TableBody>
                                     </Table>
                                 </div>
