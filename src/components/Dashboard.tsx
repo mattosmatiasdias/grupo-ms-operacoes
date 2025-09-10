@@ -1,4 +1,5 @@
 import { useAuth } from '@/hooks/useAuth';
+import { useNotifications } from '@/hooks/useNotifications';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Bell, FileText, Ship, LogOut } from 'lucide-react';
@@ -6,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 
 const Dashboard = () => {
   const { userProfile, signOut } = useAuth();
+  const { hasUnread } = useNotifications();
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
@@ -30,24 +32,29 @@ const Dashboard = () => {
         </Button>
       </div>
 
-      {/* Main Content */}
+      {/* Main Content com os 3 botões e links corretos */}
       <div className="px-6 pb-6">
         <div className="max-w-md mx-auto space-y-4">
-          {/* Notificação Button */}
+          
           <Card className="w-full shadow-[var(--shadow-card)]">
             <CardContent className="p-0">
               <Button
                 onClick={() => navigate('/notificacao')}
-                className="w-full h-16 bg-secondary hover:bg-secondary/90 text-white text-lg font-semibold rounded-lg"
+                className="w-full h-16 bg-secondary hover:bg-secondary/90 text-white text-lg font-semibold rounded-lg relative"
                 style={{ boxShadow: 'var(--shadow-button)' }}
               >
+                {hasUnread && (
+                  <span className="absolute top-3 right-3 flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                  </span>
+                )}
                 <Bell className="h-6 w-6 mr-3" />
-                NOTIFICAÇÃO
+                NOTIFICAÇÕES
               </Button>
             </CardContent>
           </Card>
 
-          {/* Relatório de Transporte Button */}
           <Card className="w-full shadow-[var(--shadow-card)]">
             <CardContent className="p-0">
               <Button
@@ -61,7 +68,6 @@ const Dashboard = () => {
             </CardContent>
           </Card>
 
-          {/* Navios Button */}
           <Card className="w-full shadow-[var(--shadow-card)]">
             <CardContent className="p-0">
               <Button

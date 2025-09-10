@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,21 +9,36 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ArrowLeft, Plus, ChevronsUpDown } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
-// Atualizamos a interface de Operacao para incluir o novo campo 'observacao'
-interface OperacaoComEquipamentos {
+// --- Interfaces para Tipagem ---
+interface OperacaoCompleta {
   id: string;
   op: string;
   data: string;
   hora_inicial: string;
   hora_final: string;
-  observacao: string | null; // << CAMPO ADICIONADO AQUI
-  equipamentos: { local: string; carga: string; tag: string; motorista_operador: string; grupo_operacao: string; }[];
+  observacao: string | null;
+  navios: {
+    nome_navio: string;
+    carga: string;
+  } | null;
+  equipamentos: {
+    local: string;
+    carga: string;
+    tag: string;
+    motorista_operador: string;
+    grupo_operacao: string;
+  }[];
 }
 interface Ajudante { id: string; nome: string; hora_inicial: string; hora_final: string; local: string; observacao: string | null; }
 interface Ausencia { id: string; nome: string; justificado: boolean; obs: string | null; }
 
+// --- Função auxiliar para calcular horas ---
 const calcularHoras = (inicio: string, fim: string): string => {
   if (!inicio || !fim) return "N/A";
   try {
@@ -46,7 +61,7 @@ const RelatorioTransporte = () => {
     const { toast } = useToast();
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const [selectedLocal, setSelectedLocal] = useState('Todos');
-    const [operacoes, setOperacoes] = useState<OperacaoComEquipamentos[]>([]);
+    const [operacoes, setOperacoes] = useState<OperacaoCompleta[]>([]);
     const [ajudantes, setAjudantes] = useState<Ajudante[]>([]);
     const [ausencias, setAusencias] = useState<Ausencia[]>([]);
     const [loading, setLoading] = useState(true);
@@ -55,11 +70,13 @@ const RelatorioTransporte = () => {
         const fetchData = async () => {
             setLoading(true);
             try {
-                const operacoesQuery = supabase.from('registro_operacoes').select('*, equipamentos(*)').eq('data', selectedDate);
+                const operacoesQuery = supabase.from('registro_operacoes').select('*, equipamentos(*), navios(nome_navio, carga)').eq('data', selectedDate);
                 const ajudantesQuery = supabase.from('ajudantes').select('*').eq('data', selectedDate);
                 const ausenciasQuery = supabase.from('ausencias').select('*').eq('data', selectedDate);
+                
                 const [ { data: operacoesData, error: operacoesError }, { data: ajudantesData, error: ajudantesError }, { data: ausenciasData, error: ausenciasError }, ] = await Promise.all([operacoesQuery, ajudantesQuery, ausenciasQuery]);
                 if (operacoesError || ajudantesError || ausenciasError) throw operacoesError || ajudantesError || ausenciasError;
+                
                 const operacoesFiltradas = selectedLocal === 'Todos' ? operacoesData || [] : (operacoesData || []).filter(op => op.equipamentos.some(eq => eq.local === selectedLocal));
                 setOperacoes(operacoesFiltradas);
                 setAjudantes(ajudantesData || []);
@@ -97,7 +114,29 @@ const RelatorioTransporte = () => {
                                 <TabsTrigger value="observacoes">Observações</TabsTrigger>
                             </TabsList>
                             <TabsContent value="operacoes" className="p-4">
-                                <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead className="w-[50px]"></TableHead><TableHead>Operação</TableHead><TableHead>Data</TableHead><TableHead>Horário</TableHead><TableHead>Local</TableHead></TableRow></TableHeader><TableBody>{loading ? <TableRow><TableCell colSpan={5} className="text-center">Carregando...</TableCell></TableRow> : operacoes.length === 0 ? <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">Nenhum registro encontrado.</TableCell></TableRow> : operacoes.map((op) => (<Collapsible key={op.id} asChild><><TableRow><TableCell><CollapsibleTrigger asChild><Button variant="ghost" size="sm" disabled={op.equipamentos.length === 0}><ChevronsUpDown className="h-4 w-4" /><span className="sr-only">Toggle</span></Button></CollapsibleTrigger></TableCell><TableCell className="font-medium">{op.op}</TableCell><TableCell>{new Date(op.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</TableCell><TableCell>{op.hora_inicial} - {op.hora_final}</TableCell><TableCell>{op.equipamentos[0]?.local || 'N/A'}</TableCell></TableRow><CollapsibleContent asChild><TableRow><TableCell colSpan={5} className="p-0"><div className="p-4 bg-muted/50"><h4 className="font-semibold mb-2">Equipamentos da Operação:</h4><Table><TableHeader><TableRow><TableHead>Grupo</TableHead><TableHead>TAG</TableHead><TableHead>Operador/Motorista</TableHead></TableRow></TableHeader><TableBody>{op.equipamentos.map((eq, index) => (<TableRow key={index}><TableCell>{eq.grupo_operacao || 'N/A'}</TableCell><TableCell>{eq.tag}</TableCell><TableCell>{eq.motorista_operador}</TableCell></TableRow>))}</TableBody></Table></div></TableCell></TableRow></CollapsibleContent></></Collapsible>))}</TableBody></Table></div>
+                                <div className="overflow-x-auto">
+                                    <Table>
+                                        <TableHeader><TableRow><TableHead className="w-[50px]"></TableHead><TableHead>Operação</TableHead><TableHead>Data</TableHead><TableHead>Horário</TableHead><TableHead>Local</TableHead></TableRow></TableHeader>
+                                        <TableBody>
+                                            {loading ? <TableRow><TableCell colSpan={5} className="text-center">Carregando...</TableCell></TableRow> : operacoes.length === 0 ? <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">Nenhum registro encontrado.</TableCell></TableRow> : operacoes.map((op) => (
+                                                <Collapsible key={op.id} asChild>
+                                                    <>
+                                                        <TableRow>
+                                                            <TableCell><CollapsibleTrigger asChild><Button variant="ghost" size="sm" disabled={op.equipamentos.length === 0}><ChevronsUpDown className="h-4 w-4" /><span className="sr-only">Toggle</span></Button></CollapsibleTrigger></TableCell>
+                                                            <TableCell className="font-medium">{op.op === 'NAVIO' && op.navios ? `${op.navios.nome_navio} (${op.navios.carga})` : op.op}</TableCell>
+                                                            <TableCell>{new Date(op.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</TableCell>
+                                                            <TableCell>{op.hora_inicial} - {op.hora_final}</TableCell>
+                                                            <TableCell>{op.equipamentos[0]?.local || 'N/A'}</TableCell>
+                                                        </TableRow>
+                                                        <CollapsibleContent asChild>
+                                                            <TableRow><TableCell colSpan={5} className="p-0"><div className="p-4 bg-muted/50"><h4 className="font-semibold mb-2">Equipamentos da Operação:</h4><Table><TableHeader><TableRow><TableHead>Grupo</TableHead><TableHead>TAG</TableHead><TableHead>Operador/Motorista</TableHead></TableRow></TableHeader><TableBody>{op.equipamentos.map((eq, index) => (<TableRow key={index}><TableCell>{eq.grupo_operacao || 'N/A'}</TableCell><TableCell>{eq.tag}</TableCell><TableCell>{eq.motorista_operador}</TableCell></TableRow>))}</TableBody></Table></div></TableCell></TableRow>
+                                                        </CollapsibleContent>
+                                                    </>
+                                                </Collapsible>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </div>
                             </TabsContent>
                             <TabsContent value="ajudantes" className="p-4">
                                 <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>Início</TableHead><TableHead>Fim</TableHead><TableHead>Local</TableHead><TableHead>Horas</TableHead></TableRow></TableHeader><TableBody>{loading ? <TableRow><TableCell colSpan={5} className="text-center">Carregando...</TableCell></TableRow> : ajudantes.length === 0 ? <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">Nenhum ajudante registrado.</TableCell></TableRow> : ajudantes.map((ajudante) => (<TableRow key={ajudante.id}><TableCell>{ajudante.nome}</TableCell><TableCell>{ajudante.hora_inicial}</TableCell><TableCell>{ajudante.hora_final}</TableCell><TableCell>{ajudante.local}</TableCell><TableCell>{calcularHoras(ajudante.hora_inicial, ajudante.hora_final)}</TableCell></TableRow>))}</TableBody></Table></div>
@@ -112,7 +151,7 @@ const RelatorioTransporte = () => {
                                         <TableBody>
                                             {loading ? <TableRow><TableCell colSpan={3} className="text-center">Carregando...</TableCell></TableRow> : operacoes.filter(op => op.observacao).length === 0 ? <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground">Nenhuma observação de turno registrada.</TableCell></TableRow> : operacoes.filter(op => op.observacao).map((op) => (
                                                 <TableRow key={op.id}>
-                                                    <TableCell className="font-medium">{op.op}</TableCell>
+                                                    <TableCell className="font-medium">{op.op === 'NAVIO' && op.navios ? `${op.navios.nome_navio} (${op.navios.carga})` : op.op}</TableCell>
                                                     <TableCell>{op.hora_inicial} - {op.hora_final}</TableCell>
                                                     <TableCell className="whitespace-pre-wrap">{op.observacao}</TableCell>
                                                 </TableRow>

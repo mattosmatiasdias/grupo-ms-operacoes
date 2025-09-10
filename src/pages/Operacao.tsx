@@ -103,7 +103,15 @@ const Operacao = () => {
         if (!user || !selectedOp || !data || !horaInicial) { toast({ title: "Erro", description: "Preencha os campos de operação, data e hora inicial.", variant: "destructive" }); return; }
         setIsSaving(true);
         try {
-            const { data: operacao, error: operacaoError } = await supabase.from('registro_operacoes').insert({ op: selectedOp, data, hora_inicial: horaInicial, hora_final: horaFinal || null, user_id: user.id, observacao: observacao }).select().single();
+            const { data: operacao, error: operacaoError } = await supabase.from('registro_operacoes').insert({
+                op: selectedOp,
+                data,
+                hora_inicial: horaInicial,
+                hora_final: horaFinal || null,
+                user_id: user.id,
+                observacao: observacao,
+                navio_id: selectedOp === 'NAVIO' ? selectedNavio || null : null
+            }).select().single();
             if (operacaoError) throw operacaoError;
             setNewOperacaoId(operacao.id);
             let equipamentosParaSalvar: any[] = [];
@@ -141,87 +149,87 @@ const Operacao = () => {
     };
     
     return (
-      <div className="min-h-screen pb-10" style={{ background: 'var(--gradient-primary)' }}>
-        <div className="flex items-center p-4 text-white">
-            <Button variant="ghost" onClick={() => step === 1 ? navigate('/novo-lancamento') : setStep(step - 1)} className="text-white hover:bg-white/20 mr-4"><ArrowLeft className="h-5 w-5" /></Button>
-            <h1 className="text-lg font-bold">{getTipoLabel()} - Passo {step} de 3</h1>
-        </div>
-        <div className="px-4 space-y-4">
-            {step === 1 && (
-                <>
-                    {!selectedOp && (
-                        <>
-                            {tipo === 'hidrato-carvao-bauxita' && (
-                                <div className="space-y-4">
-                                    <Card className="shadow-[var(--shadow-card)]"><CardContent className="p-0"><Button onClick={() => handleOpSelect('HYDRO')} className="w-full h-16 bg-secondary hover:bg-secondary/90 text-white text-lg font-semibold rounded-lg">HYDRO</Button></CardContent></Card>
-                                    <Card className="shadow-[var(--shadow-card)]"><CardContent className="p-0"><Button onClick={() => handleOpSelect('NAVIO')} className="w-full h-16 bg-secondary hover:bg-secondary/90 text-white text-lg font-semibold rounded-lg">NAVIO</Button></CardContent></Card>
-                                </div>
-                            )}
-                            {(tipo === 'coque-piche-fluoreto' || tipo === 'lingote') && (
-                                <div className="space-y-4">
-                                    <Card className="shadow-[var(--shadow-card)]"><CardContent className="p-0"><Button onClick={() => handleOpSelect('ALBRAS')} className="w-full h-16 bg-secondary hover:bg-secondary/90 text-white text-lg font-semibold rounded-lg">ALBRAS</Button></CardContent></Card>
-                                    <Card className="shadow-[var(--shadow-card)]"><CardContent className="p-0"><Button onClick={() => handleOpSelect('NAVIO')} className="w-full h-16 bg-secondary hover:bg-secondary/90 text-white text-lg font-semibold rounded-lg">NAVIO</Button></CardContent></Card>
-                                </div>
-                            )}
-                        </>
-                    )}
-                    {selectedOp && (
-                        <>
-                            <Card className="shadow-[var(--shadow-card)]">
-                                <CardHeader><CardTitle>Dados da Operação</CardTitle></CardHeader>
-                                <CardContent className="space-y-4">
-                                    {selectedOp === 'NAVIO' && ( <div><Label>Selecionar Navio</Label><Select value={selectedNavio} onValueChange={setSelectedNavio}><SelectTrigger><SelectValue placeholder="Selecione um navio..." /></SelectTrigger><SelectContent>{navios.map((navio) => (<SelectItem key={navio.id} value={navio.id}>{navio.nome_navio} - {navio.carga}</SelectItem>))}</SelectContent></Select></div> )}
-                                    <div><Label>DATA</Label><Input type="date" value={data} onChange={(e) => setData(e.target.value)} /></div>
-                                    <div><Label>HORA INICIAL</Label><Input type="time" value={horaInicial} onChange={(e) => setHoraInicial(e.target.value)} /></div>
-                                    <div><Label>HORA FINAL</Label><Input type="time" value={horaFinal} onChange={(e) => setHoraFinal(e.target.value)} /></div>
-                                    <div><Label htmlFor="observacao-turno">Observação do Turno (Opcional)</Label><Textarea id="observacao-turno" value={observacao} onChange={(e) => setObservacao(e.target.value)} placeholder="Alguma observação geral sobre a operação ou o turno..." /></div>
-                                </CardContent>
-                            </Card>
-                            {selectedOp === 'NAVIO' && (
+        <div className="min-h-screen pb-10" style={{ background: 'var(--gradient-primary)' }}>
+            <div className="flex items-center p-4 text-white">
+                <Button variant="ghost" onClick={() => step === 1 ? navigate('/novo-lancamento') : setStep(step - 1)} className="text-white hover:bg-white/20 mr-4"><ArrowLeft className="h-5 w-5" /></Button>
+                <h1 className="text-lg font-bold">{getTipoLabel()} - Passo {step} de 3</h1>
+            </div>
+            <div className="px-4 space-y-4">
+                {step === 1 && (
+                    <>
+                        {!selectedOp && (
+                            <>
+                                {tipo === 'hidrato-carvao-bauxita' && (
+                                    <div className="space-y-4">
+                                        <Card className="shadow-[var(--shadow-card)]"><CardContent className="p-0"><Button onClick={() => handleOpSelect('HYDRO')} className="w-full h-16 bg-secondary hover:bg-secondary/90 text-white text-lg font-semibold rounded-lg">HYDRO</Button></CardContent></Card>
+                                        <Card className="shadow-[var(--shadow-card)]"><CardContent className="p-0"><Button onClick={() => handleOpSelect('NAVIO')} className="w-full h-16 bg-secondary hover:bg-secondary/90 text-white text-lg font-semibold rounded-lg">NAVIO</Button></CardContent></Card>
+                                    </div>
+                                )}
+                                {(tipo === 'coque-piche-fluoreto' || tipo === 'lingote') && (
+                                    <div className="space-y-4">
+                                        <Card className="shadow-[var(--shadow-card)]"><CardContent className="p-0"><Button onClick={() => handleOpSelect('ALBRAS')} className="w-full h-16 bg-secondary hover:bg-secondary/90 text-white text-lg font-semibold rounded-lg">ALBRAS</Button></CardContent></Card>
+                                        <Card className="shadow-[var(--shadow-card)]"><CardContent className="p-0"><Button onClick={() => handleOpSelect('NAVIO')} className="w-full h-16 bg-secondary hover:bg-secondary/90 text-white text-lg font-semibold rounded-lg">NAVIO</Button></CardContent></Card>
+                                    </div>
+                                )}
+                            </>
+                        )}
+                        {selectedOp && (
+                            <>
                                 <Card className="shadow-[var(--shadow-card)]">
-                                    <CardHeader><CardTitle>Equipamentos do Navio</CardTitle></CardHeader>
-                                    <CardContent><div className="space-y-2">{equipamentosNavio.map(eq => (<div key={eq.id} className="flex items-center gap-2"><Input placeholder="TAG" value={eq.tag} onChange={e => updateEquipamentoNavio(eq.id, 'tag', e.target.value)} /><Input placeholder="OPERADOR/MOTORISTA" value={eq.motorista_operador} onChange={e => updateEquipamentoNavio(eq.id, 'motorista_operador', e.target.value)} /><Button variant="ghost" size="icon" onClick={() => removeEquipamentoNavio(eq.id)}><X className="h-4 w-4 text-red-500" /></Button></div>))}</div><div className="flex gap-2 mt-4"><Button onClick={() => addEquipamentoNavio(1)} className="flex-1">+1 Equipamento</Button><Button onClick={() => addEquipamentoNavio(10)} variant="secondary" className="flex-1">+10 Equipamentos</Button></div></CardContent>
+                                    <CardHeader><CardTitle>Dados da Operação</CardTitle></CardHeader>
+                                    <CardContent className="space-y-4">
+                                        {selectedOp === 'NAVIO' && ( <div><Label>Selecionar Navio</Label><Select value={selectedNavio} onValueChange={setSelectedNavio}><SelectTrigger><SelectValue placeholder="Selecione um navio..." /></SelectTrigger><SelectContent>{navios.map((navio) => (<SelectItem key={navio.id} value={navio.id}>{navio.nome_navio} - {navio.carga}</SelectItem>))}</SelectContent></Select></div> )}
+                                        <div><Label>DATA</Label><Input type="date" value={data} onChange={(e) => setData(e.target.value)} /></div>
+                                        <div><Label>HORA INICIAL</Label><Input type="time" value={horaInicial} onChange={(e) => setHoraInicial(e.target.value)} /></div>
+                                        <div><Label>HORA FINAL</Label><Input type="time" value={horaFinal} onChange={(e) => setHoraFinal(e.target.value)} /></div>
+                                        <div><Label htmlFor="observacao-turno">Observação do Turno (Opcional)</Label><Textarea id="observacao-turno" value={observacao} onChange={(e) => setObservacao(e.target.value)} placeholder="Alguma observação geral sobre a operação ou o turno..." /></div>
+                                    </CardContent>
                                 </Card>
-                            )}
-                            {['HYDRO', 'ALBRAS', 'SANTOS BRASIL'].includes(selectedOp) && (
-                                <div className="space-y-4">
-                                    {operacaoGrupos.map(grupo => (<Card key={grupo.id} className="shadow-[var(--shadow-card)]"><CardHeader><div className="flex items-center justify-between"><Input className="text-lg font-bold border-0 shadow-none focus-visible:ring-0 p-0" value={grupo.nome} onChange={e => updateOperacaoGrupo(grupo.id, e.target.value)} /><Button variant="ghost" size="icon" onClick={() => removeOperacaoGrupo(grupo.id)}><X className="h-5 w-5 text-red-500" /></Button></div></CardHeader><CardContent><div className="space-y-2">{grupo.equipamentos.map(eq => (<div key={eq.id} className="flex items-center gap-2"><Input placeholder="TAG" value={eq.tag} onChange={e => updateEquipamentoGrupo(grupo.id, eq.id, 'tag', e.target.value)} /><Input placeholder="OPERADOR" value={eq.motorista_operador} onChange={e => updateEquipamentoGrupo(grupo.id, eq.id, 'motorista_operador', e.target.value)} /><Button variant="ghost" size="icon" onClick={() => removeEquipamentoGrupo(grupo.id, eq.id)}><X className="h-4 w-4 text-red-500" /></Button></div>))}</div><div className="flex gap-2 mt-4"><Button onClick={() => addEquipamentoGrupo(grupo.id, 1)} size="sm" className="flex-1">+1 Equipamento</Button><Button onClick={() => addEquipamentoGrupo(grupo.id, 10)} size="sm" variant="secondary" className="flex-1">+10 Equipamentos</Button></div></CardContent></Card>))}
-                                    <Button onClick={addOperacaoGrupo} variant="outline" className="w-full">Adicionar Operação (Frente de Serviço)</Button>
-                                </div>
-                            )}
-                            <Button onClick={handleSaveStep1} disabled={isSaving} className="w-full h-12 bg-accent hover:bg-accent/90 text-white font-semibold">{isSaving ? 'Salvando...' : 'Próximo: Ajudantes'}</Button>
-                        </>
-                    )}
-                </>
-            )}
-            {step === 2 && (
-                <>
-                    <Card className="shadow-[var(--shadow-card)]">
-                        <CardHeader><div className="flex justify-between items-center"><CardTitle>Adicionar Ajudantes</CardTitle><Button onClick={addAjudante} size="sm"><Plus className="h-4 w-4 mr-2" />Ajudante</Button></div></CardHeader>
-                        <CardContent className="space-y-4 pt-4">
-                            {ajudantes.length === 0 && <p className="text-center text-muted-foreground">Nenhum ajudante adicionado.</p>}
-                            {ajudantes.map(ajudante => (<Card key={ajudante.id} className="p-4 relative"><Button onClick={() => removeAjudante(ajudante.id)} size="icon" variant="ghost" className="absolute top-1 right-1 h-7 w-7"><X className="h-4 w-4 text-red-500" /></Button><div className="space-y-2"><div><Label>Nome do Ajudante</Label><Input value={ajudante.nome} onChange={(e) => updateAjudante(ajudante.id, 'nome', e.target.value)} /></div><div className="grid grid-cols-2 gap-2"><div><Label>Hora Inicial</Label><Input type="time" value={ajudante.hora_inicial} onChange={(e) => updateAjudante(ajudante.id, 'hora_inicial', e.target.value)} /></div><div><Label>Hora Final</Label><Input type="time" value={ajudante.hora_final} onChange={(e) => updateAjudante(ajudante.id, 'hora_final', e.target.value)} /></div></div><div><Label>Observação</Label><Input value={ajudante.observacao} onChange={(e) => updateAjudante(ajudante.id, 'observacao', e.target.value)} /></div></div></Card>))}
-                        </CardContent>
-                    </Card>
-                    <Button onClick={handleSaveStep2} disabled={isSaving} className="w-full h-12 bg-accent hover:bg-accent/90 text-white font-semibold">{isSaving ? 'Salvando...' : 'Próximo: Ausências'}</Button>
-                    <Button onClick={() => setStep(3)} variant="ghost" className="w-full text-white/80">Pular</Button>
-                </>
-            )}
-            {step === 3 && (
-                <>
-                    <Card className="shadow-[var(--shadow-card)]">
-                        <CardHeader><div className="flex justify-between items-center"><CardTitle>Adicionar Ausências</CardTitle><Button onClick={addAusencia} size="sm"><Plus className="h-4 w-4 mr-2" />Ausência</Button></div></CardHeader>
-                        <CardContent className="space-y-4 pt-4">
-                            {ausencias.length === 0 && <p className="text-center text-muted-foreground">Nenhuma ausência adicionada.</p>}
-                            {ausencias.map(ausencia => (<Card key={ausencia.id} className="p-4 relative"><Button onClick={() => removeAusencia(ausencia.id)} size="icon" variant="ghost" className="absolute top-1 right-1 h-7 w-7"><X className="h-4 w-4 text-red-500" /></Button><div className="space-y-2"><div><Label>Nome do Ausente</Label><Input value={ausencia.nome} onChange={(e) => updateAusencia(ausencia.id, 'nome', e.target.value)} /></div><div><Label>Observação</Label><Input value={ausencia.obs} onChange={(e) => updateAusencia(ausencia.id, 'obs', e.target.value)} /></div><div className="flex items-center space-x-2"><Checkbox checked={ausencia.justificado} onCheckedChange={(checked) => updateAusencia(ausencia.id, 'justificado', !!checked)} /><Label>Justificado</Label></div></div></Card>))}
-                        </CardContent>
-                    </Card>
-                    <Button onClick={handleSaveStep3} disabled={isSaving} className="w-full h-12 bg-accent hover:bg-accent/90 text-white font-semibold">{isSaving ? 'Salvando...' : 'Finalizar Lançamento'}</Button>
-                    <Button onClick={() => navigate('/relatorio-transporte')} variant="ghost" className="w-full text-white/80">Pular e Finalizar</Button>
-                </>
-            )}
-        </div>
-      </div>
+                                {selectedOp === 'NAVIO' && (
+                                    <Card className="shadow-[var(--shadow-card)]">
+                                        <CardHeader><CardTitle>Equipamentos do Navio</CardTitle></CardHeader>
+                                        <CardContent><div className="space-y-2">{equipamentosNavio.map(eq => (<div key={eq.id} className="flex items-center gap-2"><Input placeholder="TAG" value={eq.tag} onChange={e => updateEquipamentoNavio(eq.id, 'tag', e.target.value)} /><Input placeholder="OPERADOR/MOTORISTA" value={eq.motorista_operador} onChange={e => updateEquipamentoNavio(eq.id, 'motorista_operador', e.target.value)} /><Button variant="ghost" size="icon" onClick={() => removeEquipamentoNavio(eq.id)}><X className="h-4 w-4 text-red-500" /></Button></div>))}</div><div className="flex gap-2 mt-4"><Button onClick={() => addEquipamentoNavio(1)} className="flex-1">+1 Equipamento</Button><Button onClick={() => addEquipamentoNavio(10)} variant="secondary" className="flex-1">+10 Equipamentos</Button></div></CardContent>
+                                    </Card>
+                                )}
+                                {['HYDRO', 'ALBRAS', 'SANTOS BRASIL'].includes(selectedOp) && (
+                                    <div className="space-y-4">
+                                        {operacaoGrupos.map(grupo => (<Card key={grupo.id} className="shadow-[var(--shadow-card)]"><CardHeader><div className="flex items-center justify-between"><Input className="text-lg font-bold border-0 shadow-none focus-visible:ring-0 p-0" value={grupo.nome} onChange={e => updateOperacaoGrupo(grupo.id, e.target.value)} /><Button variant="ghost" size="icon" onClick={() => removeOperacaoGrupo(grupo.id)}><X className="h-5 w-5 text-red-500" /></Button></div></CardHeader><CardContent><div className="space-y-2">{grupo.equipamentos.map(eq => (<div key={eq.id} className="flex items-center gap-2"><Input placeholder="TAG" value={eq.tag} onChange={e => updateEquipamentoGrupo(grupo.id, eq.id, 'tag', e.target.value)} /><Input placeholder="OPERADOR" value={eq.motorista_operador} onChange={e => updateEquipamentoGrupo(grupo.id, eq.id, 'motorista_operador', e.target.value)} /><Button variant="ghost" size="icon" onClick={() => removeEquipamentoGrupo(grupo.id, eq.id)}><X className="h-4 w-4 text-red-500" /></Button></div>))}</div><div className="flex gap-2 mt-4"><Button onClick={() => addEquipamentoGrupo(grupo.id, 1)} size="sm" className="flex-1">+1 Equipamento</Button><Button onClick={() => addEquipamentoGrupo(grupo.id, 10)} size="sm" variant="secondary" className="flex-1">+10 Equipamentos</Button></div></CardContent></Card>))}
+                                        <Button onClick={addOperacaoGrupo} variant="outline" className="w-full">Adicionar Operação (Frente de Serviço)</Button>
+                                    </div>
+                                )}
+                                <Button onClick={handleSaveStep1} disabled={isSaving} className="w-full h-12 bg-accent hover:bg-accent/90 text-white font-semibold">{isSaving ? 'Salvando...' : 'Próximo: Ajudantes'}</Button>
+                            </>
+                        )}
+                    </>
+                )}
+                {step === 2 && (
+                    <>
+                        <Card className="shadow-[var(--shadow-card)]">
+                            <CardHeader><div className="flex justify-between items-center"><CardTitle>Adicionar Ajudantes</CardTitle><Button onClick={addAjudante} size="sm"><Plus className="h-4 w-4 mr-2" />Ajudante</Button></div></CardHeader>
+                            <CardContent className="space-y-4 pt-4">
+                                {ajudantes.length === 0 && <p className="text-center text-muted-foreground">Nenhum ajudante adicionado.</p>}
+                                {ajudantes.map(ajudante => (<Card key={ajudante.id} className="p-4 relative"><Button onClick={() => removeAjudante(ajudante.id)} size="icon" variant="ghost" className="absolute top-1 right-1 h-7 w-7"><X className="h-4 w-4 text-red-500" /></Button><div className="space-y-2"><div><Label>Nome do Ajudante</Label><Input value={ajudante.nome} onChange={(e) => updateAjudante(ajudante.id, 'nome', e.target.value)} /></div><div className="grid grid-cols-2 gap-2"><div><Label>Hora Inicial</Label><Input type="time" value={ajudante.hora_inicial} onChange={(e) => updateAjudante(ajudante.id, 'hora_inicial', e.target.value)} /></div><div><Label>Hora Final</Label><Input type="time" value={ajudante.hora_final} onChange={(e) => updateAjudante(ajudante.id, 'hora_final', e.target.value)} /></div></div><div><Label>Observação</Label><Input value={ajudante.observacao} onChange={(e) => updateAjudante(ajudante.id, 'observacao', e.target.value)} /></div></div></Card>))}
+                            </CardContent>
+                        </Card>
+                        <Button onClick={handleSaveStep2} disabled={isSaving} className="w-full h-12 bg-accent hover:bg-accent/90 text-white font-semibold">{isSaving ? 'Salvando...' : 'Próximo: Ausências'}</Button>
+                        <Button onClick={() => setStep(3)} variant="ghost" className="w-full text-white/80">Pular</Button>
+                    </>
+                )}
+                {step === 3 && (
+                    <>
+                        <Card className="shadow-[var(--shadow-card)]">
+                            <CardHeader><div className="flex justify-between items-center"><CardTitle>Adicionar Ausências</CardTitle><Button onClick={addAusencia} size="sm"><Plus className="h-4 w-4 mr-2" />Ausência</Button></div></CardHeader>
+                            <CardContent className="space-y-4 pt-4">
+                                {ausencias.length === 0 && <p className="text-center text-muted-foreground">Nenhuma ausência adicionada.</p>}
+                                {ausencias.map(ausencia => (<Card key={ausencia.id} className="p-4 relative"><Button onClick={() => removeAusencia(ausencia.id)} size="icon" variant="ghost" className="absolute top-1 right-1 h-7 w-7"><X className="h-4 w-4 text-red-500" /></Button><div className="space-y-2"><div><Label>Nome do Ausente</Label><Input value={ausencia.nome} onChange={(e) => updateAusencia(ausencia.id, 'nome', e.target.value)} /></div><div><Label>Observação</Label><Input value={ausencia.obs} onChange={(e) => updateAusencia(ausencia.id, 'obs', e.target.value)} /></div><div className="flex items-center space-x-2"><Checkbox checked={ausencia.justificado} onCheckedChange={(checked) => updateAusencia(ausencia.id, 'justificado', !!checked)} /><Label>Justificado</Label></div></div></Card>))}
+                            </CardContent>
+                        </Card>
+                        <Button onClick={handleSaveStep3} disabled={isSaving} className="w-full h-12 bg-accent hover:bg-accent/90 text-white font-semibold">{isSaving ? 'Salvando...' : 'Finalizar Lançamento'}</Button>
+                        <Button onClick={() => navigate('/relatorio-transporte')} variant="ghost" className="w-full text-white/80">Pular e Finalizar</Button>
+                    </>
+                )}
+            </div>
+          </div>
     );
 };
 
