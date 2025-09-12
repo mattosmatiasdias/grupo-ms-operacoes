@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Plus, ChevronsUpDown, Pencil } from 'lucide-react';
+import { ArrowLeft, Plus, ChevronsUpDown, Pencil, FileDown } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -62,6 +62,8 @@ const RelatorioTransporte = () => {
     const { toast } = useToast();
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const [selectedLocal, setSelectedLocal] = useState('Todos');
+    const [selectedHoraInicial, setSelectedHoraInicial] = useState('Todos');
+
     const [operacoes, setOperacoes] = useState<OperacaoCompleta[]>([]);
     const [ajudantes, setAjudantes] = useState<Ajudante[]>([]);
     const [ausencias, setAusencias] = useState<Ausencia[]>([]);
@@ -71,26 +73,42 @@ const RelatorioTransporte = () => {
         const fetchData = async () => {
             setLoading(true);
             try {
-                const operacoesQuery = supabase.from('registro_operacoes').select('*, equipamentos(*), navios(nome_navio, carga)').eq('data', selectedDate);
+                let operacoesQuery = supabase
+                  .from('registro_operacoes')
+                  .select('*, equipamentos(*), navios(nome_navio, carga)')
+                  .eq('data', selectedDate);
+                
+                if (selectedHoraInicial && selectedHoraInicial !== 'Todos') {
+                  operacoesQuery = operacoesQuery.eq('hora_inicial', selectedHoraInicial);
+                }
+                
                 const ajudantesQuery = supabase.from('ajudantes').select('*').eq('data', selectedDate);
                 const ausenciasQuery = supabase.from('ausencias').select('*').eq('data', selectedDate);
                 
                 const [ { data: operacoesData, error: operacoesError }, { data: ajudantesData, error: ajudantesError }, { data: ausenciasData, error: ausenciasError }, ] = await Promise.all([operacoesQuery, ajudantesQuery, ausenciasQuery]);
-                if (operacoesError || ajudantesError || ausenciasError) throw operacoesError || ajudantesError || ausenciasError;
+                if (operacoesError) throw operacoesError;
+                if (ajudantesError) throw ajudantesError;
+                if (ausenciasError) throw ausenciasError;
                 
-                const operacoesFiltradas = selectedLocal === 'Todos' ? operacoesData || [] : (operacoesData || []).filter(op => op.equipamentos.some(eq => eq.local === selectedLocal));
+                const operacoesFiltradas = selectedLocal === 'Todos'
+                    ? operacoesData || []
+                    : (operacoesData || []).filter(op => {
+                        if (op.op === selectedLocal) return true;
+                        return op.equipamentos.some(eq => eq.local === selectedLocal);
+                    });
+                
                 setOperacoes(operacoesFiltradas);
                 setAjudantes(ajudantesData || []);
                 setAusencias(ausenciasData || []);
             } catch (error) {
-                console.error("Erro ao buscar dados:", error);
-                toast({ title: "Erro", description: "Não foi possível carregar os relatórios.", variant: "destructive" });
+                console.error("Erro detalhado ao buscar dados:", error);
+                toast({ title: "Erro", description: "Não foi possível carregar os relatórios. Verifique o console para mais detalhes.", variant: "destructive" });
             } finally {
                 setLoading(false);
             }
         };
         fetchData();
-    }, [selectedDate, selectedLocal, toast]);
+    }, [selectedDate, selectedLocal, selectedHoraInicial, toast]);
 
     return (
         <div className="min-h-screen pb-10" style={{ background: 'var(--gradient-primary)' }}>
@@ -101,8 +119,52 @@ const RelatorioTransporte = () => {
               </div>
             </div>
             <div className="px-4 mb-4"><Card className="shadow-[var(--shadow-card)]"><CardContent className="p-4 flex justify-between items-center"><span className="text-foreground font-medium">Gestão de Operações</span><Button variant="outline" size="sm" onClick={() => navigate('/')} className="text-primary border-primary hover:bg-primary hover:text-white">Voltar ao Menu</Button></CardContent></Card></div>
-            <div className="px-4 mb-4"><Button onClick={() => navigate('/novo-lancamento')} className="w-full h-12 bg-secondary hover:bg-secondary/90 text-white font-semibold" style={{ boxShadow: 'var(--shadow-button)' }}><Plus className="h-5 w-5 mr-2" />Novo Lançamento</Button></div>
-            <div className="px-4 mb-4"><Card className="shadow-[var(--shadow-card)]"><CardHeader><CardTitle>Registros Salvos</CardTitle><div className="flex flex-col sm:flex-row gap-4 pt-4"><div className="flex-1"><label className="text-sm text-muted-foreground">Data:</label><Input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="mt-1" /></div><div className="flex-1"><label className="text-sm text-muted-foreground">Local:</label><Select value={selectedLocal} onValueChange={setSelectedLocal}><SelectTrigger className="mt-1"><SelectValue placeholder="Todos" /></SelectTrigger><SelectContent><SelectItem value="Todos">Todos</SelectItem><SelectItem value="NAVIO">NAVIO</SelectItem><SelectItem value="HYDRO">HYDRO</SelectItem></SelectContent></Select></div></div></CardHeader></Card></div>
+            <div className="px-4 mb-4 flex gap-4">
+              <Button onClick={() => navigate('/novo-lancamento')} className="w-full h-12 bg-secondary hover:bg-secondary/90 text-white font-semibold" style={{ boxShadow: 'var(--shadow-button)' }}>
+                <Plus className="h-5 w-5 mr-2" />Novo Lançamento
+              </Button>
+              <Button onClick={() => alert('Funcionalidade de PDF a ser implementada!')} className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-semibold" style={{ boxShadow: 'var(--shadow-button)' }}>
+                <FileDown className="h-5 w-5 mr-2" />Baixar Relatório (PDF)
+              </Button>
+            </div>
+            
+            <div className="px-4 mb-4">
+              <Card className="shadow-[var(--shadow-card)]">
+                <CardHeader>
+                  <CardTitle>Registros Salvos</CardTitle>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4">
+                    <div className="flex-1">
+                      <label className="text-sm text-muted-foreground">Data:</label>
+                      <Input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="mt-1" />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-sm text-muted-foreground">Local:</label>
+                      <Select value={selectedLocal} onValueChange={setSelectedLocal}>
+                        <SelectTrigger className="mt-1"><SelectValue placeholder="Todos" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Todos">Todos</SelectItem>
+                          <SelectItem value="NAVIO">NAVIO</SelectItem>
+                          <SelectItem value="HYDRO">HYDRO</SelectItem>
+                          <SelectItem value="ALBRAS">ALBRAS</SelectItem>
+                          <SelectItem value="SANTOS BRASIL">SANTOS BRASIL</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-sm text-muted-foreground">Horário de Início:</label>
+                      <Select value={selectedHoraInicial} onValueChange={setSelectedHoraInicial}>
+                        <SelectTrigger className="mt-1"><SelectValue placeholder="Todos" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Todos">Todos os Horários</SelectItem>
+                          <SelectItem value="07:00:00">07:00</SelectItem>
+                          <SelectItem value="19:00:00">19:00</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </CardHeader>
+              </Card>
+            </div>
             
             <div className="px-4">
                 <Card className="shadow-[var(--shadow-card)]">
@@ -117,16 +179,7 @@ const RelatorioTransporte = () => {
                             <TabsContent value="operacoes" className="p-4">
                                 <div className="overflow-x-auto">
                                     <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead className="w-[50px]"></TableHead>
-                                                <TableHead>Operação</TableHead>
-                                                <TableHead>Data</TableHead>
-                                                <TableHead>Horário</TableHead>
-                                                <TableHead>Local</TableHead>
-                                                <TableHead className="text-right">Ações</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
+                                        <TableHeader><TableRow><TableHead className="w-[50px]"></TableHead><TableHead>Operação</TableHead><TableHead>Data</TableHead><TableHead>Horário</TableHead><TableHead>Local</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
                                         <TableBody>
                                             {loading ? <TableRow><TableCell colSpan={6} className="text-center">Carregando...</TableCell></TableRow> 
                                             : operacoes.length === 0 ? <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">Nenhum registro encontrado.</TableCell></TableRow> 
@@ -167,7 +220,7 @@ const RelatorioTransporte = () => {
                                     </Table>
                                 </div>
                             </TabsContent>
-                            <TabsContent value="ajudantes" className="p-4">
+                           <TabsContent value="ajudantes" className="p-4">
                                 <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>Início</TableHead><TableHead>Fim</TableHead><TableHead>Local</TableHead><TableHead>Horas</TableHead></TableRow></TableHeader><TableBody>{loading ? <TableRow><TableCell colSpan={5} className="text-center">Carregando...</TableCell></TableRow> : ajudantes.length === 0 ? <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">Nenhum ajudante registrado.</TableCell></TableRow> : ajudantes.map((ajudante) => (<TableRow key={ajudante.id}><TableCell>{ajudante.nome}</TableCell><TableCell>{ajudante.hora_inicial}</TableCell><TableCell>{ajudante.hora_final}</TableCell><TableCell>{ajudante.local}</TableCell><TableCell>{calcularHoras(ajudante.hora_inicial, ajudante.hora_final)}</TableCell></TableRow>))}</TableBody></Table></div>
                             </TabsContent>
                             <TabsContent value="ausencias" className="p-4">
