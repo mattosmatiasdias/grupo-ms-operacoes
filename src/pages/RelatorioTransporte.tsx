@@ -6,17 +6,12 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Plus, ChevronsUpDown, Pencil, FileDown } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, FileDown, Eye } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 
 // --- Interfaces para Tipagem ---
 interface OperacaoCompleta {
@@ -139,6 +134,11 @@ const RelatorioTransporte = () => {
         doc.save(`relatorio_${nomeOperacao}_${op.data}.pdf`);
     };
 
+    // --- FUNÇÃO PARA VISUALIZAR OPERAÇÃO ---
+    const handleViewOperation = (op: OperacaoCompleta) => {
+        // Navega para a página de visualização passando o ID da operação
+        navigate(`/operacao/${op.id}/visualizar`);
+    };
 
     return (
         <div className="min-h-screen pb-10" style={{ background: 'var(--gradient-primary)' }}>
@@ -172,33 +172,32 @@ const RelatorioTransporte = () => {
                             <TabsContent value="operacoes" className="p-4">
                                 <div className="overflow-x-auto">
                                     <Table>
-                                        <TableHeader><TableRow><TableHead className="w-[50px]"></TableHead><TableHead>Operação</TableHead><TableHead>Data</TableHead><TableHead>Horário</TableHead><TableHead>Local</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
+                                        <TableHeader><TableRow><TableHead>Operação</TableHead><TableHead>Data</TableHead><TableHead>Horário</TableHead><TableHead>Local</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
                                         <TableBody>
-                                            {loading ? <TableRow><TableCell colSpan={6} className="text-center">Carregando...</TableCell></TableRow> 
-                                            : operacoes.length === 0 ? <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">Nenhum registro encontrado.</TableCell></TableRow> 
+                                            {loading ? <TableRow><TableCell colSpan={5} className="text-center">Carregando...</TableCell></TableRow> 
+                                            : operacoes.length === 0 ? <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">Nenhum registro encontrado.</TableCell></TableRow> 
                                             : operacoes.map((op) => {
                                                 const createdAt = new Date(op.created_at).getTime();
                                                 const now = new Date().getTime();
                                                 const isEditable = (now - createdAt) < 24 * 60 * 60 * 1000;
                                                 return (
-                                                    <Collapsible key={op.id} asChild>
-                                                        <>
-                                                            <TableRow>
-                                                                <TableCell><CollapsibleTrigger asChild><Button variant="ghost" size="sm" disabled={op.equipamentos.length === 0}><ChevronsUpDown className="h-4 w-4" /><span className="sr-only">Toggle</span></Button></CollapsibleTrigger></TableCell>
-                                                                <TableCell className="font-medium">{op.op === 'NAVIO' && op.navios ? `${op.navios.nome_navio} (${op.navios.carga})` : op.op}</TableCell>
-                                                                <TableCell>{new Date(op.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</TableCell>
-                                                                <TableCell>{op.hora_inicial} - {op.hora_final}</TableCell>
-                                                                <TableCell>{op.equipamentos[0]?.local || 'N/A'}</TableCell>
-                                                                <TableCell className="text-right flex justify-end gap-2">
-                                                                    <Button variant="outline" size="sm" onClick={() => handleExportSinglePDF(op)} title="Baixar PDF do lançamento"><FileDown className="h-4 w-4"/></Button>
-                                                                    <Button variant="outline" size="sm" disabled={!isEditable} onClick={() => navigate(`/operacao/${op.id}/editar`)} title={isEditable ? 'Editar lançamento' : 'Edição bloqueada'}><Pencil className="h-4 w-4"/></Button>
-                                                                </TableCell>
-                                                            </TableRow>
-                                                            <CollapsibleContent asChild>
-                                                                <TableRow><TableCell colSpan={6} className="p-0">{/* ... Conteúdo expansível ... */}</TableCell></TableRow>
-                                                            </CollapsibleContent>
-                                                        </>
-                                                    </Collapsible>
+                                                    <TableRow key={op.id}>
+                                                        <TableCell className="font-medium">{op.op === 'NAVIO' && op.navios ? `${op.navios.nome_navio} (${op.navios.carga})` : op.op}</TableCell>
+                                                        <TableCell>{new Date(op.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</TableCell>
+                                                        <TableCell>{op.hora_inicial} - {op.hora_final}</TableCell>
+                                                        <TableCell>{op.equipamentos[0]?.local || 'N/A'}</TableCell>
+                                                        <TableCell className="text-right flex justify-end gap-2">
+                                                            <Button variant="outline" size="sm" onClick={() => handleViewOperation(op)} title="Visualizar lançamento">
+                                                                <Eye className="h-4 w-4"/>
+                                                            </Button>
+                                                            <Button variant="outline" size="sm" onClick={() => handleExportSinglePDF(op)} title="Baixar PDF do lançamento">
+                                                                <FileDown className="h-4 w-4"/>
+                                                            </Button>
+                                                            <Button variant="outline" size="sm" disabled={!isEditable} onClick={() => navigate(`/operacao/${op.id}/editar`)} title={isEditable ? 'Editar lançamento' : 'Edição bloqueada'}>
+                                                                <Pencil className="h-4 w-4"/>
+                                                            </Button>
+                                                        </TableCell>
+                                                    </TableRow>
                                                 )
                                             })}
                                         </TableBody>

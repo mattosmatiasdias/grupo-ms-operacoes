@@ -15,13 +15,15 @@ import Notificacao from "./pages/Notificacao";
 import RelatorioTransporte from "./pages/RelatorioTransporte";
 import NovoLancamento from "./pages/NovoLancamento";
 import Operacao from "./pages/Operacao";
-import EditarOperacao from "./pages/EditarOperacao"; // Novo
+import EditarOperacao from "./pages/EditarOperacao";
 
 // Páginas do sistema de 'Gestão de Navios'
 import Navios from "./pages/Navios";
 import NovoNavio from "./pages/NovoNavio";
 import ProducaoDiaria from "./pages/ProducaoDiaria";
 import EditarNavio from "./pages/EditarNavio";
+import VisualizarOperacao from "./pages/VisualizarOperacao";
+
 
 const queryClient = new QueryClient();
 
@@ -43,6 +45,7 @@ const App = () => (
             <Route path="/novo-lancamento" element={<NovoLancamento />} />
             <Route path="/operacao/:tipo" element={<Operacao />} />
             <Route path="/operacao/:id/editar" element={<EditarOperacao />} />
+            <Route path="/operacao/:id/visualizar" element={<VisualizarOperacao />} />
 
             {/* Rotas do sistema de 'Gestão de Navios' */}
             <Route path="/navios" element={<Navios />} />
