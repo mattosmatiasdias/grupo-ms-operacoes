@@ -26,7 +26,6 @@ const ProducaoDiaria = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
-  
   const [navio, setNavio] = useState<{ nome_navio: string } | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [registros, setRegistros] = useState<RegistroProducao[]>([]);
@@ -40,14 +39,20 @@ const ProducaoDiaria = () => {
       const { data: navioData, error: navioError } = await supabase.from('navios').select('nome_navio').eq('id', navioId).single();
       if (navioError) throw navioError;
       setNavio(navioData);
-
       const { data: registrosData, error } = await supabase.from('registros_producao').select('*').eq('navio_id', navioId).eq('data', data);
       if (error) throw error;
-
       if (registrosData && registrosData.length > 0) {
         setRegistros(registrosData);
       } else {
-        setRegistros([{ id: `new-${Date.now()}`, porao: '#01', tons_t1: 0, vols_t1: 0, tons_t2: 0, vols_t2: 0, tons_t3: 0, vols_t3: 0, tons_t4: 0, vols_t4: 0, observacao: '' }]);
+        setRegistros([{ 
+          id: `new-${Date.now()}`, 
+          porao: '#01', 
+          tons_t1: 0, vols_t1: 0, 
+          tons_t2: 0, vols_t2: 0, 
+          tons_t3: 0, vols_t3: 0, 
+          tons_t4: 0, vols_t4: 0, 
+          observacao: '' 
+        }]);
       }
     } catch (error) {
       toast({ title: "Erro", description: "Não foi possível carregar os dados.", variant: "destructive" });
@@ -61,26 +66,36 @@ const ProducaoDiaria = () => {
   }, [selectedDate, fetchRegistrosDoDia]);
 
   const handleRegistroChange = (id: string, field: keyof RegistroProducao, value: string) => {
-    setRegistros(prev => prev.map(r => r.id === id ? { ...r, [field]: isNaN(Number(value)) || value === '' ? value : Number(value) } : r));
+    if (field === 'porao' || field === 'observacao') {
+      setRegistros(prev => prev.map(r => r.id === id ? { ...r, [field]: value.toUpperCase() } : r));
+    } else {
+      setRegistros(prev => prev.map(r => r.id === id ? { ...r, [field]: isNaN(Number(value)) || value === '' ? value : Number(value) } : r));
+    }
   };
 
   const addPorao = () => {
     const nextPoraoNumber = registros.length + 1;
-    setRegistros(prev => [...prev, { id: `new-${Date.now()}`, porao: `#${String(nextPoraoNumber).padStart(2, '0')}`, tons_t1: 0, vols_t1: 0, tons_t2: 0, vols_t2: 0, tons_t3: 0, vols_t3: 0, tons_t4: 0, vols_t4: 0, observacao: '' }]);
+    setRegistros(prev => [...prev, { 
+      id: `new-${Date.now()}`, 
+      porao: `#${String(nextPoraoNumber).padStart(2, '0')}`, 
+      tons_t1: 0, vols_t1: 0, 
+      tons_t2: 0, vols_t2: 0, 
+      tons_t3: 0, vols_t3: 0, 
+      tons_t4: 0, vols_t4: 0, 
+      observacao: '' 
+    }]);
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !navioId) return;
     setIsSaving(true);
-    
     const dadosParaSalvar = registros.map(({ id, ...rest }) => ({
       ...rest,
       navio_id: navioId,
       data: selectedDate,
       user_id: user.id,
     }));
-
     try {
       const { error } = await supabase.from('registros_producao').upsert(dadosParaSalvar, { onConflict: 'navio_id, data, porao' });
       if (error) throw error;
@@ -127,17 +142,46 @@ const ProducaoDiaria = () => {
                       <div className="space-y-4">
                         <div>
                           <Label>Porão</Label>
-                          <Input value={registro.porao} onChange={(e) => handleRegistroChange(registro.id!, 'porao', e.target.value)} />
+                          <Input 
+                            value={registro.porao} 
+                            onChange={(e) => handleRegistroChange(registro.id!, 'porao', e.target.value)} 
+                          />
                         </div>
                         {turnos.map(turno => (
                           <div key={turno.id} className="space-y-2">
                             <h4 className="font-semibold text-md border-b pb-1">{turno.label}</h4>
                             <div className="grid grid-cols-2 gap-4">
-                              <div><Label htmlFor={`${registro.id}-${turno.tonsKey}`}>Toneladas</Label><Input id={`${registro.id}-${turno.tonsKey}`} type="number" step="0.01" value={registro[turno.tonsKey as keyof RegistroProducao] as number || 0} onChange={(e) => handleRegistroChange(registro.id!, turno.tonsKey as keyof RegistroProducao, e.target.value)} /></div>
-                              <div><Label htmlFor={`${registro.id}-${turno.volsKey}`}>Volumes</Label><Input id={`${registro.id}-${turno.volsKey}`} type="number" step="0.01" value={registro[turno.volsKey as keyof RegistroProducao] as number || 0} onChange={(e) => handleRegistroChange(registro.id!, turno.volsKey as keyof RegistroProducao, e.target.value)} /></div>
+                              <div>
+                                <Label htmlFor={`${registro.id}-${turno.tonsKey}`}>Toneladas</Label>
+                                <Input 
+                                  id={`${registro.id}-${turno.tonsKey}`} 
+                                  type="number" 
+                                  step="0.01" 
+                                  value={registro[turno.tonsKey as keyof RegistroProducao] as number || 0} 
+                                  onChange={(e) => handleRegistroChange(registro.id!, turno.tonsKey as keyof RegistroProducao, e.target.value)} 
+                                />
+                              </div>
+                              <div>
+                                <Label htmlFor={`${registro.id}-${turno.volsKey}`}>Volumes</Label>
+                                <Input 
+                                  id={`${registro.id}-${turno.volsKey}`} 
+                                  type="number" 
+                                  step="0.01" 
+                                  value={registro[turno.volsKey as keyof RegistroProducao] as number || 0} 
+                                  onChange={(e) => handleRegistroChange(registro.id!, turno.volsKey as keyof RegistroProducao, e.target.value)} 
+                                />
+                              </div>
                             </div>
                           </div>
                         ))}
+                        <div>
+                          <Label>Observação</Label>
+                          <Textarea 
+                            value={registro.observacao || ''}
+                            onChange={(e) => handleRegistroChange(registro.id!, 'observacao', e.target.value)}
+                            className="mt-1"
+                          />
+                        </div>
                       </div>
                     </Card>
                   ))}
@@ -154,4 +198,5 @@ const ProducaoDiaria = () => {
     </div>
   );
 };
+
 export default ProducaoDiaria;

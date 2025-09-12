@@ -28,7 +28,7 @@ const NovoNavio = () => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target;
-    setFormData(prev => ({ ...prev, [id]: value }));
+    setFormData(prev => ({ ...prev, [id]: value.toUpperCase() }));
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -37,11 +37,10 @@ const NovoNavio = () => {
       toast({ title: "Erro", description: "O nome do navio é obrigatório.", variant: "destructive" });
       return;
     }
-
     setIsSaving(true);
     try {
       const { error } = await supabase.from('navios').insert({
-        nome_navio: formData.nome_navio,
+        nome_navio: formData.nome_navio.toUpperCase(),
         carga: formData.carga || null,
         berco: formData.berco || null,
         quantidade_prevista: formData.quantidade_prevista ? parseFloat(formData.quantidade_prevista) : null,
@@ -52,7 +51,6 @@ const NovoNavio = () => {
         user_id: user.id,
         concluido: false,
       });
-
       if (error) throw error;
       toast({ title: "Sucesso!", description: "Navio/Viagem registrada." });
       navigate('/navios');
@@ -74,14 +72,78 @@ const NovoNavio = () => {
           <Card>
             <CardHeader><CardTitle>Dados da Viagem</CardTitle></CardHeader>
             <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2"><Label htmlFor="nome_navio">Nome do Navio*</Label><Input id="nome_navio" value={formData.nome_navio} onChange={handleChange} required /></div>
-              <div className="space-y-2"><Label htmlFor="carga">Carga</Label><Input id="carga" value={formData.carga} onChange={handleChange} /></div>
-              <div className="space-y-2"><Label htmlFor="berco">Berço</Label><Input id="berco" value={formData.berco} onChange={handleChange} /></div>
-              <div className="space-y-2"><Label htmlFor="quantidade_prevista">Quantidade Prevista</Label><Input id="quantidade_prevista" type="number" step="0.01" value={formData.quantidade_prevista} onChange={handleChange} /></div>
-              <div className="space-y-2"><Label htmlFor="cbs_total">Total de CBs</Label><Input id="cbs_total" type="number" value={formData.cbs_total} onChange={handleChange} /></div>
-              <div className="space-y-2"><Label htmlFor="media_cb">Média por CB</Label><Input id="media_cb" type="number" step="0.0001" value={formData.media_cb} onChange={handleChange} /></div>
-              <div className="space-y-2"><Label htmlFor="inicio_operacao">Início da Operação</Label><Input id="inicio_operacao" type="datetime-local" value={formData.inicio_operacao} onChange={handleChange} /></div>
-              <div className="space-y-2"><Label htmlFor="final_operacao">Final da Operação</Label><Input id="final_operacao" type="datetime-local" value={formData.final_operacao} onChange={handleChange} /></div>
+              <div className="space-y-2">
+                <Label htmlFor="nome_navio">Nome do Navio*</Label>
+                <Input 
+                  id="nome_navio" 
+                  value={formData.nome_navio} 
+                  onChange={handleChange} 
+                  required 
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="carga">Carga</Label>
+                <Input 
+                  id="carga" 
+                  value={formData.carga} 
+                  onChange={handleChange} 
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="berco">Berço</Label>
+                <Input 
+                  id="berco" 
+                  value={formData.berco} 
+                  onChange={handleChange} 
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="quantidade_prevista">Quantidade Prevista</Label>
+                <Input 
+                  id="quantidade_prevista" 
+                  type="number" 
+                  step="0.01" 
+                  value={formData.quantidade_prevista} 
+                  onChange={handleChange} 
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cbs_total">Total de CBs</Label>
+                <Input 
+                  id="cbs_total" 
+                  type="number" 
+                  value={formData.cbs_total} 
+                  onChange={handleChange} 
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="media_cb">Média por CB</Label>
+                <Input 
+                  id="media_cb" 
+                  type="number" 
+                  step="0.0001" 
+                  value={formData.media_cb} 
+                  onChange={handleChange} 
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="inicio_operacao">Início da Operação</Label>
+                <Input 
+                  id="inicio_operacao" 
+                  type="datetime-local" 
+                  value={formData.inicio_operacao} 
+                  onChange={handleChange} 
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="final_operacao">Final da Operação</Label>
+                <Input 
+                  id="final_operacao" 
+                  type="datetime-local" 
+                  value={formData.final_operacao} 
+                  onChange={handleChange} 
+                />
+              </div>
               <div className="sm:col-span-2">
                 <Button type="submit" className="w-full mt-4" disabled={isSaving}>{isSaving ? 'Salvando...' : 'Salvar Viagem'}</Button>
               </div>
@@ -92,4 +154,5 @@ const NovoNavio = () => {
     </div>
   );
 };
+
 export default NovoNavio;

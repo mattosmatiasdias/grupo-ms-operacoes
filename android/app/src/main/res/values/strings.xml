@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">MS OP.</string>
+    <string name="title_activity_main">MS OP.</string>
+    <string name="package_name">mdias.opercoes</string>
+    <string name="custom_url_scheme">mdias.opercoes</string>
+</resources>
