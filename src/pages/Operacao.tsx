@@ -143,7 +143,20 @@ const Operacao = () => {
         setOperacaoGrupos(nG); 
     };
 
-    const addAjudante = () => setAjudantes([...ajudantes, { id: Date.now().toString(), nome: '', hora_inicial: '', hora_final: '', observacao: '' }]);
+    // ✅ ALTERAÇÃO AQUI: Inicia com hora_inicial e hora_final do cabeçalho
+    const addAjudante = () => {
+        setAjudantes([
+            ...ajudantes,
+            {
+                id: Date.now().toString(),
+                nome: '',
+                hora_inicial: horaInicial || '',
+                hora_final: horaFinal || '',
+                observacao: ''
+            }
+        ]);
+    };
+
     const updateAjudante = (id: string, field: keyof Ajudante, value: string) => 
         setAjudantes(ajudantes.map(a => a.id === id ? { ...a, [field]: value.toUpperCase() } : a));
 
