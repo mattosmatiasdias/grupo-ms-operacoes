@@ -1,3 +1,4 @@
+// src/App.tsx
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -10,20 +11,20 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import Notificacao from "./pages/Notificacao";
+import Visuais from "./pages/Visuais"; // ← ✅ IMPORTAÇÃO CORRETA DO NOVO COMPONENTE
 
 // Páginas do sistema de 'Relatório de Transporte'
 import RelatorioTransporte from "./pages/RelatorioTransporte";
 import NovoLancamento from "./pages/NovoLancamento";
 import Operacao from "./pages/Operacao";
 import EditarOperacao from "./pages/EditarOperacao";
+import VisualizarOperacao from "./pages/VisualizarOperacao";
 
 // Páginas do sistema de 'Gestão de Navios'
 import Navios from "./pages/Navios";
 import NovoNavio from "./pages/NovoNavio";
 import ProducaoDiaria from "./pages/ProducaoDiaria";
 import EditarNavio from "./pages/EditarNavio";
-import VisualizarOperacao from "./pages/VisualizarOperacao";
-
 
 const queryClient = new QueryClient();
 
@@ -40,6 +41,9 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/notificacao" element={<Notificacao />} />
 
+            {/* ✅ NOVA ROTA: VISUAIS */}
+            <Route path="/visuais" element={<Visuais />} />
+
             {/* Rotas do sistema de 'Relatório de Transporte' */}
             <Route path="/relatorio-transporte" element={<RelatorioTransporte />} />
             <Route path="/novo-lancamento" element={<NovoLancamento />} />
@@ -52,7 +56,7 @@ const App = () => (
             <Route path="/novo-navio" element={<NovoNavio />} />
             <Route path="/navio/:id/editar" element={<EditarNavio />} />
             <Route path="/navio/:id/producao" element={<ProducaoDiaria />} />
-            
+
             {/* Rota de erro 404 sempre por último */}
             <Route path="*" element={<NotFound />} />
           </Routes>
