@@ -1,4 +1,3 @@
-// src/App.tsx
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -11,12 +10,12 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import Notificacao from "./pages/Notificacao";
-import Visuais from "./pages/Visuais"; // ← ✅ IMPORTAÇÃO CORRETA DO NOVO COMPONENTE
+import Visuais from "./pages/Visuais";
 
 // Páginas do sistema de 'Relatório de Transporte'
 import RelatorioTransporte from "./pages/RelatorioTransporte";
 import NovoLancamento from "./pages/NovoLancamento";
-import Operacao from "./pages/Operacao";
+import FormularioOperacao from "./pages/FormularioOperacao";
 import EditarOperacao from "./pages/EditarOperacao";
 import VisualizarOperacao from "./pages/VisualizarOperacao";
 
@@ -40,14 +39,12 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/notificacao" element={<Notificacao />} />
-
-            {/* ✅ NOVA ROTA: VISUAIS */}
             <Route path="/visuais" element={<Visuais />} />
 
             {/* Rotas do sistema de 'Relatório de Transporte' */}
             <Route path="/relatorio-transporte" element={<RelatorioTransporte />} />
             <Route path="/novo-lancamento" element={<NovoLancamento />} />
-            <Route path="/operacao/:tipo" element={<Operacao />} />
+            <Route path="/formulario-operacao" element={<FormularioOperacao />} />
             <Route path="/operacao/:id/editar" element={<EditarOperacao />} />
             <Route path="/operacao/:id/visualizar" element={<VisualizarOperacao />} />
 
