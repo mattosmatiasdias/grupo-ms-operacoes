@@ -40,6 +40,7 @@ const EditarOperacao = () => {
     const [horaInicial, setHoraInicial] = useState('');
     const [horaFinal, setHoraFinal] = useState('');
     const [observacao, setObservacao] = useState('');
+    const [carga, setCarga] = useState('');
     const [equipamentosNavio, setEquipamentosNavio] = useState<Equipamento[]>([]);
     const [navios, setNavios] = useState<Navio[]>([]);
     const [selectedNavio, setSelectedNavio] = useState('');
@@ -49,6 +50,15 @@ const EditarOperacao = () => {
     
     // Estado para rastrear IDs originais dos equipamentos
     const [initialEquipamentoIds, setInitialEquipamentoIds] = useState<string[]>([]);
+
+    const opcoesCarga = [
+        'COQUE',
+        'PICHE', 
+        'FLUORETO',
+        'ENTULHO',
+        'RECHEGO',
+        'OUTROS'
+    ];
 
     const carregarDadosOperacao = useCallback(async () => {
         if (!operacaoId) return;
@@ -67,6 +77,7 @@ const EditarOperacao = () => {
             setHoraInicial(opData.hora_inicial || '');
             setHoraFinal(opData.hora_final || '');
             setObservacao(opData.observacao?.toUpperCase() || '');
+            setCarga(opData.carga || '');
             setSelectedNavio(opData.navio_id || '');
 
             // Carregar ajudantes
@@ -160,17 +171,24 @@ const EditarOperacao = () => {
             console.log('IDs originais dos equipamentos:', initialEquipamentoIds);
             
             // 1. Atualizar a operação principal
+            const dadosAtualizacao: any = { 
+                op: selectedOp, 
+                data, 
+                hora_inicial: horaInicial, 
+                hora_final: horaFinal, 
+                observacao: observacao.toUpperCase(), 
+                navio_id: selectedNavio || null,
+                updated_at: new Date().toISOString()
+            };
+
+            // Adicionar campo carga se for operação ALBRAS
+            if (selectedOp === 'ALBRAS') {
+                dadosAtualizacao.carga = carga;
+            }
+
             const { error: opError } = await supabase
                 .from('registro_operacoes')
-                .update({ 
-                    op: selectedOp, 
-                    data, 
-                    hora_inicial: horaInicial, 
-                    hora_final: horaFinal, 
-                    observacao: observacao.toUpperCase(), 
-                    navio_id: selectedNavio || null,
-                    updated_at: new Date().toISOString()
-                })
+                .update(dadosAtualizacao)
                 .eq('id', operacaoId);
 
             if (opError) throw opError;
@@ -452,7 +470,7 @@ const EditarOperacao = () => {
                 >
                     <ArrowLeft className="h-5 w-5" />
                 </Button>
-                <h1 className="text-xl font-bold">Editando Operação: {selectedOp}</h1>
+                <h1 className="text-xl font-bold text-white">Editando Operação: {selectedOp}</h1>
             </div>
             
             <form onSubmit={handleUpdate} className="p-4 space-y-4">
@@ -478,6 +496,28 @@ const EditarOperacao = () => {
                                 </Select>
                             </div> 
                         )}
+
+                        {selectedOp === 'ALBRAS' && (
+                            <div>
+                                <Label>Tipo de Carga *</Label>
+                                <Select value={carga} onValueChange={setCarga} required>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Selecione o tipo de carga" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {opcoesCarga.map((cargaItem) => (
+                                            <SelectItem key={cargaItem} value={cargaItem}>
+                                                {cargaItem}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <p className="text-sm text-muted-foreground mt-1">
+                                    Selecione o tipo de carga para a operação ALBRAS
+                                </p>
+                            </div>
+                        )}
+
                         <div>
                             <Label>DATA</Label>
                             <Input 

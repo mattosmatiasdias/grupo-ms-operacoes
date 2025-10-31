@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowLeft, Factory, Warehouse, Building, Ship } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 interface Navio {
   id: string;
@@ -13,6 +14,7 @@ interface Navio {
 
 const NovoLancamento = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [navios, setNavios] = useState<Navio[]>([]);
 
   useEffect(() => {
@@ -30,11 +32,14 @@ const NovoLancamento = () => {
     fetchNavios();
   }, []);
 
+  // REMOVIDO: Sistema de detecção automática de cópia
+  // Agora a cópia é feita diretamente no RelatorioTransporte
+
   const handleSelectOperacao = (op: string) => {
     navigate('/formulario-operacao', { 
       state: { 
         tipo: 'OPERACAO', 
-        operacao: op 
+        operacao: op
       } 
     });
   };
@@ -43,7 +48,7 @@ const NovoLancamento = () => {
     navigate('/formulario-operacao', { 
       state: { 
         tipo: 'NAVIO', 
-        navio: navio 
+        navio: navio
       } 
     });
   };
