@@ -3,14 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Plus, Pencil, Eye, Download, Copy } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { ArrowLeft, Plus, Search, Filter, Calendar, Clock, Ship, Factory, Warehouse, Building, BarChart3, Users, UserX, Menu, RefreshCw, Database } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/hooks/useAuth';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 
 interface OperacaoCompleta {
   id: string;
@@ -25,510 +24,1111 @@ interface OperacaoCompleta {
     nome_navio: string;
     carga: string;
   } | null;
-  equipamentos: any[];
-  ajudantes: any[];
-  ausencias: any[];
+  equipamentos: Array<{
+    id: string;
+    tag: string;
+    motorista_operador: string;
+    horas_trabalhadas: number;
+    grupo_operacao: string;
+    hora_inicial: string | null;
+    hora_final: string | null;
+  }>;
+  ajudantes: Array<{
+    id: string;
+    nome: string;
+    hora_inicial: string;
+    hora_final: string;
+    observacao: string;
+    data: string;
+  }>;
+  ausencias: Array<{
+    id: string;
+    nome: string;
+    justificado: boolean;
+    obs: string;
+    data: string;
+  }>;
 }
 
 const RelatorioTransporte = () => {
-    const navigate = useNavigate();
-    const { toast } = useToast();
-    const { userProfile } = useAuth();
-    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-    const [selectedLocal, setSelectedLocal] = useState('Todos');
-    const [selectedHoraInicial, setSelectedHoraInicial] = useState('Todos');
-    const [operacoes, setOperacoes] = useState<OperacaoCompleta[]>([]);
-    const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  
+  const [operacaoSelecionada, setOperacaoSelecionada] = useState<string>('TODOS');
+  const [operacoes, setOperacoes] = useState<OperacaoCompleta[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [menuAberto, setMenuAberto] = useState(true);
+  const [atualizando, setAtualizando] = useState(false);
+  
+  const [dataFiltro, setDataFiltro] = useState(() => {
+    const hoje = new Date();
+    return hoje.toISOString().split('T')[0];
+  });
+  
+  const [horaInicialFiltro, setHoraInicialFiltro] = useState('Todos');
+  const [operadorFiltro, setOperadorFiltro] = useState('');
 
-    useEffect(() => {
-        const fetchData = async () => {
-            setLoading(true);
-            try {
-                const { data: operacoesData, error: operacoesError } = await supabase
-                    .from('registro_operacoes')
-                    .select('*, equipamentos(*), navios(nome_navio, carga), ajudantes(*), ausencias(*)')
-                    .eq('data', selectedDate);
+  const fetchOperacoes = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      console.log('🔍 Iniciando carregamento de operações...');
+      
+      const { data: operacoesData, error } = await supabase
+        .from('registro_operacoes')
+        .select(`
+          *,
+          equipamentos(*),
+          navios(nome_navio, carga),
+          ajudantes(*),
+          ausencias(*)
+        `)
+        .order('data', { ascending: false })
+        .order('hora_inicial', { ascending: false });
 
-                if (operacoesError) throw operacoesError;
-
-                let operacoesFiltradas = operacoesData || [];
-                if (selectedLocal !== 'Todos') {
-                    operacoesFiltradas = operacoesFiltradas.filter(op => op.op === selectedLocal || op.equipamentos.some(eq => eq.local === selectedLocal));
-                }
-                if (selectedHoraInicial !== 'Todos') {
-                    operacoesFiltradas = operacoesFiltradas.filter(op => op.hora_inicial === selectedHoraInicial);
-                }
-                
-                setOperacoes(operacoesFiltradas);
-            } catch (error) {
-                console.error("Erro ao buscar dados:", error);
-                toast({ title: "Erro", description: "Não foi possível carregar os relatórios.", variant: "destructive" });
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchData();
-    }, [selectedDate, selectedLocal, selectedHoraInicial, toast]);
-    
-    // FUNÇÃO PARA COPIAR OPERAÇÃO - CORRIGIDA
-    const handleCopyOperation = async (op: OperacaoCompleta) => {
-        try {
-            // Validar se a operação tem dados copiáveis
-            if (!op.equipamentos || op.equipamentos.length === 0) {
-                toast({
-                    title: "Atenção",
-                    description: "Esta operação não possui equipamentos para copiar.",
-                    variant: "destructive"
-                });
-                return;
-            }
-
-            // Preparar dados para copiar COM TIMESTAMP
-            const dadosParaCopiar = {
-                tipo: op.op === 'NAVIO' ? 'NAVIO' : 'OPERACAO',
-                operacao: op.op,
-                navio: op.navios,
-                carga: op.carga,
-                equipamentos: op.equipamentos || [],
-                ajudantes: op.ajudantes || [],
-                ausencias: op.ausencias || [],
-                observacao: op.observacao || '',
-                hora_inicial: op.hora_inicial || '',
-                hora_final: op.hora_final || '',
-                timestamp: Date.now(), // Para expiração
-                data_operacao: op.data // Data original da operação
-            };
-
-            // Salvar no localStorage para usar no formulário
-            localStorage.setItem('operacao_copiada', JSON.stringify(dadosParaCopiar));
-            
-            // Navegar DIRETAMENTE para o formulário pré-carregado
-            if (op.op === 'NAVIO') {
-                navigate('/formulario-operacao', { 
-                    state: { 
-                        tipo: 'NAVIO', 
-                        navio: op.navios,
-                        dadosCopiados: dadosParaCopiar
-                    } 
-                });
-            } else {
-                navigate('/formulario-operacao', { 
-                    state: { 
-                        tipo: 'OPERACAO', 
-                        operacao: op.op,
-                        dadosCopiados: dadosParaCopiar
-                    } 
-                });
-            }
-
-            toast({
-                title: "✅ Operação Copiada!",
-                description: `Dados de ${op.op} carregados no formulário.`
-            });
-
-        } catch (error) {
-            console.error('Erro ao copiar operação:', error);
-            toast({
-                title: "❌ Erro",
-                description: "Não foi possível copiar a operação.",
-                variant: "destructive"
-            });
-        }
-    };
-
-    const handleExportSinglePDF = async (op: OperacaoCompleta) => {
-      try {
-        console.log('📱 Iniciando geração de PDF para Android...');
-        
-        const doc = new jsPDF();
-        const dataFormatada = new Date(op.data + 'T00:00:00').toLocaleDateString('pt-BR');
-        const nomeUsuario = userProfile?.full_name || 'N/A';
-        
-        let nomeOperacao = op.op;
-        if (op.op === 'NAVIO' && op.navios) {
-          nomeOperacao = `${op.navios.nome_navio} (${op.navios.carga})`;
-        } else if (op.op === 'ALBRAS' && op.carga) {
-          nomeOperacao = `${op.op} - ${op.carga}`;
-        }
-
-        // Cabeçalho
-        doc.setFontSize(18);
-        doc.text(`Relatório da Operação: ${nomeOperacao}`, 14, 22);
-        doc.setFontSize(11);
-        doc.setTextColor(100);
-        doc.text(`Data: ${dataFormatada} | Horário: ${op.hora_inicial} - ${op.hora_final}`, 14, 30);
-        doc.text(`Gerado por: ${nomeUsuario}`, 14, 36);
-
-        let finalY = 40;
-
-        // Tabela de Equipamentos
-        if (op.equipamentos.length > 0) {
-          autoTable(doc, {
-            startY: finalY + 5,
-            head: [['Grupo', 'TAG', 'Operador/Motorista']],
-            body: op.equipamentos.map(eq => [eq.grupo_operacao || 'Principal', eq.tag, eq.motorista_operador]),
-            didDrawPage: (data) => { finalY = data.cursor?.y || finalY; }
-          });
-        }
-
-        // MÉTODO ESPECIAL PARA ANDROID
-        console.log('📄 Gerando PDF para Android...');
-        
-        // Método 1: Tentar abrir em nova janela com interface amigável
-        const pdfDataUri = doc.output('datauristring');
-        const fileName = `relatorio_${nomeOperacao.replace(/[^a-zA-Z0-9]/g, '_')}_${op.data}.pdf`;
-        
-        // Criar nova janela com interface de download
-        const newWindow = window.open('', '_blank');
-        if (newWindow) {
-          newWindow.document.write(`
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>Relatório PDF - ${nomeOperacao}</title>
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <style>
-                    * {
-                        margin: 0;
-                        padding: 0;
-                        box-sizing: border-box;
-                        font-family: 'Arial', sans-serif;
-                    }
-                    body {
-                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                        min-height: 100vh;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        padding: 20px;
-                    }
-                    .container {
-                        background: white;
-                        border-radius: 15px;
-                        padding: 30px;
-                        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-                        text-align: center;
-                        max-width: 400px;
-                        width: 100%;
-                    }
-                    .icon {
-                        font-size: 48px;
-                        margin-bottom: 20px;
-                    }
-                    h1 {
-                        color: #333;
-                        margin-bottom: 10px;
-                        font-size: 24px;
-                    }
-                    .info {
-                        background: #f8f9fa;
-                        padding: 15px;
-                        border-radius: 10px;
-                        margin: 15px 0;
-                        text-align: left;
-                    }
-                    .info p {
-                        margin: 5px 0;
-                        color: #555;
-                    }
-                    .download-btn {
-                        display: block;
-                        width: 100%;
-                        padding: 15px;
-                        background: linear-gradient(135deg, #4CAF50, #45a049);
-                        color: white;
-                        text-decoration: none;
-                        border-radius: 8px;
-                        font-size: 18px;
-                        font-weight: bold;
-                        margin: 20px 0;
-                        border: none;
-                        cursor: pointer;
-                        transition: transform 0.2s;
-                    }
-                    .download-btn:hover {
-                        transform: translateY(-2px);
-                    }
-                    .tips {
-                        background: #fff3cd;
-                        border: 1px solid #ffeaa7;
-                        padding: 10px;
-                        border-radius: 5px;
-                        margin-top: 15px;
-                        font-size: 12px;
-                        color: #856404;
-                    }
-                    .pdf-preview {
-                        margin: 20px 0;
-                        border: 2px dashed #ddd;
-                        border-radius: 10px;
-                        padding: 10px;
-                    }
-                    iframe {
-                        width: 100%;
-                        height: 400px;
-                        border: none;
-                        border-radius: 5px;
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <div class="icon">📄</div>
-                    <h1>Relatório PDF Pronto!</h1>
-                    
-                    <div class="info">
-                        <p><strong>Operação:</strong> ${nomeOperacao}</p>
-                        <p><strong>Data:</strong> ${dataFormatada}</p>
-                        <p><strong>Horário:</strong> ${op.hora_inicial} - ${op.hora_final}</p>
-                        <p><strong>Gerado por:</strong> ${nomeUsuario}</p>
-                    </div>
-
-                    <a href="${pdfDataUri}" download="${fileName}" class="download-btn">
-                        📥 BAIXAR PDF AGORA
-                    </a>
-
-                    <div class="pdf-preview">
-                        <iframe src="${pdfDataUri}"></iframe>
-                    </div>
-
-                    <div class="tips">
-                        <p><strong>💡 Dicas para Android:</strong></p>
-                        <p>• Clique no botão "BAIXAR PDF" acima</p>
-                        <p>• Ou use o menu do navegador → "Fazer download"</p>
-                        <p>• O PDF será salvo na pasta "Downloads"</p>
-                    </div>
-
-                    <script>
-                        // Focar no botão de download
-                        document.querySelector('.download-btn').focus();
-                        
-                        // Log para debug
-                        console.log('📱 PDF pronto para download:', '${fileName}');
-                    </script>
-                </div>
-            </body>
-            </html>
-          `);
-          
-          newWindow.document.close();
-        } else {
-          // Fallback: Método direto
-          console.log('🔄 Usando fallback de download...');
-          const pdfBlob = doc.output('blob');
-          const url = URL.createObjectURL(pdfBlob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = fileName;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          setTimeout(() => URL.revokeObjectURL(url), 1000);
-        }
-
-        toast({
-          title: "✅ PDF Gerado com Sucesso!",
-          description: "O relatório foi aberto em nova janela para download."
-        });
-
-        console.log('🎉 PDF gerado com sucesso!');
-
-      } catch (error) {
-        console.error('❌ Erro ao gerar PDF:', error);
-        toast({
-          title: "❌ Erro ao Gerar PDF",
-          description: "Não foi possível gerar o PDF. Tente novamente ou use um computador.",
-          variant: "destructive"
-        });
+      if (error) {
+        console.error('❌ Erro do Supabase:', error);
+        throw new Error(`Erro ao carregar dados: ${error.message}`);
       }
-    };
 
-    const handleViewOperation = (op: OperacaoCompleta) => {
-        navigate(`/operacao/${op.id}/visualizar`);
-    };
+      console.log('✅ Dados carregados:', operacoesData?.length || 0, 'operações');
+      console.log('📅 Datas disponíveis:', operacoesData?.map(op => ({ id: op.id, data: op.data, op: op.op })));
+      setOperacoes(operacoesData || []);
+      
+    } catch (error: any) {
+      console.error('❌ Erro ao carregar operações:', error);
+      setError(error.message || 'Erro desconhecido ao carregar dados');
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar os dados.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
+    fetchOperacoes();
+  }, [toast]);
+
+  const handleAtualizarDados = async () => {
+    setAtualizando(true);
+    try {
+      await fetchOperacoes();
+      toast({
+        title: "Dados atualizados",
+        description: "Os dados foram atualizados com sucesso."
+      });
+    } catch (error) {
+      console.error('Erro ao atualizar dados:', error);
+    } finally {
+      setAtualizando(false);
+    }
+  };
+
+  const handleExecutarSQL = async () => {
+    setAtualizando(true);
+    try {
+      // Executar o comando SQL usando Supabase
+      const { data, error } = await supabase.rpc('executar_atualizacao_horarios');
+      
+      if (error) {
+        console.error('❌ Erro ao executar SQL:', error);
+        throw new Error(`Erro ao executar comando: ${error.message}`);
+      }
+
+      toast({
+        title: "Comando executado",
+        description: "O comando SQL foi executado com sucesso."
+      });
+
+      // Atualizar os dados após executar o SQL
+      await fetchOperacoes();
+      
+    } catch (error: any) {
+      console.error('❌ Erro ao executar SQL:', error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao executar comando SQL",
+        variant: "destructive"
+      });
+    } finally {
+      setAtualizando(false);
+    }
+  };
+
+  const operacoesFiltradas = useMemo(() => {
+    let filtered = operacoes;
+
+    console.log('🔍 Aplicando filtros...');
+    console.log('📅 Data filtro:', dataFiltro);
+    console.log('📊 Total operações antes do filtro:', filtered.length);
+
+    // Filtro por data
+    if (dataFiltro) {
+      console.log('📅 Aplicando filtro de data:', dataFiltro);
+      
+      filtered = filtered.filter(op => {
+        const match = op.data === dataFiltro;
+        return match;
+      });
+      console.log('📊 Após filtro de data:', filtered.length);
+    }
+    
+    // Filtro por hora inicial
+    if (horaInicialFiltro !== 'Todos') {
+      filtered = filtered.filter(op => op.hora_inicial === horaInicialFiltro);
+      console.log('📊 Após filtro de hora:', filtered.length);
+    }
+    
+    // Filtro por operador
+    if (operadorFiltro.trim() !== '') {
+      filtered = filtered.filter(op => 
+        op.equipamentos.some(eq => 
+          eq.motorista_operador?.toLowerCase().includes(operadorFiltro.toLowerCase())
+        )
+      );
+      console.log('📊 Após filtro de operador:', filtered.length);
+    }
+
+    console.log('✅ Total de operações filtradas:', filtered.length);
+    
+    return filtered;
+  }, [operacoes, dataFiltro, horaInicialFiltro, operadorFiltro]);
+
+  const dataExibida = dataFiltro;
+
+  const totaisPorOperacao = useMemo(() => {
+    const totais: { [key: string]: number } = {};
+    
+    operacoesFiltradas.forEach(op => {
+      const totalHoras = op.equipamentos.reduce((sum, eq) => 
+        sum + (Number(eq.horas_trabalhadas) || 0), 0
+      );
+      totais[op.op] = (totais[op.op] || 0) + totalHoras;
+    });
+    
+    return totais;
+  }, [operacoesFiltradas]);
+
+  const totaisAjudantesAusencias = useMemo(() => {
+    let totalAjudantes = 0;
+    let totalAusencias = 0;
+
+    operacoesFiltradas.forEach(op => {
+      if (op.ajudantes && op.ajudantes.length > 0) {
+        if (dataFiltro) {
+          const ajudantesFiltrados = op.ajudantes.filter(ajudante => 
+            ajudante.data === dataFiltro
+          );
+          totalAjudantes += ajudantesFiltrados.length;
+        } else {
+          totalAjudantes += op.ajudantes.length;
+        }
+      }
+      
+      if (op.ausencias && op.ausencias.length > 0) {
+        if (dataFiltro) {
+          const ausenciasFiltradas = op.ausencias.filter(ausencia => 
+            ausencia.data === dataFiltro
+          );
+          totalAusencias += ausenciasFiltradas.length;
+        } else {
+          totalAusencias += op.ausencias.length;
+        }
+      }
+    });
+
+    console.log('👥 Totais ajudantes/ausências:', { totalAjudantes, totalAusencias });
+    
+    return { totalAjudantes, totalAusencias };
+  }, [operacoesFiltradas, dataFiltro]);
+
+  // Agrupar operações por tipo para o menu lateral
+  const operacoesPorTipo = useMemo(() => {
+    const grupos: { [key: string]: OperacaoCompleta[] } = {};
+    
+    operacoesFiltradas.forEach(op => {
+      if (!grupos[op.op]) {
+        grupos[op.op] = [];
+      }
+      grupos[op.op].push(op);
+    });
+    
+    return grupos;
+  }, [operacoesFiltradas]);
+
+  const formatarHoras = (horas: number) => {
+    return `${horas.toFixed(2)}h`;
+  };
+
+  const getOperacaoIcon = (op: string) => {
+    switch (op) {
+      case 'NAVIO': return Ship;
+      case 'HYDRO': return Factory;
+      case 'ALBRAS': return Warehouse;
+      case 'SANTOS BRASIL': return Building;
+      case 'AJUDANTES': return Users;
+      case 'AUSENCIAS': return UserX;
+      default: return BarChart3;
+    }
+  };
+
+  const getOperacaoColor = (op: string) => {
+    switch (op) {
+      case 'NAVIO': return 'blue';
+      case 'HYDRO': return 'blue';
+      case 'ALBRAS': return 'blue';
+      case 'SANTOS BRASIL': return 'blue';
+      case 'AJUDANTES': return 'blue';
+      case 'AUSENCIAS': return 'blue';
+      default: return 'blue';
+    }
+  };
+
+  const getOperacaoDisplayName = (op: OperacaoCompleta) => {
+    if (op.op === 'NAVIO' && op.navios) {
+      return `${op.navios.nome_navio} - ${op.navios.carga}`;
+    }
+    if (op.op === 'ALBRAS' && op.carga) {
+      return `${op.op} - ${op.carga}`;
+    }
+    return op.op;
+  };
+
+  if (loading) {
     return (
-        <div className="min-h-screen pb-10" style={{ background: 'var(--gradient-primary)' }}>
-            <div className="flex items-center justify-between p-4 text-white">
-              <div className="flex items-center">
-                <Button variant="ghost" onClick={() => navigate('/')} className="text-white hover:bg-white/20 mr-4">
-                  <ArrowLeft className="h-5 w-5" />
-                </Button>
-                <h1 className="text-xl font-bold">RELATÓRIO DE TRANSPORTE</h1>
+      <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-200 border-t-white rounded-full animate-spin mx-auto mb-4"></div>
+          <h2 className="text-2xl font-bold text-white mb-2">Carregando Operações</h2>
+          <p className="text-blue-200">Buscando dados do sistema...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900 flex items-center justify-center">
+        <Card className="max-w-md mx-auto border-blue-200 bg-white/10 backdrop-blur-sm">
+          <CardContent className="pt-6 text-center">
+            <div className="w-12 h-12 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Database className="h-6 w-6 text-blue-300" />
+            </div>
+            <h2 className="text-xl font-bold text-white mb-2">Erro ao Carregar Dados</h2>
+            <p className="text-blue-200 mb-4">{error}</p>
+            <Button 
+              onClick={() => window.location.reload()} 
+              className="bg-blue-500 hover:bg-blue-600 text-white"
+            >
+              Tentar Novamente
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900">
+      {/* Header */}
+      <div className="bg-blue-800/50 backdrop-blur-sm border-b border-blue-600/30 shadow-sm">
+        <div className="px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <Button 
+                variant="ghost" 
+                onClick={() => navigate('/')} 
+                className="text-white hover:bg-white/20 px-4 py-2 rounded-lg transition-all"
+              >
+                <ArrowLeft className="h-5 w-5 mr-2" />
+                Voltar
+              </Button>
+              <div>
+                <h1 className="text-2xl font-bold text-white">Relatório de Transporte</h1>
+                <p className="text-blue-200 text-sm">
+                  {operacoes.length} operações no sistema • {operacoesFiltradas.length} correspondem aos filtros
+                  {dataExibida && ` • Data: ${new Date(dataExibida).toLocaleDateString('pt-BR')}`}
+                </p>
               </div>
             </div>
-            
-            <div className="px-4 mb-4">
-              <Card className="shadow-[var(--shadow-card)]">
-                <CardContent className="p-4 flex justify-between items-center">
-                  <span className="text-foreground font-medium">Gestão de Operações</span>
-                  <Button variant="outline" size="sm" onClick={() => navigate('/')} className="text-primary border-primary hover:bg-primary hover:text-white">
-                    Voltar ao Menu
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
-            
-            <div className="px-4 mb-4">
-              <Button onClick={() => navigate('/novo-lancamento')} className="w-full h-12 bg-secondary hover:bg-secondary/90 text-white font-semibold" style={{ boxShadow: 'var(--shadow-button)' }}>
-                <Plus className="h-5 w-5 mr-2" />Novo Lançamento
+            <div className="flex items-center space-x-2">
+              <Button 
+                onClick={handleExecutarSQL}
+                disabled={atualizando}
+                className="flex items-center space-x-2 bg-white text-blue-900 hover:bg-blue-100 font-medium"
+              >
+                <Database className="h-4 w-4" />
+                <span>Atualizar Horários</span>
+              </Button>
+              <Button 
+                onClick={handleAtualizarDados}
+                disabled={atualizando}
+                className="flex items-center space-x-2 bg-white text-blue-900 hover:bg-blue-100 font-medium"
+              >
+                <RefreshCw className={`h-4 w-4 ${atualizando ? 'animate-spin' : ''}`} />
+                <span>Atualizar Dados</span>
+              </Button>
+              <Button 
+                variant="outline"
+                onClick={() => setMenuAberto(!menuAberto)}
+                className="md:hidden border-blue-300 text-white hover:bg-white/20"
+              >
+                <Menu className="h-4 w-4" />
+              </Button>
+              <Button 
+                onClick={() => navigate('/novo-lancamento')} 
+                className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-2.5 rounded-lg font-semibold transition-all shadow-sm hover:shadow-md"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Nova Operação
               </Button>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Filtros */}
+      <div className="px-6 py-4 border-b border-blue-600/30 bg-blue-800/30 backdrop-blur-sm">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-white flex items-center space-x-2">
+              <Calendar className="h-4 w-4 text-blue-300" />
+              <span>Data da Operação</span>
+            </Label>
+            <Input 
+              type="date" 
+              value={dataFiltro}
+              onChange={(e) => setDataFiltro(e.target.value)}
+              className="h-10 bg-white/5 border-blue-300/30 text-white focus:border-blue-300 transition-colors"
+            />
+            <p className="text-xs text-blue-300">
+              Mostrando: {new Date(dataExibida).toLocaleDateString('pt-BR')}
+            </p>
+          </div>
+          
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-white flex items-center space-x-2">
+              <Clock className="h-4 w-4 text-blue-300" />
+              <span>Turno</span>
+            </Label>
+            <Select value={horaInicialFiltro} onValueChange={setHoraInicialFiltro}>
+              <SelectTrigger className="h-10 bg-white/5 border-blue-300/30 text-white focus:border-blue-300">
+                <SelectValue placeholder="Todos os turnos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Todos">Todos os Turnos</SelectItem>
+                <SelectItem value="07:00:00">Manhã (07:00)</SelectItem>
+                <SelectItem value="19:00:00">Noite (19:00)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-white flex items-center space-x-2">
+              <Search className="h-4 w-4 text-blue-300" />
+              <span>Operador</span>
+            </Label>
+            <Input 
+              type="text"
+              value={operadorFiltro}
+              onChange={(e) => setOperadorFiltro(e.target.value)}
+              placeholder="Buscar por nome..."
+              className="h-10 bg-white/5 border-blue-300/30 text-white focus:border-blue-300 transition-colors"
+            />
+          </div>
+          
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-white opacity-0">Ações</Label>
+            <Button 
+              onClick={() => {
+                const hoje = new Date();
+                setDataFiltro(hoje.toISOString().split('T')[0]);
+                setHoraInicialFiltro('Todos');
+                setOperadorFiltro('');
+                setOperacaoSelecionada('TODOS');
+              }}
+              className="w-full h-10 bg-white text-blue-900 hover:bg-blue-100 font-medium"
+            >
+              <Filter className="h-4 w-4 mr-2" />
+              Limpar Filtros
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Cards de Resumo */}
+      <div className="px-6 py-4">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+          {['HYDRO', 'NAVIO', 'ALBRAS', 'SANTOS BRASIL', 'AJUDANTES', 'AUSENCIAS'].map((op) => {
+            const Icon = getOperacaoIcon(op);
+            let count = 0;
+            let label = '';
+
+            if (['HYDRO', 'NAVIO', 'ALBRAS', 'SANTOS BRASIL'].includes(op)) {
+              count = operacoesFiltradas.filter(operacao => operacao.op === op).length;
+              label = `${count} ops`;
+            } else if (op === 'AJUDANTES') {
+              count = totaisAjudantesAusencias.totalAjudantes;
+              label = `${count} ajudantes`;
+            } else if (op === 'AUSENCIAS') {
+              count = totaisAjudantesAusencias.totalAusencias;
+              label = `${count} ausências`;
+            }
             
-            <div className="px-4 mb-4">
-              <Card className="shadow-[var(--shadow-card)]">
-                <CardHeader>
-                  <CardTitle>Registros Salvos</CardTitle>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4">
-                    <div className="flex-1">
-                      <label className="text-sm text-muted-foreground">Data:</label>
-                      <Input 
-                        type="date" 
-                        value={selectedDate} 
-                        onChange={(e) => setSelectedDate(e.target.value)} 
-                        className="mt-1" 
-                      />
+            return (
+              <Card key={op} className="bg-white/10 backdrop-blur-sm border-blue-200/30 hover:shadow-lg transition-shadow">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-blue-200">{op}</p>
+                      <p className="text-2xl font-bold text-white">{count}</p>
+                      <p className="text-xs text-blue-300">{label}</p>
                     </div>
-                    <div className="flex-1">
-                      <label className="text-sm text-muted-foreground">Local:</label>
-                      <Select value={selectedLocal} onValueChange={setSelectedLocal}>
-                        <SelectTrigger className="mt-1">
-                          <SelectValue placeholder="Todos" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Todos">Todos</SelectItem>
-                          <SelectItem value="NAVIO">NAVIO</SelectItem>
-                          <SelectItem value="HYDRO">HYDRO</SelectItem>
-                          <SelectItem value="ALBRAS">ALBRAS</SelectItem>
-                          <SelectItem value="SANTOS BRASIL">SANTOS BRASIL</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="flex-1">
-                      <label className="text-sm text-muted-foreground">Horário de Início:</label>
-                      <Select value={selectedHoraInicial} onValueChange={setSelectedHoraInicial}>
-                        <SelectTrigger className="mt-1">
-                          <SelectValue placeholder="Todos" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Todos">Todos os Horários</SelectItem>
-                          <SelectItem value="07:00:00">07:00</SelectItem>
-                          <SelectItem value="19:00:00">19:00</SelectItem>
-                        </SelectContent>
-                      </Select>
+                    <div className="p-3 rounded-lg bg-blue-500/20">
+                      <Icon className="h-6 w-6 text-blue-300" />
                     </div>
                   </div>
-                </CardHeader>
+                </CardContent>
               </Card>
-            </div>
-            
-            <div className="px-4">
-                <Card className="shadow-[var(--shadow-card)]">
-                    <CardContent className="p-0">
-                        <div className="p-4">
-                            <div className="overflow-x-auto">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Operação</TableHead>
-                                            <TableHead>Data</TableHead>
-                                            <TableHead>Horário</TableHead>
-                                            <TableHead>Local</TableHead>
-                                            <TableHead className="text-right">Ações</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {loading ? (
-                                            <TableRow>
-                                                <TableCell colSpan={5} className="text-center">
-                                                    Carregando...
-                                                </TableCell>
-                                            </TableRow>
-                                        ) : operacoes.length === 0 ? (
-                                            <TableRow>
-                                                <TableCell colSpan={5} className="text-center text-muted-foreground">
-                                                    Nenhum registro encontrado.
-                                                </TableCell>
-                                            </TableRow>
-                                        ) : (
-                                            operacoes.map((op) => {
-                                                const createdAt = new Date(op.created_at).getTime();
-                                                const now = new Date().getTime();
-                                                const isEditable = (now - createdAt) < 24 * 60 * 60 * 1000;
-                                                
-                                                // Definir nome para exibição
-                                                let nomeExibicao = op.op;
-                                                if (op.op === 'NAVIO' && op.navios) {
-                                                  nomeExibicao = `${op.navios.nome_navio} (${op.navios.carga})`;
-                                                } else if (op.op === 'ALBRAS' && op.carga) {
-                                                  nomeExibicao = `${op.op} - ${op.carga}`;
-                                                }
-                                                
-                                                return (
-                                                    <TableRow key={op.id}>
-                                                        <TableCell className="font-medium">
-                                                            {nomeExibicao}
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            {new Date(op.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            {op.hora_inicial} - {op.hora_final}
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            {op.equipamentos[0]?.local || 'N/A'}
-                                                        </TableCell>
-                                                        <TableCell className="text-right">
-                                                            <div className="flex justify-end gap-2">
-                                                                <Button 
-                                                                    variant="outline" 
-                                                                    size="sm" 
-                                                                    onClick={() => handleViewOperation(op)}
-                                                                    title="Visualizar lançamento"
-                                                                >
-                                                                    <Eye className="h-4 w-4"/>
-                                                                </Button>
-                                                                <Button 
-                                                                    variant="outline" 
-                                                                    size="sm" 
-                                                                    onClick={() => handleExportSinglePDF(op)}
-                                                                    title="Baixar PDF do lançamento"
-                                                                >
-                                                                    <Download className="h-4 w-4"/>
-                                                                </Button>
-                                                                <Button 
-                                                                    variant="outline" 
-                                                                    size="sm" 
-                                                                    onClick={() => handleCopyOperation(op)}
-                                                                    title="Copiar operação para novo lançamento"
-                                                                    className="bg-green-600 hover:bg-green-700 text-white"
-                                                                >
-                                                                    <Copy className="h-4 w-4"/>
-                                                                </Button>
-                                                                <Button 
-                                                                    variant="outline" 
-                                                                    size="sm" 
-                                                                    disabled={!isEditable} 
-                                                                    onClick={() => navigate(`/operacao/${op.id}/editar`)}
-                                                                    title={isEditable ? 'Editar lançamento' : 'Edição bloqueada'}
-                                                                >
-                                                                    <Pencil className="h-4 w-4"/>
-                                                                </Button>
-                                                            </div>
-                                                        </TableCell>
-                                                    </TableRow>
-                                                );
-                                            })
-                                        )}
-                                    </TableBody>
-                                </Table>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
+            );
+          })}
         </div>
+      </div>
+
+      {/* Conteúdo Principal */}
+      <div className="flex-1 flex px-6 pb-6" style={{ minHeight: 'calc(100vh - 300px)' }}>
+        {/* Menu Lateral */}
+        <div className={`${menuAberto ? 'w-80' : 'w-0'} transition-all duration-300 flex-shrink-0 ${!menuAberto && 'overflow-hidden'}`}>
+          <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30 h-full">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg font-semibold text-white flex items-center justify-between">
+                <span>Operações</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setMenuAberto(false)}
+                  className="md:hidden text-white hover:bg-white/20"
+                >
+                  ×
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="space-y-1 max-h-[calc(100vh-400px)] overflow-y-auto">
+                {/* Item Todos */}
+                <button
+                  onClick={() => setOperacaoSelecionada('TODOS')}
+                  className={`w-full text-left p-4 hover:bg-white/10 transition-colors border-l-4 ${
+                    operacaoSelecionada === 'TODOS' 
+                      ? 'bg-blue-500/20 border-blue-300 text-white' 
+                      : 'border-transparent text-blue-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <BarChart3 className="h-5 w-5" />
+                      <span className="font-medium">VISÃO GERAL</span>
+                    </div>
+                    <Badge variant="secondary" className="bg-blue-500/20 text-blue-300">
+                      {operacoesFiltradas.length}
+                    </Badge>
+                  </div>
+                </button>
+
+                {/* Operações por Tipo com IDs SEMPRE VISÍVEIS */}
+                {Object.entries(operacoesPorTipo).map(([tipo, ops]) => {
+                  const Icon = getOperacaoIcon(tipo);
+                  return (
+                    <div key={tipo}>
+                      <button
+                        onClick={() => setOperacaoSelecionada(tipo)}
+                        className={`w-full text-left p-4 hover:bg-white/10 transition-colors border-l-4 ${
+                          operacaoSelecionada === tipo 
+                            ? 'bg-blue-500/20 border-blue-300 text-white' 
+                            : 'border-transparent text-blue-200'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <Icon className="h-5 w-5" />
+                            <span className="font-medium">{tipo}</span>
+                          </div>
+                          <Badge variant="secondary" className="bg-blue-500/20 text-blue-300">
+                            {ops.length}
+                          </Badge>
+                        </div>
+                      </button>
+                      
+                      {/* IDs das operações - SEMPRE VISÍVEIS (removida a condição operacaoSelecionada === tipo) */}
+                      {ops.map((op) => (
+                        <button
+                          key={op.id}
+                          onClick={() => setOperacaoSelecionada(op.id)}
+                          className={`w-full text-left p-4 pl-12 hover:bg-white/10 transition-colors border-l-4 ${
+                            operacaoSelecionada === op.id 
+                              ? 'bg-blue-400/20 border-blue-200 text-white' 
+                              : 'border-transparent text-blue-200'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="font-medium text-sm">ID: {op.id.slice(0, 8)}...</div>
+                              <div className="text-xs text-blue-300">
+                                {new Date(op.data).toLocaleDateString('pt-BR')} • {op.hora_inicial}
+                              </div>
+                            </div>
+                            <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-300 border-blue-300/30">
+                              {op.equipamentos.length} eqps
+                            </Badge>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })}
+
+                {/* Ajudantes */}
+                {totaisAjudantesAusencias.totalAjudantes > 0 && (
+                  <button
+                    onClick={() => setOperacaoSelecionada('AJUDANTES')}
+                    className={`w-full text-left p-4 hover:bg-white/10 transition-colors border-l-4 ${
+                      operacaoSelecionada === 'AJUDANTES' 
+                        ? 'bg-blue-500/20 border-blue-300 text-white' 
+                        : 'border-transparent text-blue-200'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <Users className="h-5 w-5" />
+                        <span className="font-medium">AJUDANTES</span>
+                      </div>
+                      <Badge variant="secondary" className="bg-blue-500/20 text-blue-300">
+                        {totaisAjudantesAusencias.totalAjudantes}
+                      </Badge>
+                    </div>
+                  </button>
+                )}
+
+                {/* Ausências */}
+                {totaisAjudantesAusencias.totalAusencias > 0 && (
+                  <button
+                    onClick={() => setOperacaoSelecionada('AUSENCIAS')}
+                    className={`w-full text-left p-4 hover:bg-white/10 transition-colors border-l-4 ${
+                      operacaoSelecionada === 'AUSENCIAS' 
+                        ? 'bg-blue-500/20 border-blue-300 text-white' 
+                        : 'border-transparent text-blue-200'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <UserX className="h-5 w-5" />
+                        <span className="font-medium">AUSÊNCIAS</span>
+                      </div>
+                      <Badge variant="secondary" className="bg-blue-500/20 text-blue-300">
+                        {totaisAjudantesAusencias.totalAusencias}
+                      </Badge>
+                    </div>
+                  </button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Conteúdo */}
+        <div className="flex-1 ml-6 min-w-0">
+          <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30 h-full">
+            <CardContent className="p-6 h-full overflow-auto">
+              {/* Visão Geral */}
+              {operacaoSelecionada === 'TODOS' && (
+                <div className="space-y-6">
+                  {Object.entries(operacoesPorTipo).map(([tipo, ops]) => {
+                    const Icon = getOperacaoIcon(tipo);
+                    
+                    return (
+                      <div key={tipo} className="border border-blue-200/30 rounded-lg">
+                        <div className="bg-blue-500/10 px-4 py-3 border-b border-blue-200/30">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                              <Icon className="h-5 w-5 text-blue-300" />
+                              <h3 className="text-lg font-semibold text-white">{tipo}</h3>
+                              <Badge variant="outline" className="bg-blue-500/10 text-blue-300 border-blue-300/30">
+                                {ops.length} operação(ões)
+                              </Badge>
+                            </div>
+                            {totaisPorOperacao[tipo] > 0 && (
+                              <div className="text-sm text-blue-300">
+                                Total: <span className="font-semibold text-green-400">{formatarHoras(totaisPorOperacao[tipo])}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <OperacoesTable 
+                          operacoes={ops}
+                          getOperacaoDisplayName={getOperacaoDisplayName}
+                        />
+                      </div>
+                    );
+                  })}
+                  
+                  {totaisAjudantesAusencias.totalAjudantes > 0 && (
+                    <div className="border border-blue-200/30 rounded-lg">
+                      <div className="bg-blue-500/10 px-4 py-3 border-b border-blue-200/30">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <Users className="h-5 w-5 text-blue-300" />
+                            <h3 className="text-lg font-semibold text-white">AJUDANTES</h3>
+                            <Badge variant="outline" className="bg-blue-500/10 text-blue-300 border-blue-300/30">
+                              {totaisAjudantesAusencias.totalAjudantes} ajudante(s)
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
+                      <AjudantesTable operacoes={operacoesFiltradas} dataFiltro={dataFiltro} />
+                    </div>
+                  )}
+
+                  {totaisAjudantesAusencias.totalAusencias > 0 && (
+                    <div className="border border-blue-200/30 rounded-lg">
+                      <div className="bg-blue-500/10 px-4 py-3 border-b border-blue-200/30">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <UserX className="h-5 w-5 text-blue-300" />
+                            <h3 className="text-lg font-semibold text-white">AUSÊNCIAS</h3>
+                            <Badge variant="outline" className="bg-blue-500/10 text-blue-300 border-blue-300/30">
+                              {totaisAjudantesAusencias.totalAusencias} ausência(s)
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
+                      <AusenciasTable operacoes={operacoesFiltradas} dataFiltro={dataFiltro} />
+                    </div>
+                  )}
+
+                  {operacoesFiltradas.length === 0 && (
+                    <div className="text-center py-12 border-2 border-dashed border-blue-300/30 rounded-lg">
+                      <Search className="h-12 w-12 text-blue-300/50 mx-auto mb-4" />
+                      <p className="text-lg font-medium text-white mb-2">Nenhuma operação encontrada</p>
+                      <p className="text-blue-300 mb-4">Ajuste os filtros ou crie uma nova operação</p>
+                      <Button 
+                        onClick={() => navigate('/novo-lancamento')}
+                        className="bg-orange-500 hover:bg-orange-600 text-white"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Criar Primeira Operação
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Operação Específica por ID */}
+              {operacaoSelecionada && operacaoSelecionada !== 'TODOS' && operacaoSelecionada !== 'AJUDANTES' && operacaoSelecionada !== 'AUSENCIAS' && !['HYDRO', 'NAVIO', 'ALBRAS', 'SANTOS BRASIL'].includes(operacaoSelecionada) && (
+                <OperacaoDetalhada 
+                  operacao={operacoesFiltradas.find(op => op.id === operacaoSelecionada)}
+                  getOperacaoDisplayName={getOperacaoDisplayName}
+                />
+              )}
+
+              {/* Operação por Tipo */}
+              {['HYDRO', 'NAVIO', 'ALBRAS', 'SANTOS BRASIL'].includes(operacaoSelecionada) && (
+                <div>
+                  <div className="flex items-center justify-between mb-6 p-4 bg-blue-500/10 rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-3 rounded-lg bg-blue-500/20">
+                        {(() => {
+                          const Icon = getOperacaoIcon(operacaoSelecionada);
+                          return <Icon className="h-6 w-6 text-blue-300" />;
+                        })()}
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-bold text-white">{operacaoSelecionada}</h2>
+                        <p className="text-blue-300">
+                          {operacoesPorTipo[operacaoSelecionada]?.length || 0} operação(ões) • Total: {formatarHoras(totaisPorOperacao[operacaoSelecionada] || 0)}
+                        </p>
+                      </div>
+                    </div>
+                    <Badge variant="secondary" className="text-sm bg-blue-500/20 text-blue-300">
+                      {operacoesPorTipo[operacaoSelecionada]?.length || 0} registros
+                    </Badge>
+                  </div>
+                  <OperacoesTable 
+                    operacoes={operacoesPorTipo[operacaoSelecionada] || []}
+                    getOperacaoDisplayName={getOperacaoDisplayName}
+                  />
+                </div>
+              )}
+
+              {/* Ajudantes */}
+              {operacaoSelecionada === 'AJUDANTES' && (
+                <div>
+                  <div className="flex items-center justify-between mb-6 p-4 bg-blue-500/10 rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-3 rounded-lg bg-blue-500/20">
+                        <Users className="h-6 w-6 text-blue-300" />
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-bold text-white">AJUDANTES</h2>
+                        <p className="text-blue-300">
+                          {totaisAjudantesAusencias.totalAjudantes} ajudante(s) registrado(s)
+                        </p>
+                      </div>
+                    </div>
+                    <Badge variant="secondary" className="text-sm bg-blue-500/20 text-blue-300">
+                      {totaisAjudantesAusencias.totalAjudantes} registros
+                    </Badge>
+                  </div>
+                  <AjudantesTable operacoes={operacoesFiltradas} dataFiltro={dataFiltro} />
+                </div>
+              )}
+
+              {/* Ausências */}
+              {operacaoSelecionada === 'AUSENCIAS' && (
+                <div>
+                  <div className="flex items-center justify-between mb-6 p-4 bg-blue-500/10 rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-3 rounded-lg bg-blue-500/20">
+                        <UserX className="h-6 w-6 text-blue-300" />
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-bold text-white">AUSÊNCIAS</h2>
+                        <p className="text-blue-300">
+                          {totaisAjudantesAusencias.totalAusencias} ausência(s) registrada(s)
+                        </p>
+                      </div>
+                    </div>
+                    <Badge variant="secondary" className="text-sm bg-blue-500/20 text-blue-300">
+                      {totaisAjudantesAusencias.totalAusencias} registros
+                    </Badge>
+                  </div>
+                  <AusenciasTable operacoes={operacoesFiltradas} dataFiltro={dataFiltro} />
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Componente para operação detalhada por ID
+interface OperacaoDetalhadaProps {
+  operacao: OperacaoCompleta | undefined;
+  getOperacaoDisplayName: (op: OperacaoCompleta) => string;
+}
+
+const OperacaoDetalhada = ({ operacao, getOperacaoDisplayName }: OperacaoDetalhadaProps) => {
+  if (!operacao) {
+    return (
+      <div className="text-center py-12">
+        <div className="space-y-3">
+          <Search className="h-12 w-12 text-blue-300/50 mx-auto" />
+          <p className="text-lg font-medium text-white">Operação não encontrada</p>
+          <p className="text-blue-300">A operação selecionada não existe ou foi removida</p>
+        </div>
+      </div>
     );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between p-4 bg-blue-500/10 rounded-lg">
+        <div>
+          <h2 className="text-xl font-bold text-white">Operação #{operacao.id.slice(0, 8)}</h2>
+          <p className="text-blue-300">
+            {getOperacaoDisplayName(operacao)} • {new Date(operacao.data).toLocaleDateString('pt-BR')}
+          </p>
+        </div>
+      </div>
+
+      <Card className="bg-white/5 border-blue-200/30">
+        <CardHeader>
+          <CardTitle className="text-white">Detalhes da Operação</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label className="text-sm font-medium text-blue-200">Data</Label>
+              <p className="text-white">{new Date(operacao.data).toLocaleDateString('pt-BR')}</p>
+            </div>
+            <div>
+              <Label className="text-sm font-medium text-blue-200">Horário</Label>
+              <p className="text-white">{operacao.hora_inicial} - {operacao.hora_final}</p>
+            </div>
+            <div>
+              <Label className="text-sm font-medium text-blue-200">Tipo</Label>
+              <p className="text-white">{operacao.op}</p>
+            </div>
+            <div>
+              <Label className="text-sm font-medium text-blue-200">Observações</Label>
+              <p className="text-white">{operacao.observacao || 'Nenhuma'}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <OperacoesTable 
+        operacoes={[operacao]}
+        getOperacaoDisplayName={getOperacaoDisplayName}
+      />
+    </div>
+  );
+};
+
+// Componente de Tabela de Operações
+interface OperacoesTableProps {
+  operacoes: OperacaoCompleta[];
+  getOperacaoDisplayName: (op: OperacaoCompleta) => string;
+}
+
+const OperacoesTable = ({ operacoes, getOperacaoDisplayName }: OperacoesTableProps) => {
+  if (operacoes.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <div className="space-y-3">
+          <Search className="h-12 w-12 text-blue-300/50 mx-auto" />
+          <p className="text-lg font-medium text-white">Nenhuma operação encontrada</p>
+          <p className="text-blue-300">Os filtros aplicados não retornaram resultados</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader className="bg-blue-500/10">
+          <TableRow>
+            <TableHead className="font-semibold text-blue-200 py-3">Operação</TableHead>
+            <TableHead className="font-semibold text-blue-200 py-3">Data</TableHead>
+            <TableHead className="font-semibold text-blue-200 py-3">Horário</TableHead>
+            <TableHead className="font-semibold text-blue-200 py-3">Equipamento</TableHead>
+            <TableHead className="font-semibold text-blue-200 py-3">Motorista/Operador</TableHead>
+            <TableHead className="font-semibold text-blue-200 py-3">Horas Trabalhadas</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {operacoes.flatMap((op) => 
+            op.equipamentos.map((eq) => {
+              const horasTrabalhadas = Number(eq.horas_trabalhadas) || 0;
+              
+              return (
+                <TableRow key={`${op.id}-${eq.id}`} className="hover:bg-white/5 transition-colors border-b border-blue-200/10">
+                  <TableCell className="py-4">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-3 h-3 rounded-full bg-blue-400"></div>
+                      <div>
+                        <div className="font-medium text-white">{getOperacaoDisplayName(op)}</div>
+                        {op.observacao && (
+                          <div className="text-sm text-blue-300 truncate max-w-xs">{op.observacao}</div>
+                        )}
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell className="py-4">
+                    <div className="text-sm font-medium text-white">
+                      {new Date(op.data).toLocaleDateString('pt-BR')}
+                    </div>
+                  </TableCell>
+                  <TableCell className="py-4">
+                    <div className="flex items-center space-x-2">
+                      <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-300/30">
+                        {op.hora_inicial}
+                      </Badge>
+                      <span className="text-blue-400">→</span>
+                      <Badge variant="outline" className="bg-green-500/20 text-green-300 border-green-300/30">
+                        {op.hora_final}
+                      </Badge>
+                    </div>
+                  </TableCell>
+                  <TableCell className="py-4">
+                    <div className="font-medium text-white">{eq.tag}</div>
+                  </TableCell>
+                  <TableCell className="py-4">
+                    <div className="font-medium text-white">{eq.motorista_operador}</div>
+                  </TableCell>
+                  <TableCell className="py-4">
+                    <div className="text-center">
+                      <Badge className="bg-green-500/20 text-green-300 hover:bg-green-500/20 border-0 text-sm font-medium">
+                        {horasTrabalhadas.toFixed(1)}h
+                      </Badge>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              );
+            })
+          )}
+        </TableBody>
+      </Table>
+    </div>
+  );
+};
+
+// Componente de Tabela de Ajudantes
+interface AjudantesTableProps {
+  operacoes: OperacaoCompleta[];
+  dataFiltro?: string;
+}
+
+const AjudantesTable = ({ operacoes, dataFiltro }: AjudantesTableProps) => {
+  const todosAjudantes = operacoes.flatMap(op => 
+    op.ajudantes?.map(ajudante => ({
+      ...ajudante,
+      operacao: op.op,
+      dataOperacao: op.data,
+      nomeOperacao: op.op === 'NAVIO' && op.navios ? `${op.navios.nome_navio} - ${op.navios.carga}` : op.op
+    })) || []
+  );
+
+  const ajudantesFiltrados = dataFiltro 
+    ? todosAjudantes.filter(ajudante => ajudante.data === dataFiltro)
+    : todosAjudantes;
+
+  if (ajudantesFiltrados.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <div className="space-y-3">
+          <Users className="h-12 w-12 text-blue-300/50 mx-auto" />
+          <p className="text-lg font-medium text-white">Nenhum ajudante encontrado</p>
+          <p className="text-blue-300">Não há ajudantes registrados para os filtros aplicados</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader className="bg-blue-500/10">
+          <TableRow>
+            <TableHead className="font-semibold text-blue-200 py-3">Nome</TableHead>
+            <TableHead className="font-semibold text-blue-200 py-3">Operação</TableHead>
+            <TableHead className="font-semibold text-blue-200 py-3">Data</TableHead>
+            <TableHead className="font-semibold text-blue-200 py-3">Horário</TableHead>
+            <TableHead className="font-semibold text-blue-200 py-3">Observações</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {ajudantesFiltrados.map((ajudante, index) => (
+            <TableRow key={`${ajudante.id}-${index}`} className="hover:bg-white/5 transition-colors border-b border-blue-200/10">
+              <TableCell className="py-4">
+                <div className="font-medium text-white">{ajudante.nome}</div>
+              </TableCell>
+              <TableCell className="py-4">
+                <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-300/30">
+                  {ajudante.nomeOperacao}
+                </Badge>
+              </TableCell>
+              <TableCell className="py-4">
+                <div className="text-sm text-white">
+                  {new Date(ajudante.data).toLocaleDateString('pt-BR')}
+                </div>
+              </TableCell>
+              <TableCell className="py-4">
+                <div className="flex items-center space-x-2">
+                  <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-300/30 text-xs">
+                    {ajudante.hora_inicial}
+                  </Badge>
+                  <span className="text-blue-400">→</span>
+                  <Badge variant="outline" className="bg-green-500/20 text-green-300 border-green-300/30 text-xs">
+                    {ajudante.hora_final}
+                  </Badge>
+                </div>
+              </TableCell>
+              <TableCell className="py-4">
+                <div className="text-sm text-blue-300 max-w-xs">
+                  {ajudante.observacao || 'Sem observações'}
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+};
+
+// Componente de Tabela de Ausências
+interface AusenciasTableProps {
+  operacoes: OperacaoCompleta[];
+  dataFiltro?: string;
+}
+
+const AusenciasTable = ({ operacoes, dataFiltro }: AusenciasTableProps) => {
+  const todasAusencias = operacoes.flatMap(op => 
+    op.ausencias?.map(ausencia => ({
+      ...ausencia,
+      operacao: op.op,
+      dataOperacao: op.data,
+      nomeOperacao: op.op === 'NAVIO' && op.navios ? `${op.navios.nome_navio} - ${op.navios.carga}` : op.op
+    })) || []
+  );
+
+  const ausenciasFiltradas = dataFiltro 
+    ? todasAusencias.filter(ausencia => ausencia.data === dataFiltro)
+    : todasAusencias;
+
+  if (ausenciasFiltradas.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <div className="space-y-3">
+          <UserX className="h-12 w-12 text-blue-300/50 mx-auto" />
+          <p className="text-lg font-medium text-white">Nenhuma ausência encontrada</p>
+          <p className="text-blue-300">Não há ausências registradas para os filtros aplicados</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader className="bg-blue-500/10">
+          <TableRow>
+            <TableHead className="font-semibold text-blue-200 py-3">Nome</TableHead>
+            <TableHead className="font-semibold text-blue-200 py-3">Operação</TableHead>
+            <TableHead className="font-semibold text-blue-200 py-3">Data</TableHead>
+            <TableHead className="font-semibold text-blue-200 py-3">Status</TableHead>
+            <TableHead className="font-semibold text-blue-200 py-3">Observações</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {ausenciasFiltradas.map((ausencia, index) => (
+            <TableRow key={`${ausencia.id}-${index}`} className="hover:bg-white/5 transition-colors border-b border-blue-200/10">
+              <TableCell className="py-4">
+                <div className="font-medium text-white">{ausencia.nome}</div>
+              </TableCell>
+              <TableCell className="py-4">
+                <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-300/30">
+                  {ausencia.nomeOperacao}
+                </Badge>
+              </TableCell>
+              <TableCell className="py-4">
+                <div className="text-sm text-white">
+                  {new Date(ausencia.data).toLocaleDateString('pt-BR')}
+                </div>
+              </TableCell>
+              <TableCell className="py-4">
+                <Badge variant={ausencia.justificado ? "default" : "destructive"} className={ausencia.justificado ? "bg-green-500/20 text-green-300 hover:bg-green-500/20 border-green-300/30" : "bg-red-500/20 text-red-300 hover:bg-red-500/20 border-red-300/30"}>
+                  {ausencia.justificado ? 'Justificado' : 'Não Justificado'}
+                </Badge>
+              </TableCell>
+              <TableCell className="py-4">
+                <div className="text-sm text-blue-300 max-w-xs">
+                  {ausencia.obs || 'Sem observações'}
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
 };
 
 export default RelatorioTransporte;

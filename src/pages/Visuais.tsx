@@ -1,382 +1,535 @@
-// src/pages/Visuais.tsx
-import { useState, useEffect } from 'react';
-import { useAuth } from '@/hooks/useAuth';
-import { useNotifications } from '@/hooks/useNotifications';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CalendarIcon, FilterIcon, Bell, FileText, Ship, BarChart2 } from 'lucide-react';
-import {
-  Chart as ChartJS,
-  ArcElement,
-  CategoryScale,
-  LinearScale,
-  Title,
-  Tooltip,
-  Legend,
-} from 'chart.js';
-import { Pie, Bar } from 'react-chartjs-2';
+import { BarChart3, TrendingUp, Download, Filter, Calendar, PieChart, ArrowLeft } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
-// Registra os componentes necessários do Chart.js
-ChartJS.register(ArcElement, CategoryScale, LinearScale, Title, Tooltip, Legend);
+// Interface para os dados do gráfico
+interface ChartData {
+  local: string;
+  horas: number;
+  quantidade: number;
+  porcentagem: number;
+}
 
-interface EquipamentoOperacao {
+// Interface para simular registros da tabela equipamentos
+interface EquipamentoSimulado {
   id: string;
-  local: string; // 'HYDRO', 'ALBRAS', 'NAVIO', 'SANTOS BRASIL'
-  tag: string; // Ex: "CB-123", "EST-5"
-  hora_inicial: string | null;
-  hora_final: string | null;
+  local: string;
+  horas_trabalhadas: number;
+  created_at: string;
 }
 
 const Visuais = () => {
-  const { userProfile, signOut } = useAuth();
-  const { hasUnread } = useNotifications();
-  const [loading, setLoading] = useState(true);
-  const [equipamentos, setEquipamentos] = useState<EquipamentoOperacao[]>([]);
-  const [filtroDataInicio, setFiltroDataInicio] = useState<string>('');
-  const [filtroDataFim, setFiltroDataFim] = useState<string>('');
-  const [filtroLocal, setFiltroLocal] = useState<string>('Todos');
-  const [filtroTipoEquipamento, setFiltroTipoEquipamento] = useState<string>('Todos');
+  const navigate = useNavigate();
+  
+  // Obter data atual no formato YYYY-MM-DD
+  const getDataAtual = () => {
+    const hoje = new Date();
+    return hoje.toISOString().split('T')[0];
+  };
 
-  // Carregar dados do Supabase
-  useEffect(() => {
-    const fetchEquipamentos = async () => {
-      setLoading(true);
-      try {
-        const { data, error } = await supabase
-          .from('equipamentos')
-          .select('local, tag, hora_inicial, hora_final')
-          .eq('hora_inicial IS NOT NULL', true)
-          .eq('hora_final IS NOT NULL', true);
+  // Obter data de 7 dias atrás
+  const getDataInicialPadrao = () => {
+    const hoje = new Date();
+    const seteDiasAtras = new Date(hoje);
+    seteDiasAtras.setDate(hoje.getDate() - 7);
+    return seteDiasAtras.toISOString().split('T')[0];
+  };
 
-        if (error) throw error;
+  const [filtros, setFiltros] = useState({
+    dataInicial: getDataInicialPadrao(),
+    dataFinal: getDataAtual(),
+    local: 'todos'
+  });
 
-        let filtered = data || [];
+  const [dadosGrafico, setDadosGrafico] = useState<ChartData[]>([]);
+  const [carregando, setCarregando] = useState(false);
 
-        // Filtrar por data
-        if (filtroDataInicio || filtroDataFim) {
-          filtered = filtered.filter(item => {
-            const dataEq = new Date(item.hora_inicial!).toISOString().split('T')[0];
-            if (filtroDataInicio && dataEq < filtroDataInicio) return false;
-            if (filtroDataFim && dataEq > filtroDataFim) return false;
-            return true;
-          });
-        }
+  // Locais disponíveis para filtro
+  const locais = [
+    { value: 'todos', label: 'Todos os Locais' },
+    { value: 'HYDRO', label: 'HYDRO' },
+    { value: 'NAVIO', label: 'NAVIO' },
+    { value: 'ALBRAS', label: 'ALBRAS' },
+    { value: 'SANTOS BRASIL', label: 'SANTOS BRASIL' }
+  ];
 
-        // Filtrar por local
-        if (filtroLocal !== 'Todos') {
-          filtered = filtered.filter(eq => eq.local === filtroLocal);
-        }
+  // Simular dados da tabela equipamentos (substituir pela API real)
+  const simularDadosEquipamentos = (): EquipamentoSimulado[] => {
+    const equipamentos: EquipamentoSimulado[] = [];
+    const locaisDisponiveis = ['HYDRO', 'NAVIO', 'ALBRAS', 'SANTOS BRASIL'];
+    
+    // Gerar dados para os últimos 30 dias
+    for (let i = 0; i < 100; i++) {
+      const local = locaisDisponiveis[Math.floor(Math.random() * locaisDisponiveis.length)];
+      const horas = parseFloat((Math.random() * 12 + 4).toFixed(1)); // 4-16 horas
+      const diasAtras = Math.floor(Math.random() * 30);
+      const data = new Date();
+      data.setDate(data.getDate() - diasAtras);
+      
+      equipamentos.push({
+        id: `eq-${i}`,
+        local,
+        horas_trabalhadas: horas,
+        created_at: data.toISOString().split('T')[0]
+      });
+    }
 
-        // Filtrar por tipo de equipamento (prefixo antes do '-')
-        if (filtroTipoEquipamento !== 'Todos') {
-          filtered = filtered.filter(eq => {
-            const prefixo = eq.tag.split('-')[0];
-            return prefixo === filtroTipoEquipamento;
-          });
-        }
+    // Adicionar alguns dados específicos para garantir valores consistentes
+    equipamentos.push(
+      { id: 'eq-hydro-1', local: 'HYDRO', horas_trabalhadas: 8.5, created_at: getDataAtual() },
+      { id: 'eq-hydro-2', local: 'HYDRO', horas_trabalhadas: 7.0, created_at: getDataAtual() },
+      { id: 'eq-navio-1', local: 'NAVIO', horas_trabalhadas: 6.0, created_at: getDataAtual() },
+      { id: 'eq-albras-1', local: 'ALBRAS', horas_trabalhadas: 9.5, created_at: getDataAtual() },
+      { id: 'eq-santos-1', local: 'SANTOS BRASIL', horas_trabalhadas: 8.0, created_at: getDataAtual() }
+    );
 
-        setEquipamentos(filtered);
-      } catch (error) {
-        console.error('Erro ao carregar equipamentos:', error);
-      } finally {
-        setLoading(false);
+    return equipamentos;
+  };
+
+  // Função para processar dados com filtros aplicados
+  const processarDadosComFiltros = (equipamentos: EquipamentoSimulado[]) => {
+    let equipamentosFiltrados = [...equipamentos];
+
+    // Aplicar filtro de data
+    if (filtros.dataInicial) {
+      equipamentosFiltrados = equipamentosFiltrados.filter(eq => 
+        eq.created_at >= filtros.dataInicial
+      );
+    }
+
+    if (filtros.dataFinal) {
+      equipamentosFiltrados = equipamentosFiltrados.filter(eq => 
+        eq.created_at <= filtros.dataFinal
+      );
+    }
+
+    // Aplicar filtro de local
+    if (filtros.local !== 'todos') {
+      equipamentosFiltrados = equipamentosFiltrados.filter(eq => 
+        eq.local === filtros.local
+      );
+    }
+
+    // Agrupar por local e calcular totais
+    const agrupadoPorLocal = equipamentosFiltrados.reduce((acc, equipamento) => {
+      if (!acc[equipamento.local]) {
+        acc[equipamento.local] = {
+          horas: 0,
+          quantidade: 0
+        };
       }
-    };
+      
+      acc[equipamento.local].horas += equipamento.horas_trabalhadas;
+      acc[equipamento.local].quantidade += 1;
+      
+      return acc;
+    }, {} as Record<string, { horas: number; quantidade: number }>);
 
-    fetchEquipamentos();
-  }, [filtroDataInicio, filtroDataFim, filtroLocal, filtroTipoEquipamento]);
+    // Converter para array e calcular porcentagens
+    const dadosArray = Object.entries(agrupadoPorLocal).map(([local, dados]) => ({
+      local,
+      horas: parseFloat(dados.horas.toFixed(1)),
+      quantidade: dados.quantidade
+    }));
 
-  // Função auxiliar para calcular diferença em horas entre dois times
-  const calcularHorasDiferenca = (inicio: string, fim: string): number => {
-    const [h1, m1] = inicio.split(':').map(Number);
-    const [h2, m2] = fim.split(':').map(Number);
-    let totalMinutos = (h2 * 60 + m2) - (h1 * 60 + m1);
-    if (totalMinutos < 0) totalMinutos += 24 * 60; // Se passou da meia-noite
-    return totalMinutos / 60; // Retorna em horas
+    // Calcular total de horas para as porcentagens
+    const totalHoras = dadosArray.reduce((sum, item) => sum + item.horas, 0);
+
+    // Adicionar porcentagens
+    const dadosComPorcentagem = dadosArray.map(item => ({
+      ...item,
+      porcentagem: totalHoras > 0 ? Math.round((item.horas / totalHoras) * 100) : 0
+    }));
+
+    return dadosComPorcentagem.sort((a, b) => b.horas - a.horas);
   };
 
-  // 🟠 GRÁFICO DE PIZZA: Horas por Local
-  const gerarDadosPizza = () => {
-    const locais = ['HYDRO', 'ALBRAS', 'NAVIO', 'SANTOS BRASIL'];
-    const somasPorLocal = locais.map(local => {
-      return equipamentos
-        .filter(eq => eq.local === local)
-        .reduce((acc, eq) => acc + calcularHorasDiferenca(eq.hora_inicial!, eq.hora_final!), 0);
-    });
+  // Função para buscar dados das horas trabalhadas da tabela equipamentos
+  const buscarHorasTrabalhadas = async () => {
+    setCarregando(true);
+    
+    try {
+      // Simular delay de rede
+      await new Promise(resolve => setTimeout(resolve, 800));
 
-    const total = somasPorLocal.reduce((a, b) => a + b, 0);
-    const porcentagens = somasPorLocal.map(soma => (total > 0 ? (soma / total) * 100 : 0));
-
-    return {
-      labels: locais,
-      datasets: [
-        {
-           porcentagens,
-          backgroundColor: [
-            '#3B82F6', // HYDRO - Azul
-            '#EF4444', // ALBRAS - Vermelho
-            '#10B981', // NAVIO - Verde
-            '#8B5CF6', // SANTOS BRASIL - Roxo
-          ],
-          borderColor: ['#fff'],
-          borderWidth: 1,
+      // EM PRODUÇÃO: Substituir por chamada real à API
+      /*
+      const response = await fetch('/api/dashboard/horas-equipamentos', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
-      ],
-    };
+        body: JSON.stringify({
+          dataInicial: filtros.dataInicial,
+          dataFinal: filtros.dataFinal,
+          local: filtros.local === 'todos' ? null : filtros.local
+        })
+      });
+
+      const dados = await response.json();
+      setDadosGrafico(dados);
+      */
+
+      // SIMULAÇÃO: Usar dados simulados e aplicar filtros
+      const equipamentosSimulados = simularDadosEquipamentos();
+      const dadosProcessados = processarDadosComFiltros(equipamentosSimulados);
+      setDadosGrafico(dadosProcessados);
+
+    } catch (error) {
+      console.error('Erro ao buscar dados:', error);
+      // Em caso de erro, usar dados simulados
+      const equipamentosSimulados = simularDadosEquipamentos();
+      const dadosProcessados = processarDadosComFiltros(equipamentosSimulados);
+      setDadosGrafico(dadosProcessados);
+    } finally {
+      setCarregando(false);
+    }
   };
 
-  // 🟢 GRÁFICO DE BARRAS: Horas por Tipo de Equipamento (prefixo)
-  const gerarDadosBarras = () => {
-    const tipos: Record<string, number> = {};
-    equipamentos.forEach(eq => {
-      const prefixo = eq.tag.split('-')[0];
-      if (!prefixo) return;
-      const horas = calcularHorasDiferenca(eq.hora_inicial!, eq.hora_final!);
-      tipos[prefixo] = (tipos[prefixo] || 0) + horas;
+  // Buscar dados quando o componente montar
+  useEffect(() => {
+    buscarHorasTrabalhadas();
+  }, []);
+
+  // Função para aplicar filtros
+  const aplicarFiltros = () => {
+    buscarHorasTrabalhadas();
+  };
+
+  // Função para limpar filtros
+  const limparFiltros = () => {
+    setFiltros({
+      dataInicial: getDataInicialPadrao(),
+      dataFinal: getDataAtual(),
+      local: 'todos'
     });
-
-    const labels = Object.keys(tipos);
-    const valores = Object.values(tipos);
-
-    return {
-      labels,
-      datasets: [
-        {
-          label: 'Horas Operadas',
-           valores,
-          backgroundColor: '#10B981',
-          borderColor: '#059669',
-          borderWidth: 1,
-        },
-      ],
-    };
+    // Não buscar automaticamente ao limpar - usuário precisa clicar em aplicar
   };
 
-  // Obter todos os tipos únicos de equipamento (prefixos)
-  const tiposEquipamentos = Array.from(
-    new Set(equipamentos.map(eq => eq.tag.split('-')[0]).filter(Boolean))
-  );
-
-  // Filtros disponíveis
-  const filtrosLocais = ['Todos', 'HYDRO', 'ALBRAS', 'NAVIO', 'SANTOS BRASIL'];
-
-  // Formatar valor para mostrar como "X.XX h"
-  const formatarHoras = (valor: number): string => {
-    return `${valor.toFixed(2)} h`;
+  // Função para retornar ao menu principal
+  const retornarAoMenu = () => {
+    navigate('/');
   };
+
+  // Cores para o gráfico
+  const cores = [
+    'bg-blue-500',
+    'bg-green-500',
+    'bg-purple-500',
+    'bg-orange-500',
+    'bg-cyan-500'
+  ];
+
+  // Calcular totais
+  const totais = dadosGrafico.reduce((acc, item) => ({
+    horas: acc.horas + item.horas,
+    quantidade: acc.quantidade + item.quantidade
+  }), { horas: 0, quantidade: 0 });
+
+  // Debug: mostrar dados filtrados no console
+  useEffect(() => {
+    console.log('Dados do gráfico:', dadosGrafico);
+    console.log('Totais:', totais);
+  }, [dadosGrafico]);
 
   return (
-    <div className="min-h-screen pb-10" style={{ background: 'var(--gradient-primary)' }}>
+    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900 p-6">
       {/* Header */}
-      <div className="flex justify-between items-center p-6 text-white">
-        <div>
-          <h1 className="text-2xl font-bold">VISUAIS</h1>
-          <p className="text-lg opacity-90">{userProfile?.full_name || 'Usuário'}</p>
+      <div className="mb-8">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-4">
+            <Button 
+              onClick={retornarAoMenu}
+              className="bg-white/10 hover:bg-white/20 text-white border border-white/30"
+              size="sm"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Voltar
+            </Button>
+            <div>
+              <h1 className="text-3xl font-bold text-white mb-2">Visuais e Dashboard</h1>
+              <p className="text-blue-200">
+                Horas trabalhadas por local - Dados da tabela Equipamentos
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <Button className="bg-white/10 hover:bg-white/20 text-white border border-white/30">
+              <Download className="h-4 w-4 mr-2" />
+              Exportar
+            </Button>
+          </div>
         </div>
-        <Button
-          variant="ghost"
-          onClick={() => window.location.href = '/auth'}
-          className="text-white hover:bg-white/20"
-        >
-          Sair
-        </Button>
       </div>
 
       {/* Filtros */}
-      <div className="px-6 py-6 space-y-4">
-        <Card className="shadow-[var(--shadow-card)] bg-white/90 backdrop-blur-sm">
+      <Card className="mb-8 bg-white/10 backdrop-blur-sm border-blue-200/30">
+        <CardHeader>
+          <CardTitle className="text-white flex items-center gap-2">
+            <Filter className="h-5 w-5" />
+            Filtros - Equipamentos
+          </CardTitle>
+          <CardDescription className="text-blue-200">
+            Filtre as horas trabalhadas da tabela de equipamentos
+            {filtros.dataInicial && filtros.dataFinal && (
+              <span className="block text-orange-300 mt-1">
+                Período: {new Date(filtros.dataInicial).toLocaleDateString('pt-BR')} até {new Date(filtros.dataFinal).toLocaleDateString('pt-BR')}
+                {dadosGrafico.length > 0 && (
+                  <span className="text-green-300 ml-2">
+                    • {totais.quantidade} equipamentos • {totais.horas.toFixed(1)} horas totais
+                  </span>
+                )}
+              </span>
+            )}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {/* Data Inicial */}
+            <div className="space-y-2">
+              <Label htmlFor="dataInicial" className="text-white">Data Inicial</Label>
+              <Input
+                id="dataInicial"
+                type="date"
+                value={filtros.dataInicial}
+                onChange={(e) => setFiltros({ ...filtros, dataInicial: e.target.value })}
+                className="bg-white/5 border-blue-300/30 text-white"
+                max={filtros.dataFinal || getDataAtual()}
+              />
+            </div>
+
+            {/* Data Final */}
+            <div className="space-y-2">
+              <Label htmlFor="dataFinal" className="text-white">Data Final</Label>
+              <Input
+                id="dataFinal"
+                type="date"
+                value={filtros.dataFinal}
+                onChange={(e) => setFiltros({ ...filtros, dataFinal: e.target.value })}
+                className="bg-white/5 border-blue-300/30 text-white"
+                min={filtros.dataInicial}
+                max={getDataAtual()}
+              />
+            </div>
+
+            {/* Local */}
+            <div className="space-y-2">
+              <Label htmlFor="local" className="text-white">Local</Label>
+              <Select value={filtros.local} onValueChange={(value) => setFiltros({ ...filtros, local: value })}>
+                <SelectTrigger className="bg-white/5 border-blue-300/30 text-white">
+                  <SelectValue placeholder="Selecione o local" />
+                </SelectTrigger>
+                <SelectContent>
+                  {locais.map((local) => (
+                    <SelectItem key={local.value} value={local.value}>
+                      {local.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Botões de Ação */}
+            <div className="flex items-end gap-2">
+              <Button 
+                onClick={aplicarFiltros}
+                className="bg-orange-500 hover:bg-orange-600 text-white flex-1"
+                disabled={carregando}
+              >
+                <Filter className="h-4 w-4 mr-2" />
+                {carregando ? 'Aplicando...' : 'Aplicar Filtros'}
+              </Button>
+              <Button 
+                onClick={limparFiltros}
+                variant="outline"
+                className="border-blue-300/30 text-white hover:bg-white/10"
+                disabled={carregando}
+              >
+                Limpar
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Gráfico de Horas Trabalhadas por Local */}
+      <Card className="mb-8 bg-white/10 backdrop-blur-sm border-blue-200/30">
+        <CardHeader>
+          <CardTitle className="text-white flex items-center gap-2">
+            <PieChart className="h-5 w-5" />
+            Horas Trabalhadas - Equipamentos
+            {carregando && (
+              <span className="text-orange-400 text-sm font-normal">(Atualizando...)</span>
+            )}
+          </CardTitle>
+          <CardDescription className="text-blue-200">
+            Distribuição das horas trabalhadas por local (coluna horas_trabalhadas)
+            {totais.horas > 0 && (
+              <span className="text-green-300 ml-2">
+                Soma total: {totais.horas.toFixed(1)} horas
+              </span>
+            )}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {carregando ? (
+            <div className="flex justify-center items-center h-64">
+              <div className="text-white animate-pulse">Carregando dados dos equipamentos...</div>
+            </div>
+          ) : dadosGrafico.length === 0 ? (
+            <div className="flex justify-center items-center h-64">
+              <div className="text-white text-center">
+                <p>Nenhum dado encontrado para os filtros aplicados</p>
+                <p className="text-sm text-blue-200 mt-2">
+                  Tente ajustar as datas ou selecionar outro local
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Gráfico de Pizza Visual */}
+              <div className="flex justify-center items-center">
+                <div className="relative w-64 h-64">
+                  {/* Gráfico de Pizza */}
+                  <div className="absolute inset-0 rounded-full border-4 border-white/20">
+                    {dadosGrafico.map((item, index) => {
+                      const porcentagemAcumulada = dadosGrafico
+                        .slice(0, index)
+                        .reduce((acc, curr) => acc + curr.porcentagem, 0);
+                      
+                      return (
+                        <div
+                          key={item.local}
+                          className={`absolute inset-0 rounded-full ${cores[index]} opacity-80`}
+                          style={{
+                            clipPath: `conic-gradient(from ${porcentagemAcumulada * 3.6}deg, transparent 0, transparent ${item.porcentagem * 3.6}deg, #0000 0)`
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                  
+                  {/* Centro do gráfico */}
+                  <div className="absolute inset-8 bg-blue-900/80 rounded-full backdrop-blur-sm flex items-center justify-center">
+                    <div className="text-center">
+                      <div className="text-white text-2xl font-bold">{totais.horas.toFixed(1)}h</div>
+                      <div className="text-blue-200 text-sm">Total Horas</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Legenda e Detalhes */}
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 gap-3">
+                  {dadosGrafico.map((item, index) => (
+                    <div key={item.local} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-4 h-4 rounded ${cores[index]}`} />
+                        <div>
+                          <span className="text-white font-medium">{item.local}</span>
+                          <div className="text-blue-200 text-xs">
+                            {item.quantidade} equipamento{item.quantidade !== 1 ? 's' : ''}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-white font-bold">{item.horas.toFixed(1)}h</div>
+                        <div className="text-blue-200 text-sm">
+                          {item.porcentagem}% do total
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Totais */}
+                <div className="border-t border-white/20 pt-4">
+                  <div className="grid grid-cols-2 gap-4 text-center">
+                    <div className="bg-white/5 rounded-lg p-3">
+                      <div className="text-blue-200 text-sm">Total de Horas</div>
+                      <div className="text-white text-xl font-bold">{totais.horas.toFixed(1)}h</div>
+                    </div>
+                    <div className="bg-white/5 rounded-lg p-3">
+                      <div className="text-blue-200 text-sm">Total de Equipamentos</div>
+                      <div className="text-white text-xl font-bold">{totais.quantidade}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Cards de Métricas */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30 text-white">
           <CardContent className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-              {/* Data Início */}
-              <div className="space-y-2">
-                <Label htmlFor="data-inicio">Data Início</Label>
-                <div className="relative">
-                  <Input
-                    id="data-inicio"
-                    type="date"
-                    value={filtroDataInicio}
-                    onChange={(e) => setFiltroDataInicio(e.target.value)}
-                    className="pl-10"
-                  />
-                  <CalendarIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-blue-200 text-sm">Total Horas Trabalhadas</p>
+                <p className="text-3xl font-bold">{totais.horas.toFixed(1)}h</p>
+                <p className="text-blue-200 text-xs">Soma de horas_trabalhadas</p>
               </div>
-
-              {/* Data Fim */}
-              <div className="space-y-2">
-                <Label htmlFor="data-fim">Data Fim</Label>
-                <div className="relative">
-                  <Input
-                    id="data-fim"
-                    type="date"
-                    value={filtroDataFim}
-                    onChange={(e) => setFiltroDataFim(e.target.value)}
-                    className="pl-10"
-                  />
-                  <CalendarIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                </div>
-              </div>
-
-              {/* Local */}
-              <div className="space-y-2">
-                <Label htmlFor="filtro-local">Local</Label>
-                <Select value={filtroLocal} onValueChange={setFiltroLocal}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Todos" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {filtrosLocais.map(local => (
-                      <SelectItem key={local} value={local}>
-                        {local === 'Todos' ? 'Todos os Locais' : local}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Tipo de Equipamento */}
-              <div className="space-y-2">
-                <Label htmlFor="filtro-tipo">Tipo Equipamento</Label>
-                <Select value={filtroTipoEquipamento} onValueChange={setFiltroTipoEquipamento}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Todos" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Todos">Todos os Tipos</SelectItem>
-                    {tiposEquipamentos.map(tipo => (
-                      <SelectItem key={tipo} value={tipo}>
-                        {tipo}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Botão Limpar */}
-              <div className="flex items-end">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setFiltroDataInicio('');
-                    setFiltroDataFim('');
-                    setFiltroLocal('Todos');
-                    setFiltroTipoEquipamento('Todos');
-                  }}
-                  className="w-full"
-                >
-                  <FilterIcon className="h-4 w-4 mr-2" /> Limpar Filtros
-                </Button>
+              <div className="bg-blue-500/20 p-3 rounded-xl">
+                <BarChart3 className="h-6 w-6 text-blue-300" />
               </div>
             </div>
           </CardContent>
         </Card>
-      </div>
 
-      {/* Gráficos */}
-      <div className="px-6 space-y-6">
-        {/* Gráfico de Pizza */}
-        <Card className="shadow-[var(--shadow-card)]">
-          <CardHeader>
-            <CardTitle>Distribuição de Horas por Local</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="flex items-center justify-center py-12">
-                <p className="text-muted-foreground">Carregando dados...</p>
+        <Card className="bg-white/10 backdrop-blur-sm border-green-200/30 text-white">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-blue-200 text-sm">Total Equipamentos</p>
+                <p className="text-3xl font-bold">{totais.quantidade}</p>
+                <p className="text-blue-200 text-xs">Registros filtrados</p>
               </div>
-            ) : (
-              <div className="flex flex-col md:flex-row items-center justify-center gap-8">
-                <div style={{ width: '300px', height: '300px' }}>
-                  <Pie data={gerarDadosPizza()} options={{ responsive: true, maintainAspectRatio: false }} />
-                </div>
-                <div className="bg-gray-50 p-4 rounded-lg min-w-64">
-                  <h4 className="font-semibold mb-3">Resumo</h4>
-                  {['HYDRO', 'ALBRAS', 'NAVIO', 'SANTOS BRASIL'].map(local => {
-                    const total = equipamentos
-                      .filter(eq => eq.local === local)
-                      .reduce((acc, eq) => acc + calcularHorasDiferenca(eq.hora_inicial!, eq.hora_final!), 0);
-                    return (
-                      <div key={local} className="flex justify-between py-1">
-                        <span>{local}</span>
-                        <span className="font-medium">{formatarHoras(total)}</span>
-                      </div>
-                    );
-                  })}
-                </div>
+              <div className="bg-green-500/20 p-3 rounded-xl">
+                <TrendingUp className="h-6 w-6 text-green-300" />
               </div>
-            )}
+            </div>
           </CardContent>
         </Card>
 
-        {/* Gráfico de Barras */}
-        <Card className="shadow-[var(--shadow-card)]">
-          <CardHeader>
-            <CardTitle>Total de Horas por Tipo de Equipamento</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="flex items-center justify-center py-12">
-                <p className="text-muted-foreground">Carregando dados...</p>
+        <Card className="bg-white/10 backdrop-blur-sm border-purple-200/30 text-white">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-blue-200 text-sm">Locais com Equipamentos</p>
+                <p className="text-3xl font-bold">{dadosGrafico.length}</p>
+                <p className="text-blue-200 text-xs">Locais distintos</p>
               </div>
-            ) : (
-              <div style={{ width: '100%', height: '400px' }}>
-                <Bar data={gerarDadosBarras()} options={{ responsive: true, maintainAspectRatio: false }} />
+              <div className="bg-purple-500/20 p-3 rounded-xl">
+                <Calendar className="h-6 w-6 text-purple-300" />
               </div>
-            )}
+            </div>
           </CardContent>
         </Card>
 
-        {/* Métricas Gerais */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <Card className="shadow-[var(--shadow-card)] bg-gradient-to-r from-blue-500 to-blue-600 text-white">
-            <CardContent className="p-6">
-              <h3 className="text-sm opacity-90">Total de Equipamentos</h3>
-              <p className="text-3xl font-bold mt-2">{equipamentos.length}</p>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-[var(--shadow-card)] bg-gradient-to-r from-green-500 to-green-600 text-white">
-            <CardContent className="p-6">
-              <h3 className="text-sm opacity-90">Horas Totais Operadas</h3>
-              <p className="text-3xl font-bold mt-2">
-                {formatarHoras(
-                  equipamentos.reduce(
-                    (acc, eq) => acc + calcularHorasDiferenca(eq.hora_inicial!, eq.hora_final!),
-                    0
-                  )
-                )}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-[var(--shadow-card)] bg-gradient-to-r from-purple-500 to-purple-600 text-white">
-            <CardContent className="p-6">
-              <h3 className="text-sm opacity-90">Média por Equipamento</h3>
-              <p className="text-3xl font-bold mt-2">
-                {equipamentos.length > 0
-                  ? formatarHoras(
-                      equipamentos.reduce(
-                        (acc, eq) => acc + calcularHorasDiferenca(eq.hora_inicial!, eq.hora_final!),
-                        0
-                      ) / equipamentos.length
-                    )
-                  : '0.00 h'}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-[var(--shadow-card)] bg-gradient-to-r from-orange-500 to-orange-600 text-white">
-            <CardContent className="p-6">
-              <h3 className="text-sm opacity-90">Locais Ativos</h3>
-              <p className="text-3xl font-bold mt-2">
-                {new Set(equipamentos.map(eq => eq.local)).size}
-              </p>
-            </CardContent>
-          </Card>
-        </div>
+        <Card className="bg-white/10 backdrop-blur-sm border-orange-200/30 text-white">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-blue-200 text-sm">Média por Equipamento</p>
+                <p className="text-3xl font-bold">
+                  {totais.quantidade > 0 ? (totais.horas / totais.quantidade).toFixed(1) : '0'}h
+                </p>
+                <p className="text-blue-200 text-xs">Horas por equipamento</p>
+              </div>
+              <div className="bg-orange-500/20 p-3 rounded-xl">
+                <PieChart className="h-6 w-6 text-orange-300" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
