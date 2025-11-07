@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Plus, X, Calendar, Ship, BarChart3 } from 'lucide-react';
+import { ArrowLeft, Plus, X, Ship, BarChart3 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -34,14 +34,25 @@ const ProducaoDiaria = () => {
     setLoading(true);
     try {
       if (!navioId) return;
+      
       const { data: navioData, error: navioError } = await supabase.from('navios').select('nome_navio').eq('id', navioId).single();
       if (navioError) throw navioError;
       setNavio(navioData);
-      const { data: registrosData, error } = await supabase.from('registros_producao').select('*').eq('navio_id', navioId).eq('data', data);
+      
+      const { data: registrosData, error } = await supabase
+        .from('registros_producao')
+        .select('*')
+        .eq('navio_id', navioId)
+        .eq('data', data)
+        .order('porao');
+      
       if (error) throw error;
+      
       if (registrosData && registrosData.length > 0) {
+        console.log('Dados carregados:', registrosData);
         setRegistros(registrosData);
       } else {
+        console.log('Nenhum dado encontrado, criando linha padrão');
         setRegistros([{ 
           id: `new-${Date.now()}`, 
           porao: '#01', 
@@ -52,6 +63,7 @@ const ProducaoDiaria = () => {
         }]);
       }
     } catch (error) {
+      console.error('Erro ao carregar dados:', error);
       toast({ title: "Erro", description: "Não foi possível carregar os dados.", variant: "destructive" });
     } finally {
       setLoading(false);
@@ -62,15 +74,21 @@ const ProducaoDiaria = () => {
     fetchRegistrosDoDia(selectedDate);
   }, [selectedDate, fetchRegistrosDoDia]);
 
+  const handleDateChange = (newDate: string) => {
+    setSelectedDate(newDate);
+    // A função fetchRegistrosDoDia será chamada automaticamente pelo useEffect
+  };
+
   const handleRegistroChange = (id: string, field: keyof RegistroProducao, value: string) => {
     if (field === 'porao') {
       setRegistros(prev => prev.map(r => r.id === id ? { ...r, [field]: value.toUpperCase() } : r));
     } else {
-      setRegistros(prev => prev.map(r => r.id === id ? { ...r, [field]: isNaN(Number(value)) || value === '' ? value : Number(value) } : r));
+      const numValue = value === '' ? 0 : Number(value);
+      setRegistros(prev => prev.map(r => r.id === id ? { ...r, [field]: numValue } : r));
     }
   };
 
-  const addPorao = () => {
+  const addLinha = () => {
     const nextPoraoNumber = registros.length + 1;
     setRegistros(prev => [...prev, { 
       id: `new-${Date.now()}`, 
@@ -82,11 +100,11 @@ const ProducaoDiaria = () => {
     }]);
   };
 
-  const removePorao = (id: string) => {
+  const removeLinha = (id: string) => {
     if (registros.length > 1) {
       setRegistros(prev => prev.filter(r => r.id !== id));
     } else {
-      toast({ title: "Aviso", description: "É necessário manter pelo menos um porão.", variant: "default" });
+      toast({ title: "Aviso", description: "É necessário manter pelo menos uma linha.", variant: "default" });
     }
   };
 
@@ -94,19 +112,24 @@ const ProducaoDiaria = () => {
     e.preventDefault();
     if (!user || !navioId) return;
     setIsSaving(true);
+    
     const dadosParaSalvar = registros.map(({ id, ...rest }) => ({
       ...rest,
       navio_id: navioId,
       data: selectedDate,
       user_id: user.id,
     }));
+    
+    console.log('Salvando dados:', dadosParaSalvar);
+    
     try {
       const { error } = await supabase.from('registros_producao').upsert(dadosParaSalvar, { onConflict: 'navio_id, data, porao' });
       if (error) throw error;
       toast({ title: "Sucesso!", description: "Registros do dia salvos com sucesso." });
+      // Recarrega os dados para garantir que temos os IDs atualizados
       fetchRegistrosDoDia(selectedDate);
     } catch (error) {
-      console.error(error);
+      console.error('Erro ao salvar:', error);
       toast({ title: "Erro", description: "Não foi possível salvar os dados.", variant: "destructive" });
     } finally {
       setIsSaving(false);
@@ -114,10 +137,10 @@ const ProducaoDiaria = () => {
   };
 
   const turnos = [
-    { id: 1, label: "07h às 13h", shortLabel: "07-13", tonsKey: "tons_t2", volsKey: "vols_t2" },
-    { id: 2, label: "13h às 19h", shortLabel: "13-19", tonsKey: "tons_t3", volsKey: "vols_t3" },
-    { id: 3, label: "19h às 01h", shortLabel: "19-01", tonsKey: "tons_t4", volsKey: "vols_t4" },
-    { id: 4, label: "01h às 07h", shortLabel: "01-07", tonsKey: "tons_t1", volsKey: "vols_t1" },
+    { id: 1, label: "07h às 13h", shortLabel: "07-13", tonsKey: "tons_t1", volsKey: "vols_t1" },
+    { id: 2, label: "13h às 19h", shortLabel: "13-19", tonsKey: "tons_t2", volsKey: "vols_t2" },
+    { id: 3, label: "19h às 01h", shortLabel: "19-01", tonsKey: "tons_t3", volsKey: "vols_t3" },
+    { id: 4, label: "01h às 07h", shortLabel: "01-07", tonsKey: "tons_t4", volsKey: "vols_t4" },
   ];
 
   // Calcular totais
@@ -166,23 +189,6 @@ const ProducaoDiaria = () => {
         </div>
       </div>
 
-      {/* Filtro de Data */}
-      <div className="px-6 py-4 bg-blue-800/30 backdrop-blur-sm border-b border-blue-600/30">
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2 text-white">
-            <Calendar className="h-4 w-4 text-blue-300" />
-            <Label htmlFor="data-selecao" className="text-sm font-medium">Selecionar Data</Label>
-          </div>
-          <Input 
-            id="data-selecao" 
-            type="date" 
-            value={selectedDate} 
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="bg-white/5 border-blue-300/30 text-white focus:border-blue-300 w-48"
-          />
-        </div>
-      </div>
-
       <div className="p-6">
         <form onSubmit={handleSave}>
           <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
@@ -191,7 +197,7 @@ const ProducaoDiaria = () => {
                 <BarChart3 className="h-5 w-5" />
                 <span>Registro de Produção</span>
                 <span className="text-blue-300 text-sm font-normal">
-                  {registros.length} porão(ões) • {new Date(selectedDate).toLocaleDateString('pt-BR')}
+                  {registros.length} linha(s) • {new Date(selectedDate).toLocaleDateString('pt-BR')}
                 </span>
               </CardTitle>
             </CardHeader>
@@ -206,8 +212,10 @@ const ProducaoDiaria = () => {
               ) : (
                 <div className="space-y-4">
                   {/* Cabeçalho da Tabela */}
-                  <div className="grid grid-cols-11 gap-2 px-4 py-3 bg-blue-600/50 rounded-lg">
-                    <div className="col-span-1 text-white font-semibold text-sm flex items-center">Porão</div>
+                  <div className="grid grid-cols-12 gap-2 px-4 py-3 bg-blue-600/50 rounded-lg">
+                    <div className="col-span-2 text-white font-semibold text-sm flex items-center">
+                      Data e Porão
+                    </div>
                     {turnos.map((turno) => (
                       <div key={turno.id} className="col-span-2 text-center text-white font-semibold text-sm">
                         <div>{turno.label}</div>
@@ -219,25 +227,39 @@ const ProducaoDiaria = () => {
 
                   {/* Linhas dos Porões */}
                   {registros.map(registro => (
-                    <div key={registro.id} className="grid grid-cols-11 gap-2 items-center p-4 bg-white/5 rounded-lg border border-blue-200/20">
-                      {/* Porão */}
-                      <div className="col-span-1">
+                    <div key={registro.id} className="grid grid-cols-12 gap-2 items-center p-4 bg-white/5 rounded-lg border border-blue-200/20">
+                      {/* Data e Porão */}
+                      <div className="col-span-2">
                         <div className="flex items-center space-x-2">
-                          <Input 
-                            value={registro.porao} 
-                            onChange={(e) => handleRegistroChange(registro.id!, 'porao', e.target.value)}
-                            className="bg-white/5 border-blue-300/30 text-white w-20 font-mono text-center h-9"
-                          />
-                          {registros.length > 1 && (
-                            <Button 
-                              variant="ghost" 
-                              size="icon"
-                              onClick={() => removePorao(registro.id!)}
-                              className="h-7 w-7 text-red-400 hover:text-red-300 hover:bg-red-500/20"
-                            >
-                              <X className="h-3 w-3" />
-                            </Button>
-                          )}
+                          <div className="flex-1">
+                            <Label className="text-white text-xs block mb-1">Data</Label>
+                            <Input 
+                              type="date" 
+                              value={selectedDate} 
+                              onChange={(e) => handleDateChange(e.target.value)}
+                              className="bg-white/5 border-blue-300/30 text-white text-sm h-9 rounded-none mb-2"
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <Label className="text-white text-xs block mb-1">Porão</Label>
+                            <div className="flex items-center space-x-2">
+                              <Input 
+                                value={registro.porao} 
+                                onChange={(e) => handleRegistroChange(registro.id!, 'porao', e.target.value)}
+                                className="bg-white/5 border-blue-300/30 text-white w-20 font-mono text-center h-9 rounded-none"
+                              />
+                              {registros.length > 1 && (
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon"
+                                  onClick={() => removeLinha(registro.id!)}
+                                  className="h-7 w-7 text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded-none"
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       </div>
 
@@ -292,8 +314,8 @@ const ProducaoDiaria = () => {
                   ))}
 
                   {/* Linha de Totais */}
-                  <div className="grid grid-cols-11 gap-2 items-center p-4 bg-blue-600/30 rounded-lg border border-blue-300/30">
-                    <div className="col-span-1 text-white font-semibold text-sm flex items-center">TOTAL</div>
+                  <div className="grid grid-cols-12 gap-2 items-center p-4 bg-blue-600/30 rounded-lg border border-blue-300/30">
+                    <div className="col-span-2 text-white font-semibold text-sm flex items-center">TOTAL GERAL</div>
                     {totaisTurnos.map((total, index) => (
                       <div key={index} className="col-span-2">
                         <div className="grid grid-cols-2 gap-2 text-center">
@@ -343,11 +365,11 @@ const ProducaoDiaria = () => {
                     <Button 
                       variant="outline" 
                       type="button" 
-                      onClick={addPorao}
+                      onClick={addLinha}
                       className="w-full border-blue-300 text-white hover:bg-white/20 bg-white/10 rounded-none h-12"
                     >
                       <Plus className="h-4 w-4 mr-2" />
-                      Adicionar Porão
+                      Inserir Linha
                     </Button>
                     
                     <Button 
