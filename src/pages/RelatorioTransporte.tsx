@@ -75,7 +75,7 @@ const RelatorioTransporte = () => {
     try {
       console.log('🔍 Iniciando carregamento de operações...');
       
-      const { data: operacoesData, error } = await supabase
+      let query = supabase
         .from('registro_operacoes')
         .select(`
           *,
@@ -83,7 +83,15 @@ const RelatorioTransporte = () => {
           navios(nome_navio, carga),
           ajudantes(*),
           ausencias(*)
-        `)
+        `);
+
+      // Aplicar filtro de data diretamente na consulta (igual ao segundo código)
+      if (dataFiltro) {
+        console.log('📅 Aplicando filtro de data na consulta:', dataFiltro);
+        query = query.eq('data', dataFiltro);
+      }
+
+      const { data: operacoesData, error } = await query
         .order('data', { ascending: false })
         .order('hora_inicial', { ascending: false });
 
@@ -111,7 +119,7 @@ const RelatorioTransporte = () => {
 
   useEffect(() => {
     fetchOperacoes();
-  }, [toast]);
+  }, [toast, dataFiltro]); // Adicionei dataFiltro como dependência para recarregar quando a data mudar
 
   const handleAtualizarDados = async () => {
     setAtualizando(true);
@@ -162,28 +170,17 @@ const RelatorioTransporte = () => {
   const operacoesFiltradas = useMemo(() => {
     let filtered = operacoes;
 
-    console.log('🔍 Aplicando filtros...');
+    console.log('🔍 Aplicando filtros adicionais...');
     console.log('📅 Data filtro:', dataFiltro);
-    console.log('📊 Total operações antes do filtro:', filtered.length);
+    console.log('📊 Total operações antes dos filtros adicionais:', filtered.length);
 
-    // Filtro por data
-    if (dataFiltro) {
-      console.log('📅 Aplicando filtro de data:', dataFiltro);
-      
-      filtered = filtered.filter(op => {
-        const match = op.data === dataFiltro;
-        return match;
-      });
-      console.log('📊 Após filtro de data:', filtered.length);
-    }
-    
-    // Filtro por hora inicial
+    // Filtro por hora inicial (mantido no frontend)
     if (horaInicialFiltro !== 'Todos') {
       filtered = filtered.filter(op => op.hora_inicial === horaInicialFiltro);
       console.log('📊 Após filtro de hora:', filtered.length);
     }
     
-    // Filtro por operador
+    // Filtro por operador (mantido no frontend)
     if (operadorFiltro.trim() !== '') {
       filtered = filtered.filter(op => 
         op.equipamentos.some(eq => 
@@ -196,7 +193,7 @@ const RelatorioTransporte = () => {
     console.log('✅ Total de operações filtradas:', filtered.length);
     
     return filtered;
-  }, [operacoes, dataFiltro, horaInicialFiltro, operadorFiltro]);
+  }, [operacoes, horaInicialFiltro, operadorFiltro]); // Removi dataFiltro daqui pois já é aplicado na consulta
 
   const dataExibida = dataFiltro;
 
