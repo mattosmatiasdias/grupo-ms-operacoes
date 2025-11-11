@@ -20,7 +20,9 @@ interface OperacaoCompleta {
   hora_final: string;
   observacao: string | null;
   carga: string | null;
+  navio_id: string | null;
   navios: {
+    id: string;
     nome_navio: string;
     carga: string;
   } | null;
@@ -61,48 +63,196 @@ const RelatorioTransporte = () => {
   const [menuAberto, setMenuAberto] = useState(true);
   const [atualizando, setAtualizando] = useState(false);
   
-  const [dataFiltro, setDataFiltro] = useState(() => {
-    const hoje = new Date();
-    return hoje.toISOString().split('T')[0];
-  });
-  
+  const [dataFiltro, setDataFiltro] = useState('');
   const [horaInicialFiltro, setHoraInicialFiltro] = useState('Todos');
   const [operadorFiltro, setOperadorFiltro] = useState('');
 
-  const fetchOperacoes = async () => {
+  // Função para corrigir o fuso horário - converte para o fuso local
+  const corrigirFusoHorarioData = (dataString: string) => {
+    try {
+      // Se a data já está no formato YYYY-MM-DD, apenas retorna
+      if (dataString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        return dataString;
+      }
+      
+      // Se vem como string completa, extrai a parte da data
+      const data = new Date(dataString);
+      
+      // Corrige o fuso horário adicionando o offset
+      const offset = data.getTimezoneOffset();
+      data.setMinutes(data.getMinutes() - offset);
+      
+      return data.toISOString().split('T')[0];
+    } catch (error) {
+      console.error('Erro ao corrigir fuso horário:', error);
+      return dataString;
+    }
+  };
+
+  // Função para formatar data no formato brasileiro
+  const formatarDataBR = (dataString: string) => {
+    try {
+      const data = new Date(dataString + 'T00:00:00'); // Adiciona horário para evitar problemas de fuso
+      return data.toLocaleDateString('pt-BR');
+    } catch (error) {
+      console.error('Erro ao formatar data:', error);
+      return dataString;
+    }
+  };
+
+  // Buscar a última data disponível no banco de dados
+  const buscarUltimaData = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('registro_operacoes')
+        .select('data')
+        .order('data', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error) throw error;
+
+      if (data?.data) {
+        // Corrige o fuso horário da data vinda do banco
+        return corrigirFusoHorarioData(data.data);
+      }
+      
+      return new Date().toISOString().split('T')[0];
+    } catch (error) {
+      console.error('Erro ao buscar última data:', error);
+      return new Date().toISOString().split('T')[0];
+    }
+  };
+
+  const fetchOperacoes = async (dataEspecifica?: string) => {
     setLoading(true);
     setError(null);
     try {
       console.log('🔍 Iniciando carregamento de operações...');
       
-      let query = supabase
+      // Determinar qual data usar para o filtro
+      let dataParaFiltrar = dataEspecifica || dataFiltro;
+      if (!dataParaFiltrar) {
+        dataParaFiltrar = await buscarUltimaData();
+        setDataFiltro(dataParaFiltrar);
+      }
+
+      console.log('📅 Data para filtrar (corrigida):', dataParaFiltrar);
+
+      // Primeiro, buscar as operações principais
+      let queryOperacoes = supabase
         .from('registro_operacoes')
         .select(`
           *,
-          equipamentos(*),
-          navios(nome_navio, carga),
-          ajudantes(*),
-          ausencias(*)
+          navios (
+            id,
+            nome_navio,
+            carga
+          )
         `);
 
-      // Aplicar filtro de data diretamente na consulta (igual ao segundo código)
-      if (dataFiltro) {
-        console.log('📅 Aplicando filtro de data na consulta:', dataFiltro);
-        query = query.eq('data', dataFiltro);
+      // Aplicar filtro de data diretamente na consulta
+      if (dataParaFiltrar) {
+        console.log('📅 Aplicando filtro de data na consulta:', dataParaFiltrar);
+        queryOperacoes = queryOperacoes.eq('data', dataParaFiltrar);
       }
 
-      const { data: operacoesData, error } = await query
+      const { data: operacoesData, error: operacoesError } = await queryOperacoes
         .order('data', { ascending: false })
         .order('hora_inicial', { ascending: false });
 
-      if (error) {
-        console.error('❌ Erro do Supabase:', error);
-        throw new Error(`Erro ao carregar dados: ${error.message}`);
+      if (operacoesError) {
+        console.error('❌ Erro ao carregar operações:', operacoesError);
+        throw new Error(`Erro ao carregar operações: ${operacoesError.message}`);
       }
 
-      console.log('✅ Dados carregados:', operacoesData?.length || 0, 'operações');
-      console.log('📅 Datas disponíveis:', operacoesData?.map(op => ({ id: op.id, data: op.data, op: op.op })));
-      setOperacoes(operacoesData || []);
+      if (!operacoesData || operacoesData.length === 0) {
+        console.log('📭 Nenhuma operação encontrada para a data:', dataParaFiltrar);
+        setOperacoes([]);
+        setLoading(false);
+        return;
+      }
+
+      console.log('✅ Operações carregadas:', operacoesData.length);
+      
+      // Corrigir fusos horários das datas
+      const operacoesComFusoCorrigido = operacoesData.map(op => ({
+        ...op,
+        data: corrigirFusoHorarioData(op.data)
+      }));
+
+      console.log('📊 Datas das operações (corrigidas):', operacoesComFusoCorrigido.map(op => ({ id: op.id, data: op.data, op: op.op })));
+
+      // Buscar dados relacionados para cada operação
+      const operacoesCompletas = await Promise.all(
+        operacoesComFusoCorrigido.map(async (operacao) => {
+          try {
+            // Buscar equipamentos
+            const { data: equipamentos, error: equipamentosError } = await supabase
+              .from('equipamentos')
+              .select('*')
+              .eq('registro_operacoes_id', operacao.id);
+
+            if (equipamentosError) {
+              console.error(`❌ Erro ao carregar equipamentos para operação ${operacao.id}:`, equipamentosError);
+            }
+
+            // Buscar ajudantes e corrigir fusos horários
+            const { data: ajudantes, error: ajudantesError } = await supabase
+              .from('ajudantes')
+              .select('*')
+              .eq('registro_operacoes_id', operacao.id);
+
+            let ajudantesCorrigidos = [];
+            if (ajudantes) {
+              ajudantesCorrigidos = ajudantes.map(ajudante => ({
+                ...ajudante,
+                data: corrigirFusoHorarioData(ajudante.data)
+              }));
+            }
+
+            if (ajudantesError) {
+              console.error(`❌ Erro ao carregar ajudantes para operação ${operacao.id}:`, ajudantesError);
+            }
+
+            // Buscar ausências e corrigir fusos horários
+            const { data: ausencias, error: ausenciasError } = await supabase
+              .from('ausencias')
+              .select('*')
+              .eq('registro_operacoes_id', operacao.id);
+
+            let ausenciasCorrigidas = [];
+            if (ausencias) {
+              ausenciasCorrigidas = ausencias.map(ausencia => ({
+                ...ausencia,
+                data: corrigirFusoHorarioData(ausencia.data)
+              }));
+            }
+
+            if (ausenciasError) {
+              console.error(`❌ Erro ao carregar ausências para operação ${operacao.id}:`, ausenciasError);
+            }
+
+            return {
+              ...operacao,
+              equipamentos: equipamentos || [],
+              ajudantes: ajudantesCorrigidos,
+              ausencias: ausenciasCorrigidas,
+            };
+          } catch (error) {
+            console.error(`❌ Erro ao carregar dados relacionados para operação ${operacao.id}:`, error);
+            return {
+              ...operacao,
+              equipamentos: [],
+              ajudantes: [],
+              ausencias: [],
+            };
+          }
+        })
+      );
+
+      console.log('✅ Dados carregados:', operacoesCompletas.length, 'operações completas');
+      setOperacoes(operacoesCompletas);
       
     } catch (error: any) {
       console.error('❌ Erro ao carregar operações:', error);
@@ -119,7 +269,7 @@ const RelatorioTransporte = () => {
 
   useEffect(() => {
     fetchOperacoes();
-  }, [toast, dataFiltro]); // Adicionei dataFiltro como dependência para recarregar quando a data mudar
+  }, []); // Carrega apenas uma vez ao montar o componente
 
   const handleAtualizarDados = async () => {
     setAtualizando(true);
@@ -167,6 +317,18 @@ const RelatorioTransporte = () => {
     }
   };
 
+  const aplicarFiltros = () => {
+    console.log('🎯 Aplicando filtros com data:', dataFiltro);
+    fetchOperacoes(dataFiltro);
+  };
+
+  const limparFiltros = () => {
+    setHoraInicialFiltro('Todos');
+    setOperadorFiltro('');
+    setOperacaoSelecionada('TODOS');
+    // Não limpa a dataFiltro, apenas os outros filtros
+  };
+
   const operacoesFiltradas = useMemo(() => {
     let filtered = operacoes;
 
@@ -193,9 +355,7 @@ const RelatorioTransporte = () => {
     console.log('✅ Total de operações filtradas:', filtered.length);
     
     return filtered;
-  }, [operacoes, horaInicialFiltro, operadorFiltro]); // Removi dataFiltro daqui pois já é aplicado na consulta
-
-  const dataExibida = dataFiltro;
+  }, [operacoes, horaInicialFiltro, operadorFiltro, dataFiltro]);
 
   const totaisPorOperacao = useMemo(() => {
     const totais: { [key: string]: number } = {};
@@ -215,33 +375,14 @@ const RelatorioTransporte = () => {
     let totalAusencias = 0;
 
     operacoesFiltradas.forEach(op => {
-      if (op.ajudantes && op.ajudantes.length > 0) {
-        if (dataFiltro) {
-          const ajudantesFiltrados = op.ajudantes.filter(ajudante => 
-            ajudante.data === dataFiltro
-          );
-          totalAjudantes += ajudantesFiltrados.length;
-        } else {
-          totalAjudantes += op.ajudantes.length;
-        }
-      }
-      
-      if (op.ausencias && op.ausencias.length > 0) {
-        if (dataFiltro) {
-          const ausenciasFiltradas = op.ausencias.filter(ausencia => 
-            ausencia.data === dataFiltro
-          );
-          totalAusencias += ausenciasFiltradas.length;
-        } else {
-          totalAusencias += op.ausencias.length;
-        }
-      }
+      totalAjudantes += op.ajudantes?.length || 0;
+      totalAusencias += op.ausencias?.length || 0;
     });
 
     console.log('👥 Totais ajudantes/ausências:', { totalAjudantes, totalAusencias });
     
     return { totalAjudantes, totalAusencias };
-  }, [operacoesFiltradas, dataFiltro]);
+  }, [operacoesFiltradas]);
 
   // Agrupar operações por tipo para o menu lateral
   const operacoesPorTipo = useMemo(() => {
@@ -270,18 +411,6 @@ const RelatorioTransporte = () => {
       case 'AJUDANTES': return Users;
       case 'AUSENCIAS': return UserX;
       default: return BarChart3;
-    }
-  };
-
-  const getOperacaoColor = (op: string) => {
-    switch (op) {
-      case 'NAVIO': return 'blue';
-      case 'HYDRO': return 'blue';
-      case 'ALBRAS': return 'blue';
-      case 'SANTOS BRASIL': return 'blue';
-      case 'AJUDANTES': return 'blue';
-      case 'AUSENCIAS': return 'blue';
-      default: return 'blue';
     }
   };
 
@@ -347,8 +476,8 @@ const RelatorioTransporte = () => {
               <div>
                 <h1 className="text-2xl font-bold text-white">Relatório de Transporte</h1>
                 <p className="text-blue-200 text-sm">
-                  {operacoes.length} operações no sistema • {operacoesFiltradas.length} correspondem aos filtros
-                  {dataExibida && ` • Data: ${new Date(dataExibida).toLocaleDateString('pt-BR')}`}
+                  {operacoes.length} operações carregadas • {operacoesFiltradas.length} correspondem aos filtros
+                  {dataFiltro && ` • Data: ${formatarDataBR(dataFiltro)}`}
                 </p>
               </div>
             </div>
@@ -390,20 +519,28 @@ const RelatorioTransporte = () => {
 
       {/* Filtros */}
       <div className="px-6 py-4 border-b border-blue-600/30 bg-blue-800/30 backdrop-blur-sm">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div className="space-y-2">
             <Label className="text-sm font-medium text-white flex items-center space-x-2">
               <Calendar className="h-4 w-4 text-blue-300" />
               <span>Data da Operação</span>
             </Label>
-            <Input 
-              type="date" 
-              value={dataFiltro}
-              onChange={(e) => setDataFiltro(e.target.value)}
-              className="h-10 bg-white/5 border-blue-300/30 text-white focus:border-blue-300 transition-colors"
-            />
+            <div className="flex space-x-2">
+              <Input 
+                type="date" 
+                value={dataFiltro}
+                onChange={(e) => setDataFiltro(e.target.value)}
+                className="h-10 bg-white/5 border-blue-300/30 text-white focus:border-blue-300 transition-colors"
+              />
+              <Button 
+                onClick={aplicarFiltros}
+                className="h-10 bg-blue-500 hover:bg-blue-600 text-white"
+              >
+                <Search className="h-4 w-4" />
+              </Button>
+            </div>
             <p className="text-xs text-blue-300">
-              Mostrando: {new Date(dataExibida).toLocaleDateString('pt-BR')}
+              {dataFiltro ? `Mostrando: ${formatarDataBR(dataFiltro)}` : 'Selecione uma data'}
             </p>
           </div>
           
@@ -441,16 +578,21 @@ const RelatorioTransporte = () => {
           <div className="space-y-2">
             <Label className="text-sm font-medium text-white opacity-0">Ações</Label>
             <Button 
-              onClick={() => {
-                const hoje = new Date();
-                setDataFiltro(hoje.toISOString().split('T')[0]);
-                setHoraInicialFiltro('Todos');
-                setOperadorFiltro('');
-                setOperacaoSelecionada('TODOS');
-              }}
-              className="w-full h-10 bg-white text-blue-900 hover:bg-blue-100 font-medium"
+              onClick={aplicarFiltros}
+              className="w-full h-10 bg-green-600 hover:bg-green-700 text-white font-medium"
             >
               <Filter className="h-4 w-4 mr-2" />
+              Aplicar Filtros
+            </Button>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-white opacity-0">Limpar</Label>
+            <Button 
+              onClick={limparFiltros}
+              className="w-full h-10 bg-gray-600 hover:bg-gray-700 text-white font-medium"
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
               Limpar Filtros
             </Button>
           </div>
@@ -464,10 +606,15 @@ const RelatorioTransporte = () => {
             const Icon = getOperacaoIcon(op);
             let count = 0;
             let label = '';
+            let totalHoras = 0;
 
             if (['HYDRO', 'NAVIO', 'ALBRAS', 'SANTOS BRASIL'].includes(op)) {
-              count = operacoesFiltradas.filter(operacao => operacao.op === op).length;
-              label = `${count} ops`;
+              const opsDoTipo = operacoesFiltradas.filter(operacao => operacao.op === op);
+              count = opsDoTipo.length;
+              totalHoras = opsDoTipo.reduce((sum, operacao) => 
+                sum + operacao.equipamentos.reduce((eqSum, eq) => eqSum + (Number(eq.horas_trabalhadas) || 0), 0), 0
+              );
+              label = `${count} ops • ${formatarHoras(totalHoras)}`;
             } else if (op === 'AJUDANTES') {
               count = totaisAjudantesAusencias.totalAjudantes;
               label = `${count} ajudantes`;
@@ -477,7 +624,11 @@ const RelatorioTransporte = () => {
             }
             
             return (
-              <Card key={op} className="bg-white/10 backdrop-blur-sm border-blue-200/30 hover:shadow-lg transition-shadow">
+              <Card 
+                key={op} 
+                className="bg-white/10 backdrop-blur-sm border-blue-200/30 hover:shadow-lg transition-all hover:scale-105 cursor-pointer"
+                onClick={() => setOperacaoSelecionada(op)}
+              >
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
@@ -504,14 +655,19 @@ const RelatorioTransporte = () => {
             <CardHeader className="pb-3">
               <CardTitle className="text-lg font-semibold text-white flex items-center justify-between">
                 <span>Operações</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setMenuAberto(false)}
-                  className="md:hidden text-white hover:bg-white/20"
-                >
-                  ×
-                </Button>
+                <div className="flex items-center space-x-2">
+                  <Badge variant="secondary" className="bg-blue-500/20 text-blue-300">
+                    {operacoesFiltradas.length}
+                  </Badge>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setMenuAberto(false)}
+                    className="md:hidden text-white hover:bg-white/20"
+                  >
+                    ×
+                  </Button>
+                </div>
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
@@ -519,10 +675,10 @@ const RelatorioTransporte = () => {
                 {/* Item Todos */}
                 <button
                   onClick={() => setOperacaoSelecionada('TODOS')}
-                  className={`w-full text-left p-4 hover:bg-white/10 transition-colors border-l-4 ${
+                  className={`w-full text-left p-4 hover:bg-white/10 transition-all border-l-4 ${
                     operacaoSelecionada === 'TODOS' 
-                      ? 'bg-blue-500/20 border-blue-300 text-white' 
-                      : 'border-transparent text-blue-200'
+                      ? 'bg-blue-500/20 border-blue-300 text-white shadow-inner' 
+                      : 'border-transparent text-blue-200 hover:border-blue-200/50'
                   }`}
                 >
                   <div className="flex items-center justify-between">
@@ -536,17 +692,21 @@ const RelatorioTransporte = () => {
                   </div>
                 </button>
 
-                {/* Operações por Tipo com IDs SEMPRE VISÍVEIS */}
+                {/* Operações por Tipo */}
                 {Object.entries(operacoesPorTipo).map(([tipo, ops]) => {
                   const Icon = getOperacaoIcon(tipo);
+                  const totalHoras = ops.reduce((sum, op) => 
+                    sum + op.equipamentos.reduce((eqSum, eq) => eqSum + (Number(eq.horas_trabalhadas) || 0), 0), 0
+                  );
+                  
                   return (
                     <div key={tipo}>
                       <button
                         onClick={() => setOperacaoSelecionada(tipo)}
-                        className={`w-full text-left p-4 hover:bg-white/10 transition-colors border-l-4 ${
+                        className={`w-full text-left p-4 hover:bg-white/10 transition-all border-l-4 ${
                           operacaoSelecionada === tipo 
-                            ? 'bg-blue-500/20 border-blue-300 text-white' 
-                            : 'border-transparent text-blue-200'
+                            ? 'bg-blue-500/20 border-blue-300 text-white shadow-inner' 
+                            : 'border-transparent text-blue-200 hover:border-blue-200/50'
                         }`}
                       >
                         <div className="flex items-center justify-between">
@@ -554,36 +714,52 @@ const RelatorioTransporte = () => {
                             <Icon className="h-5 w-5" />
                             <span className="font-medium">{tipo}</span>
                           </div>
-                          <Badge variant="secondary" className="bg-blue-500/20 text-blue-300">
-                            {ops.length}
-                          </Badge>
+                          <div className="text-right">
+                            <Badge variant="secondary" className="bg-blue-500/20 text-blue-300 mb-1">
+                              {ops.length}
+                            </Badge>
+                            <div className="text-xs text-blue-300">
+                              {formatarHoras(totalHoras)}
+                            </div>
+                          </div>
                         </div>
                       </button>
                       
-                      {/* IDs das operações - SEMPRE VISÍVEIS (removida a condição operacaoSelecionada === tipo) */}
-                      {ops.map((op) => (
-                        <button
-                          key={op.id}
-                          onClick={() => setOperacaoSelecionada(op.id)}
-                          className={`w-full text-left p-4 pl-12 hover:bg-white/10 transition-colors border-l-4 ${
-                            operacaoSelecionada === op.id 
-                              ? 'bg-blue-400/20 border-blue-200 text-white' 
-                              : 'border-transparent text-blue-200'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <div className="font-medium text-sm">ID: {op.id.slice(0, 8)}...</div>
-                              <div className="text-xs text-blue-300">
-                                {new Date(op.data).toLocaleDateString('pt-BR')} • {op.hora_inicial}
+                      {/* IDs das operações - SEMPRE VISÍVEIS */}
+                      {ops.map((op) => {
+                        const opHoras = op.equipamentos.reduce((sum, eq) => 
+                          sum + (Number(eq.horas_trabalhadas) || 0), 0
+                        );
+                        
+                        return (
+                          <button
+                            key={op.id}
+                            onClick={() => setOperacaoSelecionada(op.id)}
+                            className={`w-full text-left p-4 pl-12 hover:bg-white/10 transition-all border-l-4 ${
+                              operacaoSelecionada === op.id 
+                                ? 'bg-blue-400/20 border-blue-200 text-white shadow-inner' 
+                                : 'border-transparent text-blue-200 hover:border-blue-200/30'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <div className="font-medium text-sm">ID: {op.id.slice(0, 8)}...</div>
+                                <div className="text-xs text-blue-300">
+                                  {formatarDataBR(op.data)} • {op.hora_inicial}
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-300 border-blue-300/30 mb-1">
+                                  {op.equipamentos.length} eqps
+                                </Badge>
+                                <div className="text-xs text-green-300">
+                                  {formatarHoras(opHoras)}
+                                </div>
                               </div>
                             </div>
-                            <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-300 border-blue-300/30">
-                              {op.equipamentos.length} eqps
-                            </Badge>
-                          </div>
-                        </button>
-                      ))}
+                          </button>
+                        );
+                      })}
                     </div>
                   );
                 })}
@@ -592,10 +768,10 @@ const RelatorioTransporte = () => {
                 {totaisAjudantesAusencias.totalAjudantes > 0 && (
                   <button
                     onClick={() => setOperacaoSelecionada('AJUDANTES')}
-                    className={`w-full text-left p-4 hover:bg-white/10 transition-colors border-l-4 ${
+                    className={`w-full text-left p-4 hover:bg-white/10 transition-all border-l-4 ${
                       operacaoSelecionada === 'AJUDANTES' 
-                        ? 'bg-blue-500/20 border-blue-300 text-white' 
-                        : 'border-transparent text-blue-200'
+                        ? 'bg-blue-500/20 border-blue-300 text-white shadow-inner' 
+                        : 'border-transparent text-blue-200 hover:border-blue-200/50'
                     }`}
                   >
                     <div className="flex items-center justify-between">
@@ -614,10 +790,10 @@ const RelatorioTransporte = () => {
                 {totaisAjudantesAusencias.totalAusencias > 0 && (
                   <button
                     onClick={() => setOperacaoSelecionada('AUSENCIAS')}
-                    className={`w-full text-left p-4 hover:bg-white/10 transition-colors border-l-4 ${
+                    className={`w-full text-left p-4 hover:bg-white/10 transition-all border-l-4 ${
                       operacaoSelecionada === 'AUSENCIAS' 
-                        ? 'bg-blue-500/20 border-blue-300 text-white' 
-                        : 'border-transparent text-blue-200'
+                        ? 'bg-blue-500/20 border-blue-300 text-white shadow-inner' 
+                        : 'border-transparent text-blue-200 hover:border-blue-200/50'
                     }`}
                   >
                     <div className="flex items-center justify-between">
@@ -645,9 +821,12 @@ const RelatorioTransporte = () => {
                 <div className="space-y-6">
                   {Object.entries(operacoesPorTipo).map(([tipo, ops]) => {
                     const Icon = getOperacaoIcon(tipo);
+                    const totalHoras = ops.reduce((sum, op) => 
+                      sum + op.equipamentos.reduce((eqSum, eq) => eqSum + (Number(eq.horas_trabalhadas) || 0), 0), 0
+                    );
                     
                     return (
-                      <div key={tipo} className="border border-blue-200/30 rounded-lg">
+                      <div key={tipo} className="border border-blue-200/30 rounded-lg hover:border-blue-200/50 transition-all">
                         <div className="bg-blue-500/10 px-4 py-3 border-b border-blue-200/30">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center space-x-3">
@@ -657,9 +836,9 @@ const RelatorioTransporte = () => {
                                 {ops.length} operação(ões)
                               </Badge>
                             </div>
-                            {totaisPorOperacao[tipo] > 0 && (
+                            {totalHoras > 0 && (
                               <div className="text-sm text-blue-300">
-                                Total: <span className="font-semibold text-green-400">{formatarHoras(totaisPorOperacao[tipo])}</span>
+                                Total: <span className="font-semibold text-green-400">{formatarHoras(totalHoras)}</span>
                               </div>
                             )}
                           </div>
@@ -667,13 +846,14 @@ const RelatorioTransporte = () => {
                         <OperacoesTable 
                           operacoes={ops}
                           getOperacaoDisplayName={getOperacaoDisplayName}
+                          formatarDataBR={formatarDataBR}
                         />
                       </div>
                     );
                   })}
                   
                   {totaisAjudantesAusencias.totalAjudantes > 0 && (
-                    <div className="border border-blue-200/30 rounded-lg">
+                    <div className="border border-blue-200/30 rounded-lg hover:border-blue-200/50 transition-all">
                       <div className="bg-blue-500/10 px-4 py-3 border-b border-blue-200/30">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-3">
@@ -685,12 +865,12 @@ const RelatorioTransporte = () => {
                           </div>
                         </div>
                       </div>
-                      <AjudantesTable operacoes={operacoesFiltradas} dataFiltro={dataFiltro} />
+                      <AjudantesTable operacoes={operacoesFiltradas} formatarDataBR={formatarDataBR} />
                     </div>
                   )}
 
                   {totaisAjudantesAusencias.totalAusencias > 0 && (
-                    <div className="border border-blue-200/30 rounded-lg">
+                    <div className="border border-blue-200/30 rounded-lg hover:border-blue-200/50 transition-all">
                       <div className="bg-blue-500/10 px-4 py-3 border-b border-blue-200/30">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-3">
@@ -702,12 +882,12 @@ const RelatorioTransporte = () => {
                           </div>
                         </div>
                       </div>
-                      <AusenciasTable operacoes={operacoesFiltradas} dataFiltro={dataFiltro} />
+                      <AusenciasTable operacoes={operacoesFiltradas} formatarDataBR={formatarDataBR} />
                     </div>
                   )}
 
                   {operacoesFiltradas.length === 0 && (
-                    <div className="text-center py-12 border-2 border-dashed border-blue-300/30 rounded-lg">
+                    <div className="text-center py-12 border-2 border-dashed border-blue-300/30 rounded-lg hover:border-blue-300/50 transition-all">
                       <Search className="h-12 w-12 text-blue-300/50 mx-auto mb-4" />
                       <p className="text-lg font-medium text-white mb-2">Nenhuma operação encontrada</p>
                       <p className="text-blue-300 mb-4">Ajuste os filtros ou crie uma nova operação</p>
@@ -728,6 +908,7 @@ const RelatorioTransporte = () => {
                 <OperacaoDetalhada 
                   operacao={operacoesFiltradas.find(op => op.id === operacaoSelecionada)}
                   getOperacaoDisplayName={getOperacaoDisplayName}
+                  formatarDataBR={formatarDataBR}
                 />
               )}
 
@@ -756,6 +937,7 @@ const RelatorioTransporte = () => {
                   <OperacoesTable 
                     operacoes={operacoesPorTipo[operacaoSelecionada] || []}
                     getOperacaoDisplayName={getOperacaoDisplayName}
+                    formatarDataBR={formatarDataBR}
                   />
                 </div>
               )}
@@ -779,7 +961,7 @@ const RelatorioTransporte = () => {
                       {totaisAjudantesAusencias.totalAjudantes} registros
                     </Badge>
                   </div>
-                  <AjudantesTable operacoes={operacoesFiltradas} dataFiltro={dataFiltro} />
+                  <AjudantesTable operacoes={operacoesFiltradas} formatarDataBR={formatarDataBR} />
                 </div>
               )}
 
@@ -802,7 +984,7 @@ const RelatorioTransporte = () => {
                       {totaisAjudantesAusencias.totalAusencias} registros
                     </Badge>
                   </div>
-                  <AusenciasTable operacoes={operacoesFiltradas} dataFiltro={dataFiltro} />
+                  <AusenciasTable operacoes={operacoesFiltradas} formatarDataBR={formatarDataBR} />
                 </div>
               )}
             </CardContent>
@@ -817,9 +999,10 @@ const RelatorioTransporte = () => {
 interface OperacaoDetalhadaProps {
   operacao: OperacaoCompleta | undefined;
   getOperacaoDisplayName: (op: OperacaoCompleta) => string;
+  formatarDataBR: (data: string) => string;
 }
 
-const OperacaoDetalhada = ({ operacao, getOperacaoDisplayName }: OperacaoDetalhadaProps) => {
+const OperacaoDetalhada = ({ operacao, getOperacaoDisplayName, formatarDataBR }: OperacaoDetalhadaProps) => {
   if (!operacao) {
     return (
       <div className="text-center py-12">
@@ -832,15 +1015,22 @@ const OperacaoDetalhada = ({ operacao, getOperacaoDisplayName }: OperacaoDetalha
     );
   }
 
+  const totalHoras = operacao.equipamentos.reduce((sum, eq) => 
+    sum + (Number(eq.horas_trabalhadas) || 0), 0
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between p-4 bg-blue-500/10 rounded-lg">
         <div>
           <h2 className="text-xl font-bold text-white">Operação #{operacao.id.slice(0, 8)}</h2>
           <p className="text-blue-300">
-            {getOperacaoDisplayName(operacao)} • {new Date(operacao.data).toLocaleDateString('pt-BR')}
+            {getOperacaoDisplayName(operacao)} • {formatarDataBR(operacao.data)}
           </p>
         </div>
+        <Badge className="bg-green-500/20 text-green-300 text-lg px-3 py-1">
+          Total: {totalHoras.toFixed(1)}h
+        </Badge>
       </div>
 
       <Card className="bg-white/5 border-blue-200/30">
@@ -851,7 +1041,7 @@ const OperacaoDetalhada = ({ operacao, getOperacaoDisplayName }: OperacaoDetalha
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label className="text-sm font-medium text-blue-200">Data</Label>
-              <p className="text-white">{new Date(operacao.data).toLocaleDateString('pt-BR')}</p>
+              <p className="text-white">{formatarDataBR(operacao.data)}</p>
             </div>
             <div>
               <Label className="text-sm font-medium text-blue-200">Horário</Label>
@@ -872,6 +1062,7 @@ const OperacaoDetalhada = ({ operacao, getOperacaoDisplayName }: OperacaoDetalha
       <OperacoesTable 
         operacoes={[operacao]}
         getOperacaoDisplayName={getOperacaoDisplayName}
+        formatarDataBR={formatarDataBR}
       />
     </div>
   );
@@ -881,9 +1072,10 @@ const OperacaoDetalhada = ({ operacao, getOperacaoDisplayName }: OperacaoDetalha
 interface OperacoesTableProps {
   operacoes: OperacaoCompleta[];
   getOperacaoDisplayName: (op: OperacaoCompleta) => string;
+  formatarDataBR: (data: string) => string;
 }
 
-const OperacoesTable = ({ operacoes, getOperacaoDisplayName }: OperacoesTableProps) => {
+const OperacoesTable = ({ operacoes, getOperacaoDisplayName, formatarDataBR }: OperacoesTableProps) => {
   if (operacoes.length === 0) {
     return (
       <div className="text-center py-12">
@@ -929,7 +1121,7 @@ const OperacoesTable = ({ operacoes, getOperacaoDisplayName }: OperacoesTablePro
                   </TableCell>
                   <TableCell className="py-4">
                     <div className="text-sm font-medium text-white">
-                      {new Date(op.data).toLocaleDateString('pt-BR')}
+                      {formatarDataBR(op.data)}
                     </div>
                   </TableCell>
                   <TableCell className="py-4">
@@ -969,10 +1161,10 @@ const OperacoesTable = ({ operacoes, getOperacaoDisplayName }: OperacoesTablePro
 // Componente de Tabela de Ajudantes
 interface AjudantesTableProps {
   operacoes: OperacaoCompleta[];
-  dataFiltro?: string;
+  formatarDataBR: (data: string) => string;
 }
 
-const AjudantesTable = ({ operacoes, dataFiltro }: AjudantesTableProps) => {
+const AjudantesTable = ({ operacoes, formatarDataBR }: AjudantesTableProps) => {
   const todosAjudantes = operacoes.flatMap(op => 
     op.ajudantes?.map(ajudante => ({
       ...ajudante,
@@ -982,11 +1174,7 @@ const AjudantesTable = ({ operacoes, dataFiltro }: AjudantesTableProps) => {
     })) || []
   );
 
-  const ajudantesFiltrados = dataFiltro 
-    ? todosAjudantes.filter(ajudante => ajudante.data === dataFiltro)
-    : todosAjudantes;
-
-  if (ajudantesFiltrados.length === 0) {
+  if (todosAjudantes.length === 0) {
     return (
       <div className="text-center py-12">
         <div className="space-y-3">
@@ -1011,7 +1199,7 @@ const AjudantesTable = ({ operacoes, dataFiltro }: AjudantesTableProps) => {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {ajudantesFiltrados.map((ajudante, index) => (
+          {todosAjudantes.map((ajudante, index) => (
             <TableRow key={`${ajudante.id}-${index}`} className="hover:bg-white/5 transition-colors border-b border-blue-200/10">
               <TableCell className="py-4">
                 <div className="font-medium text-white">{ajudante.nome}</div>
@@ -1023,7 +1211,7 @@ const AjudantesTable = ({ operacoes, dataFiltro }: AjudantesTableProps) => {
               </TableCell>
               <TableCell className="py-4">
                 <div className="text-sm text-white">
-                  {new Date(ajudante.data).toLocaleDateString('pt-BR')}
+                  {formatarDataBR(ajudante.data)}
                 </div>
               </TableCell>
               <TableCell className="py-4">
@@ -1053,10 +1241,10 @@ const AjudantesTable = ({ operacoes, dataFiltro }: AjudantesTableProps) => {
 // Componente de Tabela de Ausências
 interface AusenciasTableProps {
   operacoes: OperacaoCompleta[];
-  dataFiltro?: string;
+  formatarDataBR: (data: string) => string;
 }
 
-const AusenciasTable = ({ operacoes, dataFiltro }: AusenciasTableProps) => {
+const AusenciasTable = ({ operacoes, formatarDataBR }: AusenciasTableProps) => {
   const todasAusencias = operacoes.flatMap(op => 
     op.ausencias?.map(ausencia => ({
       ...ausencia,
@@ -1066,11 +1254,7 @@ const AusenciasTable = ({ operacoes, dataFiltro }: AusenciasTableProps) => {
     })) || []
   );
 
-  const ausenciasFiltradas = dataFiltro 
-    ? todasAusencias.filter(ausencia => ausencia.data === dataFiltro)
-    : todasAusencias;
-
-  if (ausenciasFiltradas.length === 0) {
+  if (todasAusencias.length === 0) {
     return (
       <div className="text-center py-12">
         <div className="space-y-3">
@@ -1095,7 +1279,7 @@ const AusenciasTable = ({ operacoes, dataFiltro }: AusenciasTableProps) => {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {ausenciasFiltradas.map((ausencia, index) => (
+          {todasAusencias.map((ausencia, index) => (
             <TableRow key={`${ausencia.id}-${index}`} className="hover:bg-white/5 transition-colors border-b border-blue-200/10">
               <TableCell className="py-4">
                 <div className="font-medium text-white">{ausencia.nome}</div>
@@ -1107,7 +1291,7 @@ const AusenciasTable = ({ operacoes, dataFiltro }: AusenciasTableProps) => {
               </TableCell>
               <TableCell className="py-4">
                 <div className="text-sm text-white">
-                  {new Date(ausencia.data).toLocaleDateString('pt-BR')}
+                  {formatarDataBR(ausencia.data)}
                 </div>
               </TableCell>
               <TableCell className="py-4">
