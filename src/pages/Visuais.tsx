@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { BarChart3, TrendingUp, Download, Filter, Calendar, PieChart, ArrowLeft } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
 
 // Interface para os dados do gráfico
 interface ChartData {
@@ -15,39 +16,90 @@ interface ChartData {
   porcentagem: number;
 }
 
-// Interface para simular registros da tabela equipamentos
-interface EquipamentoSimulado {
-  id: string;
-  local: string;
-  horas_trabalhadas: number;
-  created_at: string;
-}
-
 const Visuais = () => {
   const navigate = useNavigate();
   
-  // Obter data atual no formato YYYY-MM-DD
-  const getDataAtual = () => {
-    const hoje = new Date();
-    return hoje.toISOString().split('T')[0];
+  // Função para corrigir o fuso horário - converte para o fuso local
+  const corrigirFusoHorarioData = (dataString: string) => {
+    try {
+      // Se a data já está no formato YYYY-MM-DD, apenas retorna
+      if (dataString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        return dataString;
+      }
+      
+      // Se vem como string completa, extrai a parte da data
+      const data = new Date(dataString);
+      
+      // Corrige o fuso horário adicionando o offset
+      const offset = data.getTimezoneOffset();
+      data.setMinutes(data.getMinutes() - offset);
+      
+      return data.toISOString().split('T')[0];
+    } catch (error) {
+      console.error('Erro ao corrigir fuso horário:', error);
+      return dataString;
+    }
   };
 
-  // Obter data de 7 dias atrás
-  const getDataInicialPadrao = () => {
-    const hoje = new Date();
-    const seteDiasAtras = new Date(hoje);
-    seteDiasAtras.setDate(hoje.getDate() - 7);
-    return seteDiasAtras.toISOString().split('T')[0];
+  // Função para formatar data no formato brasileiro
+  const formatarDataBR = (dataString: string) => {
+    try {
+      const data = new Date(dataString + 'T00:00:00'); // Adiciona horário para evitar problemas de fuso
+      return data.toLocaleDateString('pt-BR');
+    } catch (error) {
+      console.error('Erro ao formatar data:', error);
+      return dataString;
+    }
+  };
+
+  // Buscar a última data disponível no banco de dados (da tabela registro_operacoes)
+  const buscarUltimaData = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('registro_operacoes')
+        .select('data')
+        .order('data', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error) throw error;
+
+      if (data?.data) {
+        // Corrige o fuso horário da data vinda do banco
+        return corrigirFusoHorarioData(data.data);
+      }
+      
+      return new Date().toISOString().split('T')[0];
+    } catch (error) {
+      console.error('Erro ao buscar última data:', error);
+      return new Date().toISOString().split('T')[0];
+    }
+  };
+
+  // Obter data de 7 dias atrás (com correção de fuso)
+  const getDataInicialPadrao = async () => {
+    try {
+      const dataAtual = new Date();
+      const seteDiasAtras = new Date(dataAtual);
+      seteDiasAtras.setDate(dataAtual.getDate() - 7);
+      return corrigirFusoHorarioData(seteDiasAtras.toISOString());
+    } catch (error) {
+      console.error('Erro ao obter data inicial:', error);
+      const dataAtual = new Date();
+      dataAtual.setDate(dataAtual.getDate() - 7);
+      return dataAtual.toISOString().split('T')[0];
+    }
   };
 
   const [filtros, setFiltros] = useState({
-    dataInicial: getDataInicialPadrao(),
-    dataFinal: getDataAtual(),
+    dataInicial: '',
+    dataFinal: '',
     local: 'todos'
   });
 
   const [dadosGrafico, setDadosGrafico] = useState<ChartData[]>([]);
   const [carregando, setCarregando] = useState(false);
+  const [inicializando, setInicializando] = useState(true);
 
   // Locais disponíveis para filtro
   const locais = [
@@ -58,157 +110,178 @@ const Visuais = () => {
     { value: 'SANTOS BRASIL', label: 'SANTOS BRASIL' }
   ];
 
-  // Simular dados da tabela equipamentos (substituir pela API real)
-  const simularDadosEquipamentos = (): EquipamentoSimulado[] => {
-    const equipamentos: EquipamentoSimulado[] = [];
-    const locaisDisponiveis = ['HYDRO', 'NAVIO', 'ALBRAS', 'SANTOS BRASIL'];
-    
-    // Gerar dados para os últimos 30 dias
-    for (let i = 0; i < 100; i++) {
-      const local = locaisDisponiveis[Math.floor(Math.random() * locaisDisponiveis.length)];
-      const horas = parseFloat((Math.random() * 12 + 4).toFixed(1)); // 4-16 horas
-      const diasAtras = Math.floor(Math.random() * 30);
-      const data = new Date();
-      data.setDate(data.getDate() - diasAtras);
-      
-      equipamentos.push({
-        id: `eq-${i}`,
-        local,
-        horas_trabalhadas: horas,
-        created_at: data.toISOString().split('T')[0]
-      });
-    }
-
-    // Adicionar alguns dados específicos para garantir valores consistentes
-    equipamentos.push(
-      { id: 'eq-hydro-1', local: 'HYDRO', horas_trabalhadas: 8.5, created_at: getDataAtual() },
-      { id: 'eq-hydro-2', local: 'HYDRO', horas_trabalhadas: 7.0, created_at: getDataAtual() },
-      { id: 'eq-navio-1', local: 'NAVIO', horas_trabalhadas: 6.0, created_at: getDataAtual() },
-      { id: 'eq-albras-1', local: 'ALBRAS', horas_trabalhadas: 9.5, created_at: getDataAtual() },
-      { id: 'eq-santos-1', local: 'SANTOS BRASIL', horas_trabalhadas: 8.0, created_at: getDataAtual() }
-    );
-
-    return equipamentos;
-  };
-
-  // Função para processar dados com filtros aplicados
-  const processarDadosComFiltros = (equipamentos: EquipamentoSimulado[]) => {
-    let equipamentosFiltrados = [...equipamentos];
-
-    // Aplicar filtro de data
-    if (filtros.dataInicial) {
-      equipamentosFiltrados = equipamentosFiltrados.filter(eq => 
-        eq.created_at >= filtros.dataInicial
-      );
-    }
-
-    if (filtros.dataFinal) {
-      equipamentosFiltrados = equipamentosFiltrados.filter(eq => 
-        eq.created_at <= filtros.dataFinal
-      );
-    }
-
-    // Aplicar filtro de local
-    if (filtros.local !== 'todos') {
-      equipamentosFiltrados = equipamentosFiltrados.filter(eq => 
-        eq.local === filtros.local
-      );
-    }
-
-    // Agrupar por local e calcular totais
-    const agrupadoPorLocal = equipamentosFiltrados.reduce((acc, equipamento) => {
-      if (!acc[equipamento.local]) {
-        acc[equipamento.local] = {
-          horas: 0,
-          quantidade: 0
-        };
-      }
-      
-      acc[equipamento.local].horas += equipamento.horas_trabalhadas;
-      acc[equipamento.local].quantidade += 1;
-      
-      return acc;
-    }, {} as Record<string, { horas: number; quantidade: number }>);
-
-    // Converter para array e calcular porcentagens
-    const dadosArray = Object.entries(agrupadoPorLocal).map(([local, dados]) => ({
-      local,
-      horas: parseFloat(dados.horas.toFixed(1)),
-      quantidade: dados.quantidade
-    }));
-
-    // Calcular total de horas para as porcentagens
-    const totalHoras = dadosArray.reduce((sum, item) => sum + item.horas, 0);
-
-    // Adicionar porcentagens
-    const dadosComPorcentagem = dadosArray.map(item => ({
-      ...item,
-      porcentagem: totalHoras > 0 ? Math.round((item.horas / totalHoras) * 100) : 0
-    }));
-
-    return dadosComPorcentagem.sort((a, b) => b.horas - a.horas);
-  };
-
-  // Função para buscar dados das horas trabalhadas da tabela equipamentos
-  const buscarHorasTrabalhadas = async () => {
+  // Função para buscar dados reais com JOIN entre as tabelas
+  const buscarDadosEquipamentos = async () => {
     setCarregando(true);
     
     try {
-      // Simular delay de rede
-      await new Promise(resolve => setTimeout(resolve, 800));
-
-      // EM PRODUÇÃO: Substituir por chamada real à API
-      /*
-      const response = await fetch('/api/dashboard/horas-equipamentos', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          dataInicial: filtros.dataInicial,
-          dataFinal: filtros.dataFinal,
-          local: filtros.local === 'todos' ? null : filtros.local
-        })
+      console.log('🔍 Buscando dados com JOIN entre tabelas...');
+      console.log('📅 Filtros aplicados:', {
+        dataInicial: filtros.dataInicial,
+        dataFinal: filtros.dataFinal,
+        local: filtros.local
       });
 
-      const dados = await response.json();
-      setDadosGrafico(dados);
-      */
+      // Primeiro, buscar as operações que correspondem ao filtro de data
+      let queryOperacoes = supabase
+        .from('registro_operacoes')
+        .select('id, op, data')
+        .order('data', { ascending: false });
 
-      // SIMULAÇÃO: Usar dados simulados e aplicar filtros
-      const equipamentosSimulados = simularDadosEquipamentos();
-      const dadosProcessados = processarDadosComFiltros(equipamentosSimulados);
-      setDadosGrafico(dadosProcessados);
+      // Aplicar filtro de data na tabela registro_operacoes
+      if (filtros.dataInicial) {
+        const dataInicialCorrigida = corrigirFusoHorarioData(filtros.dataInicial);
+        console.log('📅 Aplicando filtro data inicial (corrigida):', dataInicialCorrigida);
+        queryOperacoes = queryOperacoes.gte('data', dataInicialCorrigida);
+      }
 
-    } catch (error) {
-      console.error('Erro ao buscar dados:', error);
-      // Em caso de erro, usar dados simulados
-      const equipamentosSimulados = simularDadosEquipamentos();
-      const dadosProcessados = processarDadosComFiltros(equipamentosSimulados);
-      setDadosGrafico(dadosProcessados);
+      if (filtros.dataFinal) {
+        const dataFinalCorrigida = corrigirFusoHorarioData(filtros.dataFinal);
+        console.log('📅 Aplicando filtro data final (corrigida):', dataFinalCorrigida);
+        queryOperacoes = queryOperacoes.lte('data', dataFinalCorrigida);
+      }
+
+      const { data: operacoes, error: errorOperacoes } = await queryOperacoes;
+
+      if (errorOperacoes) {
+        console.error('❌ Erro ao buscar operações:', errorOperacoes);
+        throw new Error(`Erro ao buscar operações: ${errorOperacoes.message}`);
+      }
+
+      console.log('✅ Operações encontradas:', operacoes?.length || 0);
+
+      if (!operacoes || operacoes.length === 0) {
+        console.log('📭 Nenhuma operação encontrada para os filtros de data');
+        setDadosGrafico([]);
+        return;
+      }
+
+      // Extrair os IDs das operações encontradas
+      const operacaoIds = operacoes.map(op => op.id);
+      console.log('📋 IDs das operações:', operacaoIds);
+
+      // Agora buscar os equipamentos relacionados a essas operações
+      let queryEquipamentos = supabase
+        .from('equipamentos')
+        .select('local, horas_trabalhadas, registro_operacoes_id')
+        .in('registro_operacoes_id', operacaoIds);
+
+      // Aplicar filtro de local se necessário
+      if (filtros.local !== 'todos') {
+        console.log('🏭 Aplicando filtro local:', filtros.local);
+        queryEquipamentos = queryEquipamentos.eq('local', filtros.local);
+      }
+
+      const { data: equipamentos, error: errorEquipamentos } = await queryEquipamentos;
+
+      if (errorEquipamentos) {
+        console.error('❌ Erro ao buscar equipamentos:', errorEquipamentos);
+        throw new Error(`Erro ao buscar equipamentos: ${errorEquipamentos.message}`);
+      }
+
+      console.log('✅ Equipamentos encontrados:', equipamentos?.length || 0);
+
+      if (!equipamentos || equipamentos.length === 0) {
+        console.log('📭 Nenhum equipamento encontrado para as operações filtradas');
+        setDadosGrafico([]);
+        return;
+      }
+
+      // Agrupar por local e calcular totais
+      const agrupadoPorLocal = equipamentos.reduce((acc, equipamento) => {
+        const local = equipamento.local || 'NÃO INFORMADO';
+        
+        if (!acc[local]) {
+          acc[local] = {
+            horas: 0,
+            quantidade: 0
+          };
+        }
+        
+        acc[local].horas += Number(equipamento.horas_trabalhadas) || 0;
+        acc[local].quantidade += 1;
+        
+        return acc;
+      }, {} as Record<string, { horas: number; quantidade: number }>);
+
+      // Converter para array e calcular porcentagens
+      const dadosArray = Object.entries(agrupadoPorLocal).map(([local, dados]) => ({
+        local,
+        horas: parseFloat(dados.horas.toFixed(1)),
+        quantidade: dados.quantidade
+      }));
+
+      // Calcular total de horas para as porcentagens
+      const totalHoras = dadosArray.reduce((sum, item) => sum + item.horas, 0);
+
+      // Adicionar porcentagens
+      const dadosComPorcentagem = dadosArray.map(item => ({
+        ...item,
+        porcentagem: totalHoras > 0 ? Math.round((item.horas / totalHoras) * 100) : 0
+      }));
+
+      const dadosOrdenados = dadosComPorcentagem.sort((a, b) => b.horas - a.horas);
+      
+      console.log('📊 Dados processados:', dadosOrdenados);
+      console.log('📈 Total de horas:', totalHoras);
+      setDadosGrafico(dadosOrdenados);
+
+    } catch (error: any) {
+      console.error('❌ Erro ao processar dados:', error);
+      // Em caso de erro, definir array vazio
+      setDadosGrafico([]);
     } finally {
       setCarregando(false);
     }
   };
 
-  // Buscar dados quando o componente montar
+  // Inicializar datas padrão quando o componente montar
   useEffect(() => {
-    buscarHorasTrabalhadas();
+    const inicializarDatas = async () => {
+      setInicializando(true);
+      try {
+        const dataFinal = await buscarUltimaData();
+        const dataInicial = await getDataInicialPadrao();
+        
+        setFiltros({
+          dataInicial,
+          dataFinal,
+          local: 'todos'
+        });
+
+        console.log('📅 Datas inicializadas:', { dataInicial, dataFinal });
+      } catch (error) {
+        console.error('Erro ao inicializar datas:', error);
+      } finally {
+        setInicializando(false);
+      }
+    };
+
+    inicializarDatas();
   }, []);
+
+  // Buscar dados quando as datas forem inicializadas ou filtros mudarem
+  useEffect(() => {
+    if (!inicializando && filtros.dataInicial && filtros.dataFinal) {
+      buscarDadosEquipamentos();
+    }
+  }, [filtros, inicializando]);
 
   // Função para aplicar filtros
   const aplicarFiltros = () => {
-    buscarHorasTrabalhadas();
+    buscarDadosEquipamentos();
   };
 
   // Função para limpar filtros
-  const limparFiltros = () => {
+  const limparFiltros = async () => {
+    const dataFinal = await buscarUltimaData();
+    const dataInicial = await getDataInicialPadrao();
+    
     setFiltros({
-      dataInicial: getDataInicialPadrao(),
-      dataFinal: getDataAtual(),
+      dataInicial,
+      dataFinal,
       local: 'todos'
     });
-    // Não buscar automaticamente ao limpar - usuário precisa clicar em aplicar
   };
 
   // Função para retornar ao menu principal
@@ -222,7 +295,10 @@ const Visuais = () => {
     'bg-green-500',
     'bg-purple-500',
     'bg-orange-500',
-    'bg-cyan-500'
+    'bg-cyan-500',
+    'bg-pink-500',
+    'bg-indigo-500',
+    'bg-teal-500'
   ];
 
   // Calcular totais
@@ -233,9 +309,30 @@ const Visuais = () => {
 
   // Debug: mostrar dados filtrados no console
   useEffect(() => {
-    console.log('Dados do gráfico:', dadosGrafico);
-    console.log('Totais:', totais);
-  }, [dadosGrafico]);
+    if (!inicializando) {
+      console.log('📈 Dados do gráfico:', dadosGrafico);
+      console.log('🧮 Totais:', totais);
+      console.log('⚙️ Filtros aplicados:', {
+        dataInicial: filtros.dataInicial,
+        dataFinal: filtros.dataFinal,
+        dataInicialFormatada: formatarDataBR(filtros.dataInicial),
+        dataFinalFormatada: formatarDataBR(filtros.dataFinal),
+        local: filtros.local
+      });
+    }
+  }, [dadosGrafico, filtros, inicializando]);
+
+  if (inicializando) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900 p-6 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-200 border-t-white rounded-full animate-spin mx-auto mb-4"></div>
+          <h2 className="text-2xl font-bold text-white mb-2">Carregando Dashboard</h2>
+          <p className="text-blue-200">Inicializando dados do sistema...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900 p-6">
@@ -254,7 +351,7 @@ const Visuais = () => {
             <div>
               <h1 className="text-3xl font-bold text-white mb-2">Visuais e Dashboard</h1>
               <p className="text-blue-200">
-                Horas trabalhadas por local - Dados da tabela Equipamentos
+                Horas trabalhadas por local - Dados reais das operações
               </p>
             </div>
           </div>
@@ -272,13 +369,13 @@ const Visuais = () => {
         <CardHeader>
           <CardTitle className="text-white flex items-center gap-2">
             <Filter className="h-5 w-5" />
-            Filtros - Equipamentos
+            Filtros - Operações e Equipamentos
           </CardTitle>
           <CardDescription className="text-blue-200">
-            Filtre as horas trabalhadas da tabela de equipamentos
+            Filtre as horas trabalhadas por data da operação
             {filtros.dataInicial && filtros.dataFinal && (
               <span className="block text-orange-300 mt-1">
-                Período: {new Date(filtros.dataInicial).toLocaleDateString('pt-BR')} até {new Date(filtros.dataFinal).toLocaleDateString('pt-BR')}
+                Período: {formatarDataBR(filtros.dataInicial)} até {formatarDataBR(filtros.dataFinal)}
                 {dadosGrafico.length > 0 && (
                   <span className="text-green-300 ml-2">
                     • {totais.quantidade} equipamentos • {totais.horas.toFixed(1)} horas totais
@@ -299,7 +396,7 @@ const Visuais = () => {
                 value={filtros.dataInicial}
                 onChange={(e) => setFiltros({ ...filtros, dataInicial: e.target.value })}
                 className="bg-white/5 border-blue-300/30 text-white"
-                max={filtros.dataFinal || getDataAtual()}
+                max={filtros.dataFinal}
               />
             </div>
 
@@ -313,7 +410,6 @@ const Visuais = () => {
                 onChange={(e) => setFiltros({ ...filtros, dataFinal: e.target.value })}
                 className="bg-white/5 border-blue-300/30 text-white"
                 min={filtros.dataInicial}
-                max={getDataAtual()}
               />
             </div>
 
@@ -362,13 +458,13 @@ const Visuais = () => {
         <CardHeader>
           <CardTitle className="text-white flex items-center gap-2">
             <PieChart className="h-5 w-5" />
-            Horas Trabalhadas - Equipamentos
+            Horas Trabalhadas - Operações
             {carregando && (
               <span className="text-orange-400 text-sm font-normal">(Atualizando...)</span>
             )}
           </CardTitle>
           <CardDescription className="text-blue-200">
-            Distribuição das horas trabalhadas por local (coluna horas_trabalhadas)
+            Distribuição das horas trabalhadas por local (filtrado por data da operação)
             {totais.horas > 0 && (
               <span className="text-green-300 ml-2">
                 Soma total: {totais.horas.toFixed(1)} horas
@@ -379,14 +475,14 @@ const Visuais = () => {
         <CardContent>
           {carregando ? (
             <div className="flex justify-center items-center h-64">
-              <div className="text-white animate-pulse">Carregando dados dos equipamentos...</div>
+              <div className="text-white animate-pulse">Carregando dados das operações...</div>
             </div>
           ) : dadosGrafico.length === 0 ? (
             <div className="flex justify-center items-center h-64">
               <div className="text-white text-center">
                 <p>Nenhum dado encontrado para os filtros aplicados</p>
                 <p className="text-sm text-blue-200 mt-2">
-                  Tente ajustar as datas ou selecionar outro local
+                  Não houve operações registradas neste período
                 </p>
               </div>
             </div>
@@ -405,7 +501,7 @@ const Visuais = () => {
                       return (
                         <div
                           key={item.local}
-                          className={`absolute inset-0 rounded-full ${cores[index]} opacity-80`}
+                          className={`absolute inset-0 rounded-full ${cores[index % cores.length]} opacity-80`}
                           style={{
                             clipPath: `conic-gradient(from ${porcentagemAcumulada * 3.6}deg, transparent 0, transparent ${item.porcentagem * 3.6}deg, #0000 0)`
                           }}
@@ -430,7 +526,7 @@ const Visuais = () => {
                   {dadosGrafico.map((item, index) => (
                     <div key={item.local} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
                       <div className="flex items-center gap-3">
-                        <div className={`w-4 h-4 rounded ${cores[index]}`} />
+                        <div className={`w-4 h-4 rounded ${cores[index % cores.length]}`} />
                         <div>
                           <span className="text-white font-medium">{item.local}</span>
                           <div className="text-blue-200 text-xs">
