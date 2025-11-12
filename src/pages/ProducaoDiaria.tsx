@@ -17,6 +17,7 @@ interface RegistroProducao {
   tons_t2?: number; vols_t2?: number;
   tons_t3?: number; vols_t3?: number;
   tons_t4?: number; vols_t4?: number;
+  data: string;
 }
 
 const ProducaoDiaria = () => {
@@ -25,12 +26,11 @@ const ProducaoDiaria = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [navio, setNavio] = useState<{ nome_navio: string } | null>(null);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [registros, setRegistros] = useState<RegistroProducao[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
-  const fetchRegistrosDoDia = useCallback(async (data: string) => {
+  const fetchTodosRegistros = useCallback(async () => {
     setLoading(true);
     try {
       if (!navioId) return;
@@ -39,27 +39,30 @@ const ProducaoDiaria = () => {
       if (navioError) throw navioError;
       setNavio(navioData);
       
+      // REMOVIDO: filtro por data - agora busca todos os registros
       const { data: registrosData, error } = await supabase
         .from('registros_producao')
         .select('*')
         .eq('navio_id', navioId)
-        .eq('data', data)
+        .order('data', { ascending: false })
         .order('porao');
       
       if (error) throw error;
       
       if (registrosData && registrosData.length > 0) {
-        console.log('Dados carregados:', registrosData);
+        console.log('Todos os dados carregados:', registrosData);
         setRegistros(registrosData);
       } else {
         console.log('Nenhum dado encontrado, criando linha padrão');
+        const dataAtual = new Date().toISOString().split('T')[0];
         setRegistros([{ 
           id: `new-${Date.now()}`, 
           porao: '#01', 
           tons_t1: 0, vols_t1: 0, 
           tons_t2: 0, vols_t2: 0, 
           tons_t3: 0, vols_t3: 0, 
-          tons_t4: 0, vols_t4: 0
+          tons_t4: 0, vols_t4: 0,
+          data: dataAtual
         }]);
       }
     } catch (error) {
@@ -71,17 +74,14 @@ const ProducaoDiaria = () => {
   }, [navioId, toast]);
 
   useEffect(() => {
-    fetchRegistrosDoDia(selectedDate);
-  }, [selectedDate, fetchRegistrosDoDia]);
-
-  const handleDateChange = (newDate: string) => {
-    setSelectedDate(newDate);
-    // A função fetchRegistrosDoDia será chamada automaticamente pelo useEffect
-  };
+    fetchTodosRegistros();
+  }, [fetchTodosRegistros]);
 
   const handleRegistroChange = (id: string, field: keyof RegistroProducao, value: string) => {
     if (field === 'porao') {
       setRegistros(prev => prev.map(r => r.id === id ? { ...r, [field]: value.toUpperCase() } : r));
+    } else if (field === 'data') {
+      setRegistros(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
     } else {
       const numValue = value === '' ? 0 : Number(value);
       setRegistros(prev => prev.map(r => r.id === id ? { ...r, [field]: numValue } : r));
@@ -89,6 +89,7 @@ const ProducaoDiaria = () => {
   };
 
   const addLinha = () => {
+    const dataAtual = new Date().toISOString().split('T')[0];
     const nextPoraoNumber = registros.length + 1;
     setRegistros(prev => [...prev, { 
       id: `new-${Date.now()}`, 
@@ -96,7 +97,8 @@ const ProducaoDiaria = () => {
       tons_t1: 0, vols_t1: 0, 
       tons_t2: 0, vols_t2: 0, 
       tons_t3: 0, vols_t3: 0, 
-      tons_t4: 0, vols_t4: 0
+      tons_t4: 0, vols_t4: 0,
+      data: dataAtual
     }]);
   };
 
@@ -116,18 +118,19 @@ const ProducaoDiaria = () => {
     const dadosParaSalvar = registros.map(({ id, ...rest }) => ({
       ...rest,
       navio_id: navioId,
-      data: selectedDate,
       user_id: user.id,
     }));
     
     console.log('Salvando dados:', dadosParaSalvar);
     
     try {
-      const { error } = await supabase.from('registros_producao').upsert(dadosParaSalvar, { onConflict: 'navio_id, data, porao' });
+      const { error } = await supabase.from('registros_producao').upsert(dadosParaSalvar, { 
+        onConflict: 'id'
+      });
       if (error) throw error;
-      toast({ title: "Sucesso!", description: "Registros do dia salvos com sucesso." });
+      toast({ title: "Sucesso!", description: "Todos os registros foram salvos com sucesso." });
       // Recarrega os dados para garantir que temos os IDs atualizados
-      fetchRegistrosDoDia(selectedDate);
+      fetchTodosRegistros();
     } catch (error) {
       console.error('Erro ao salvar:', error);
       toast({ title: "Erro", description: "Não foi possível salvar os dados.", variant: "destructive" });
@@ -171,15 +174,15 @@ const ProducaoDiaria = () => {
                 Voltar
               </Button>
               <div>
-                <h1 className="text-2xl font-bold text-white">Produção Diária</h1>
+                <h1 className="text-2xl font-bold text-white">Produção - Todos os Registros</h1>
                 <p className="text-blue-200 text-sm">
-                  {navio?.nome_navio || 'Carregando...'} • {new Date(selectedDate).toLocaleDateString('pt-BR')}
+                  {navio?.nome_navio || 'Carregando...'} • {registros.length} registros
                 </p>
               </div>
             </div>
             <div className="flex items-center space-x-4">
               <div className="text-right">
-                <div className="text-blue-200 text-sm">Total do Dia</div>
+                <div className="text-blue-200 text-sm">Total Geral</div>
                 <div className="text-white font-bold">
                   {totais.tons.toFixed(3)} tons • {totais.vols.toFixed(3)} vols
                 </div>
@@ -197,7 +200,7 @@ const ProducaoDiaria = () => {
                 <BarChart3 className="h-5 w-5" />
                 <span>Registro de Produção</span>
                 <span className="text-blue-300 text-sm font-normal">
-                  {registros.length} linha(s) • {new Date(selectedDate).toLocaleDateString('pt-BR')}
+                  {registros.length} linha(s)
                 </span>
               </CardTitle>
             </CardHeader>
@@ -235,8 +238,8 @@ const ProducaoDiaria = () => {
                             <Label className="text-white text-xs block mb-1">Data</Label>
                             <Input 
                               type="date" 
-                              value={selectedDate} 
-                              onChange={(e) => handleDateChange(e.target.value)}
+                              value={registro.data} 
+                              onChange={(e) => handleRegistroChange(registro.id!, 'data', e.target.value)}
                               className="bg-white/5 border-blue-300/30 text-white text-sm h-9 rounded-none mb-2"
                             />
                           </div>
@@ -383,7 +386,7 @@ const ProducaoDiaria = () => {
                           Salvando...
                         </>
                       ) : (
-                        'Salvar Registros do Dia'
+                        'Salvar Todos os Registros'
                       )}
                     </Button>
                   </div>
