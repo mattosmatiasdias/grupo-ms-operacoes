@@ -39,7 +39,6 @@ const ProducaoDiaria = () => {
       if (navioError) throw navioError;
       setNavio(navioData);
       
-      // REMOVIDO: filtro por data - agora busca todos os registros
       const { data: registrosData, error } = await supabase
         .from('registros_producao')
         .select('*')
@@ -115,25 +114,84 @@ const ProducaoDiaria = () => {
     if (!user || !navioId) return;
     setIsSaving(true);
     
-    const dadosParaSalvar = registros.map(({ id, ...rest }) => ({
-      ...rest,
-      navio_id: navioId,
-      user_id: user.id,
-    }));
-    
-    console.log('Salvando dados:', dadosParaSalvar);
-    
     try {
-      const { error } = await supabase.from('registros_producao').upsert(dadosParaSalvar, { 
-        onConflict: 'id'
+      // Separar registros existentes e novos
+      const registrosExistentes = registros.filter(r => r.id && !r.id.startsWith('new-'));
+      const registrosNovos = registros.filter(r => !r.id || r.id.startsWith('new-'));
+      
+      console.log('Registros existentes:', registrosExistentes);
+      console.log('Registros novos:', registrosNovos);
+
+      // Atualizar registros existentes
+      if (registrosExistentes.length > 0) {
+        const updates = registrosExistentes.map(registro => ({
+          id: registro.id,
+          porao: registro.porao,
+          tons_t1: registro.tons_t1 || 0,
+          vols_t1: registro.vols_t1 || 0,
+          tons_t2: registro.tons_t2 || 0,
+          vols_t2: registro.vols_t2 || 0,
+          tons_t3: registro.tons_t3 || 0,
+          vols_t3: registro.vols_t3 || 0,
+          tons_t4: registro.tons_t4 || 0,
+          vols_t4: registro.vols_t4 || 0,
+          data: registro.data,
+          navio_id: navioId,
+          user_id: user.id,
+        }));
+
+        const { error: updateError } = await supabase
+          .from('registros_producao')
+          .upsert(updates);
+
+        if (updateError) {
+          console.error('Erro ao atualizar:', updateError);
+          throw updateError;
+        }
+      }
+
+      // Inserir novos registros
+      if (registrosNovos.length > 0) {
+        const inserts = registrosNovos.map(registro => ({
+          porao: registro.porao,
+          tons_t1: registro.tons_t1 || 0,
+          vols_t1: registro.vols_t1 || 0,
+          tons_t2: registro.tons_t2 || 0,
+          vols_t2: registro.vols_t2 || 0,
+          tons_t3: registro.tons_t3 || 0,
+          vols_t3: registro.vols_t3 || 0,
+          tons_t4: registro.tons_t4 || 0,
+          vols_t4: registro.vols_t4 || 0,
+          data: registro.data,
+          navio_id: navioId,
+          user_id: user.id,
+        }));
+
+        const { error: insertError } = await supabase
+          .from('registros_producao')
+          .insert(inserts);
+
+        if (insertError) {
+          console.error('Erro ao inserir:', insertError);
+          throw insertError;
+        }
+      }
+
+      toast({ 
+        title: "Sucesso!", 
+        description: "Todos os registros foram salvos com sucesso." 
       });
-      if (error) throw error;
-      toast({ title: "Sucesso!", description: "Todos os registros foram salvos com sucesso." });
-      // Recarrega os dados para garantir que temos os IDs atualizados
-      fetchTodosRegistros();
-    } catch (error) {
-      console.error('Erro ao salvar:', error);
-      toast({ title: "Erro", description: "Não foi possível salvar os dados.", variant: "destructive" });
+      
+      // Recarregar os dados para obter os IDs atualizados
+      await fetchTodosRegistros();
+      
+    } catch (error: any) {
+      console.error('Erro completo ao salvar:', error);
+      toast({ 
+        title: "Erro ao salvar", 
+        description: error.message || "Não foi possível salvar os dados.", 
+        variant: "destructive" 
+      });
     } finally {
       setIsSaving(false);
     }
@@ -347,18 +405,6 @@ const ProducaoDiaria = () => {
                             {totais.tons.toFixed(3)}
                           </div>
                         </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Legenda dos Horários */}
-                  <div className="flex justify-center pt-2">
-                    <div className="bg-blue-700/50 px-4 py-2 rounded-lg border border-blue-400/30">
-                      <div className="text-blue-200 text-sm font-medium flex items-center space-x-6">
-                        <span>🕖 07h-13h</span>
-                        <span>🕐 13h-19h</span>
-                        <span>🕖 19h-01h</span>
-                        <span>🕐 01h-07h</span>
                       </div>
                     </div>
                   </div>
