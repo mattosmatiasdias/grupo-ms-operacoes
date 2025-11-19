@@ -1106,13 +1106,18 @@ const OperacoesTable = ({ operacoes, getOperacaoDisplayName, formatarDataBR }: O
             op.equipamentos.map((eq) => {
               const horasTrabalhadas = Number(eq.horas_trabalhadas) || 0;
               
+              // VERIFICA SE É HYDRO E SUBSTITUI A OPERAÇÃO PELO grupo_operacao
+              const displayOperacao = op.op === 'HYDRO' 
+                ? eq.grupo_operacao 
+                : getOperacaoDisplayName(op);
+              
               return (
                 <TableRow key={`${op.id}-${eq.id}`} className="hover:bg-white/5 transition-colors border-b border-blue-200/10">
                   <TableCell className="py-4">
                     <div className="flex items-center space-x-3">
                       <div className="w-3 h-3 rounded-full bg-blue-400"></div>
                       <div>
-                        <div className="font-medium text-white">{getOperacaoDisplayName(op)}</div>
+                        <div className="font-medium text-white">{displayOperacao}</div>
                         {op.observacao && (
                           <div className="text-sm text-blue-300 truncate max-w-xs">{op.observacao}</div>
                         )}

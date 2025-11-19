@@ -1,432 +1,387 @@
-// src/pages/Dashboard.tsx
-import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotifications } from '@/hooks/useNotifications';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CalendarIcon, FilterIcon, Bell, FileText, Ship, BarChart2 } from 'lucide-react';
-import {
-  Chart as ChartJS,
-  ArcElement,
-  CategoryScale,
-  LinearScale,
-  Title,
-  Tooltip,
-  Legend,
-} from 'chart.js';
-import { Pie, Bar } from 'react-chartjs-2';
-
-// Registra os componentes necessários do Chart.js
-ChartJS.register(ArcElement, CategoryScale, LinearScale, Title, Tooltip, Legend);
-
-interface EquipamentoOperacao {
-  id: string;
-  local: string; // 'HYDRO', 'ALBRAS', 'NAVIO', 'SANTOS BRASIL'
-  tag: string; // Ex: "CB-123", "EST-5"
-  hora_inicial: string | null;
-  hora_final: string | null;
-}
+import { Card, CardContent } from '@/components/ui/card';
+import { Bell, FileText, Ship, LogOut, BarChart3, Menu, X, Calendar, ClipboardCheck, Car, AlertTriangle, Building2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 
 const Dashboard = () => {
   const { userProfile, signOut } = useAuth();
   const { hasUnread } = useNotifications();
-  const [loading, setLoading] = useState(true);
-  const [equipamentos, setEquipamentos] = useState<EquipamentoOperacao[]>([]);
-  const [filtroDataInicio, setFiltroDataInicio] = useState<string>('');
-  const [filtroDataFim, setFiltroDataFim] = useState<string>('');
-  const [filtroLocal, setFiltroLocal] = useState<string>('Todos');
-  const [filtroTipoEquipamento, setFiltroTipoEquipamento] = useState<string>('Todos');
+  const navigate = useNavigate();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Carregar dados do Supabase
-  useEffect(() => {
-    const fetchEquipamentos = async () => {
-      setLoading(true);
-      try {
-        const { data, error } = await supabase
-          .from('equipamentos')
-          .select('local, tag, hora_inicial, hora_final')
-          .eq('hora_inicial IS NOT NULL', true)
-          .eq('hora_final IS NOT NULL', true);
-
-        if (error) throw error;
-
-        let filtered = data || [];
-
-        // Filtrar por data
-        if (filtroDataInicio || filtroDataFim) {
-          filtered = filtered.filter(item => {
-            const dataEq = new Date(item.hora_inicial!).toISOString().split('T')[0];
-            if (filtroDataInicio && dataEq < filtroDataInicio) return false;
-            if (filtroDataFim && dataEq > filtroDataFim) return false;
-            return true;
-          });
-        }
-
-        // Filtrar por local
-        if (filtroLocal !== 'Todos') {
-          filtered = filtered.filter(eq => eq.local === filtroLocal);
-        }
-
-        // Filtrar por tipo de equipamento (prefixo antes do '-')
-        if (filtroTipoEquipamento !== 'Todos') {
-          filtered = filtered.filter(eq => {
-            const prefixo = eq.tag.split('-')[0];
-            return prefixo === filtroTipoEquipamento;
-          });
-        }
-
-        setEquipamentos(filtered);
-      } catch (error) {
-        console.error('Erro ao carregar equipamentos:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchEquipamentos();
-  }, [filtroDataInicio, filtroDataFim, filtroLocal, filtroTipoEquipamento]);
-
-  // Função auxiliar para calcular diferença em horas entre dois times
-  const calcularHorasDiferenca = (inicio: string, fim: string): number => {
-    const [h1, m1] = inicio.split(':').map(Number);
-    const [h2, m2] = fim.split(':').map(Number);
-    let totalMinutos = (h2 * 60 + m2) - (h1 * 60 + m1);
-    if (totalMinutos < 0) totalMinutos += 24 * 60; // Se passou da meia-noite
-    return totalMinutos / 60; // Retorna em horas
+  const handleSignOut = async () => {
+    await signOut();
   };
 
-  // 🟠 GRÁFICO DE PIZZA: Horas por Local
-  const gerarDadosPizza = () => {
-    const locais = ['HYDRO', 'ALBRAS', 'NAVIO', 'SANTOS BRASIL'];
-    const somasPorLocal = locais.map(local => {
-      return equipamentos
-        .filter(eq => eq.local === local)
-        .reduce((acc, eq) => acc + calcularHorasDiferenca(eq.hora_inicial!, eq.hora_final!), 0);
-    });
+  const menuItems = [
+    {
+      icon: FileText,
+      label: 'RELATÓRIO DE TRANSPORTE',
+      path: '/relatorio-transporte',
+      color: 'from-green-600 to-green-700',
+      hoverColor: 'from-green-700 to-green-800'
+    },
+    {
+      icon: Ship,
+      label: 'NAVIOS',
+      path: '/navios',
+      color: 'from-purple-600 to-purple-700',
+      hoverColor: 'from-purple-700 to-purple-800'
+    },
+    {
+      icon: Calendar,
+      label: 'ESCALAS',
+      path: '/escalas',
+      color: 'from-cyan-600 to-cyan-700',
+      hoverColor: 'from-cyan-700 to-cyan-800'
+    },
+    {
+      icon: ClipboardCheck,
+      label: 'VISTORIAS',
+      path: '/vistorias',
+      color: 'from-teal-600 to-teal-700',
+      hoverColor: 'from-teal-700 to-teal-800'
+    },
+    {
+      icon: Car,
+      label: 'MASTER DRIVE',
+      path: '/master-drive',
+      color: 'from-blue-600 to-blue-700',
+      hoverColor: 'from-blue-700 to-blue-800'
+    },
+    {
+      icon: AlertTriangle,
+      label: 'OCORRÊNCIAS',
+      path: '/ocorrencias',
+      color: 'from-indigo-600 to-indigo-700',
+      hoverColor: 'from-indigo-700 to-indigo-800'
+    },
+    {
+      icon: Bell,
+      label: 'NOTIFICAÇÕES',
+      path: '/notificacao',
+      color: 'from-violet-600 to-violet-700',
+      hoverColor: 'from-violet-700 to-violet-800',
+      hasNotification: hasUnread
+    },
+    {
+      icon: Building2,
+      label: 'RDO SANTOS BRASIL',
+      path: '/santos-brasil', // ← CORRIGIDO: era '/rdo-santos-brasil'
+      color: 'from-red-600 to-red-700',
+      hoverColor: 'from-red-700 to-red-800'
+    },
+    {
+      icon: BarChart3,
+      label: 'VISUAIS E DASHBOARD',
+      path: '/visuais',
+      color: 'from-orange-500 to-orange-600',
+      hoverColor: 'from-orange-600 to-orange-700'
+    }
+  ];
 
-    const total = somasPorLocal.reduce((a, b) => a + b, 0);
-    const porcentagens = somasPorLocal.map(soma => (total > 0 ? (soma / total) * 100 : 0));
-
-    return {
-      labels: locais,
-      datasets: [
-        {
-           porcentagens,
-          backgroundColor: [
-            '#3B82F6', // HYDRO - Azul
-            '#EF4444', // ALBRAS - Vermelho
-            '#10B981', // NAVIO - Verde
-            '#8B5CF6', // SANTOS BRASIL - Roxo
-          ],
-          borderColor: ['#fff'],
-          borderWidth: 1,
-        },
-      ],
-    };
-  };
-
-  // 🟢 GRÁFICO DE BARRAS: Horas por Tipo de Equipamento (prefixo)
-  const gerarDadosBarras = () => {
-    const tipos: Record<string, number> = {};
-    equipamentos.forEach(eq => {
-      const prefixo = eq.tag.split('-')[0];
-      if (!prefixo) return;
-      const horas = calcularHorasDiferenca(eq.hora_inicial!, eq.hora_final!);
-      tipos[prefixo] = (tipos[prefixo] || 0) + horas;
-    });
-
-    const labels = Object.keys(tipos);
-    const valores = Object.values(tipos);
-
-    return {
-      labels,
-      datasets: [
-        {
-          label: 'Horas Operadas',
-           valores,
-          backgroundColor: '#10B981',
-          borderColor: '#059669',
-          borderWidth: 1,
-        },
-      ],
-    };
-  };
-
-  // Obter todos os tipos únicos de equipamento (prefixos)
-  const tiposEquipamentos = Array.from(
-    new Set(equipamentos.map(eq => eq.tag.split('-')[0]).filter(Boolean))
-  );
-
-  // Filtros disponíveis
-  const filtrosLocais = ['Todos', 'HYDRO', 'ALBRAS', 'NAVIO', 'SANTOS BRASIL'];
-
-  // Formatar valor para mostrar como "X.XX h"
-  const formatarHoras = (valor: number): string => {
-    return `${valor.toFixed(2)} h`;
-  };
+  const quickActions = [
+    {
+      icon: FileText,
+      label: 'NOVO LANÇAMENTO',
+      path: '/novo-lancamento',
+      color: 'from-cyan-500 to-cyan-600',
+      hoverColor: 'from-cyan-600 to-cyan-700'
+    },
+    {
+      icon: Building2,
+      label: 'NOVO RDO SANTOS BRASIL',
+      path: '/santos-brasil/novo', // ← CORRIGIDO: era '/rdo-santos-brasil/novo'
+      color: 'from-red-500 to-red-600',
+      hoverColor: 'from-red-600 to-red-700'
+    }
+  ];
 
   return (
-    <div className="min-h-screen pb-10" style={{ background: 'var(--gradient-primary)' }}>
-      {/* Header */}
-      <div className="flex justify-between items-center p-6 text-white">
-        <div>
-          <h1 className="text-2xl font-bold">Dashboard</h1>
-          <p className="text-lg opacity-90">{userProfile?.full_name || 'Usuário'}</p>
+    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900">
+      {/* Header Mobile */}
+      <div className="lg:hidden flex justify-between items-center p-4 text-white bg-blue-800/50 backdrop-blur-sm">
+        <div className="flex items-center space-x-3">
+          <Button
+            variant="ghost"
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="text-white hover:bg-white/20 p-2"
+          >
+            <Menu className="h-6 w-6" />
+          </Button>
+          <div>
+            <h1 className="text-xl font-bold">Gestão de Operações</h1>
+            <p className="text-sm opacity-90">{userProfile?.full_name || 'Usuário'}</p>
+          </div>
         </div>
         <Button
           variant="ghost"
-          onClick={() => window.location.href = '/auth'}
-          className="text-white hover:bg-white/20"
+          onClick={handleSignOut}
+          className="text-white hover:bg-white/20 p-2"
         >
-          Sair
+          <LogOut className="h-5 w-5" />
         </Button>
       </div>
 
-      {/* Filtros */}
-      <div className="px-6 py-6 space-y-4">
-        <Card className="shadow-[var(--shadow-card)] bg-white/90 backdrop-blur-sm">
-          <CardContent className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-              {/* Data Início */}
-              <div className="space-y-2">
-                <Label htmlFor="data-inicio">Data Início</Label>
-                <div className="relative">
-                  <Input
-                    id="data-inicio"
-                    type="date"
-                    value={filtroDataInicio}
-                    onChange={(e) => setFiltroDataInicio(e.target.value)}
-                    className="pl-10"
-                  />
-                  <CalendarIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                </div>
-              </div>
-
-              {/* Data Fim */}
-              <div className="space-y-2">
-                <Label htmlFor="data-fim">Data Fim</Label>
-                <div className="relative">
-                  <Input
-                    id="data-fim"
-                    type="date"
-                    value={filtroDataFim}
-                    onChange={(e) => setFiltroDataFim(e.target.value)}
-                    className="pl-10"
-                  />
-                  <CalendarIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                </div>
-              </div>
-
-              {/* Local */}
-              <div className="space-y-2">
-                <Label htmlFor="filtro-local">Local</Label>
-                <Select value={filtroLocal} onValueChange={setFiltroLocal}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Todos" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {filtrosLocais.map(local => (
-                      <SelectItem key={local} value={local}>
-                        {local === 'Todos' ? 'Todos os Locais' : local}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Tipo de Equipamento */}
-              <div className="space-y-2">
-                <Label htmlFor="filtro-tipo">Tipo Equipamento</Label>
-                <Select value={filtroTipoEquipamento} onValueChange={setFiltroTipoEquipamento}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Todos" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Todos">Todos os Tipos</SelectItem>
-                    {tiposEquipamentos.map(tipo => (
-                      <SelectItem key={tipo} value={tipo}>
-                        {tipo}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Botão Limpar */}
-              <div className="flex items-end">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setFiltroDataInicio('');
-                    setFiltroDataFim('');
-                    setFiltroLocal('Todos');
-                    setFiltroTipoEquipamento('Todos');
-                  }}
-                  className="w-full"
-                >
-                  <FilterIcon className="h-4 w-4 mr-2" /> Limpar Filtros
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Gráficos */}
-      <div className="px-6 space-y-6">
-        {/* Gráfico de Pizza */}
-        <Card className="shadow-[var(--shadow-card)]">
-          <CardHeader>
-            <CardTitle>Distribuição de Horas por Local</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="flex items-center justify-center py-12">
-                <p className="text-muted-foreground">Carregando dados...</p>
-              </div>
-            ) : (
-              <div className="flex flex-col md:flex-row items-center justify-center gap-8">
-                <div style={{ width: '300px', height: '300px' }}>
-                  <Pie data={gerarDadosPizza()} options={{ responsive: true, maintainAspectRatio: false }} />
-                </div>
-                <div className="bg-gray-50 p-4 rounded-lg min-w-64">
-                  <h4 className="font-semibold mb-3">Resumo</h4>
-                  {['HYDRO', 'ALBRAS', 'NAVIO', 'SANTOS BRASIL'].map(local => {
-                    const total = equipamentos
-                      .filter(eq => eq.local === local)
-                      .reduce((acc, eq) => acc + calcularHorasDiferenca(eq.hora_inicial!, eq.hora_final!), 0);
-                    return (
-                      <div key={local} className="flex justify-between py-1">
-                        <span>{local}</span>
-                        <span className="font-medium">{formatarHoras(total)}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Gráfico de Barras */}
-        <Card className="shadow-[var(--shadow-card)]">
-          <CardHeader>
-            <CardTitle>Total de Horas por Tipo de Equipamento</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="flex items-center justify-center py-12">
-                <p className="text-muted-foreground">Carregando dados...</p>
-              </div>
-            ) : (
-              <div style={{ width: '100%', height: '400px' }}>
-                <Bar data={gerarDadosBarras()} options={{ responsive: true, maintainAspectRatio: false }} />
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Métricas Gerais */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <Card className="shadow-[var(--shadow-card)] bg-gradient-to-r from-blue-500 to-blue-600 text-white">
-            <CardContent className="p-6">
-              <h3 className="text-sm opacity-90">Total de Equipamentos</h3>
-              <p className="text-3xl font-bold mt-2">{equipamentos.length}</p>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-[var(--shadow-card)] bg-gradient-to-r from-green-500 to-green-600 text-white">
-            <CardContent className="p-6">
-              <h3 className="text-sm opacity-90">Horas Totais Operadas</h3>
-              <p className="text-3xl font-bold mt-2">
-                {formatarHoras(
-                  equipamentos.reduce(
-                    (acc, eq) => acc + calcularHorasDiferenca(eq.hora_inicial!, eq.hora_final!),
-                    0
-                  )
-                )}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-[var(--shadow-card)] bg-gradient-to-r from-purple-500 to-purple-600 text-white">
-            <CardContent className="p-6">
-              <h3 className="text-sm opacity-90">Média por Equipamento</h3>
-              <p className="text-3xl font-bold mt-2">
-                {equipamentos.length > 0
-                  ? formatarHoras(
-                      equipamentos.reduce(
-                        (acc, eq) => acc + calcularHorasDiferenca(eq.hora_inicial!, eq.hora_final!),
-                        0
-                      ) / equipamentos.length
-                    )
-                  : '0.00 h'}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-[var(--shadow-card)] bg-gradient-to-r from-orange-500 to-orange-600 text-white">
-            <CardContent className="p-6">
-              <h3 className="text-sm opacity-90">Locais Ativos</h3>
-              <p className="text-3xl font-bold mt-2">
-                {new Set(equipamentos.map(eq => eq.local)).size}
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* BOTÕES DE ACESSO RÁPIDO */}
-        <div className="max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-3 gap-6 pt-8">
-          <Card className="shadow-[var(--shadow-card)] hover:shadow-xl transition-shadow cursor-pointer">
-            <CardContent className="p-6 text-center">
+      {/* Sidebar Mobile */}
+      {sidebarOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 bg-blue-900/95 backdrop-blur-sm">
+          <div className="flex justify-between items-center p-4 border-b border-blue-700">
+            <h2 className="text-xl font-bold text-white">Menu</h2>
+            <Button
+              variant="ghost"
+              onClick={() => setSidebarOpen(false)}
+              className="text-white hover:bg-white/20 p-2"
+            >
+              <X className="h-6 w-6" />
+            </Button>
+          </div>
+          <div className="p-4 space-y-2">
+            {menuItems.map((item) => (
               <Button
-                variant="outline"
-                size="lg"
-                onClick={() => window.location.href = '/relatorio-transporte'}
-                className="w-full h-24 bg-secondary hover:bg-secondary/90 text-white text-lg font-semibold rounded-lg shadow-md"
+                key={item.path}
+                onClick={() => {
+                  navigate(item.path);
+                  setSidebarOpen(false);
+                }}
+                className={`w-full h-16 bg-gradient-to-r ${item.color} hover:${item.hoverColor} text-white text-lg font-semibold rounded-xl transition-all duration-300 relative`}
               >
-                <FileText className="h-8 w-8 mr-3" />
-                RELATÓRIO DE TRANSPORTE
-              </Button>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-[var(--shadow-card)] hover:shadow-xl transition-shadow cursor-pointer">
-            <CardContent className="p-6 text-center">
-              <Button
-                variant="outline"
-                size="lg"
-                onClick={() => window.location.href = '/navios'}
-                className="w-full h-24 bg-secondary hover:bg-secondary/90 text-white text-lg font-semibold rounded-lg shadow-md"
-              >
-                <Ship className="h-8 w-8 mr-3" />
-                NAVIOS
-              </Button>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-[var(--shadow-card)] hover:shadow-xl transition-shadow cursor-pointer">
-            <CardContent className="p-6 text-center">
-              <Button
-                variant="outline"
-                size="lg"
-                onClick={() => window.location.href = '/notificacao'}
-                className="w-full h-24 bg-secondary hover:bg-secondary/90 text-white text-lg font-semibold rounded-lg shadow-md relative"
-              >
-                {hasUnread && (
-                  <span className="absolute top-2 right-2 flex h-3 w-3">
+                <div className="flex items-center justify-start space-x-4 w-full">
+                  <item.icon className="h-6 w-6" />
+                  <span>{item.label}</span>
+                </div>
+                {item.hasNotification && (
+                  <span className="absolute top-3 right-3 flex h-3 w-3">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
                   </span>
                 )}
-                <Bell className="h-8 w-8 mr-3" />
-                NOTIFICAÇÕES
               </Button>
-            </CardContent>
-          </Card>
+            ))}
+            {quickActions.map((action) => (
+              <Button
+                key={action.path}
+                onClick={() => {
+                  navigate(action.path);
+                  setSidebarOpen(false);
+                }}
+                className={`w-full h-14 bg-gradient-to-r ${action.color} hover:${action.hoverColor} text-white font-semibold rounded-xl transition-all duration-300`}
+              >
+                <div className="flex items-center justify-start space-x-3 w-full">
+                  <action.icon className="h-5 w-5" />
+                  <span>{action.label}</span>
+                </div>
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Desktop Layout */}
+      <div className="hidden lg:flex min-h-screen">
+        {/* Sidebar Desktop */}
+        <div className="w-80 bg-blue-800/50 backdrop-blur-sm border-r border-blue-600/30 flex flex-col">
+          {/* Sidebar Header */}
+          <div className="p-6 border-b border-blue-600/30">
+            <div className="flex items-center space-x-4">
+              <div className="bg-white/20 p-3 rounded-xl">
+                <BarChart3 className="h-8 w-8 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-white">Gestão de Operações</h1>
+                <p className="text-blue-200 text-sm">( versão 4.1.3)</p>
+              </div>
+            </div>
+          </div>
+
+          {/* User Info */}
+          <div className="p-6 border-b border-blue-600/30">
+            <div className="bg-white/10 rounded-xl p-4">
+              <p className="text-white font-semibold">{userProfile?.full_name || 'Usuário'}</p>
+              <p className="text-blue-200 text-sm">Status: <span className="text-green-400">Ativo</span></p>
+              <p className="text-blue-200 text-sm">Último acesso: {new Date().toLocaleDateString('pt-BR')}</p>
+            </div>
+          </div>
+
+          {/* Main Menu */}
+          <div className="flex-1 p-6 space-y-3">
+            <h3 className="text-blue-200 font-semibold text-sm uppercase tracking-wider mb-4">Menu Principal</h3>
+            {menuItems.map((item) => (
+              <Button
+                key={item.path}
+                onClick={() => navigate(item.path)}
+                className={`w-full h-16 bg-gradient-to-r ${item.color} hover:${item.hoverColor} text-white text-lg font-semibold rounded-xl transition-all duration-300 relative group hover:scale-105 hover:shadow-xl`}
+              >
+                <div className="flex items-center justify-start space-x-4 w-full">
+                  <div className="bg-white/20 p-2 rounded-lg group-hover:bg-white/30 transition-colors">
+                    <item.icon className="h-5 w-5" />
+                  </div>
+                  <span className="text-left">{item.label}</span>
+                </div>
+                {item.hasNotification && (
+                  <span className="absolute top-4 right-4 flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                  </span>
+                )}
+              </Button>
+            ))}
+          </div>
+
+          {/* Quick Actions */}
+          <div className="p-6 border-t border-blue-600/30">
+            <h3 className="text-blue-200 font-semibold text-sm uppercase tracking-wider mb-4">Ações Rápidas</h3>
+            {quickActions.map((action) => (
+              <Button
+                key={action.path}
+                onClick={() => navigate(action.path)}
+                className={`w-full h-14 bg-gradient-to-r ${action.color} hover:${action.hoverColor} text-white font-semibold rounded-xl transition-all duration-300 hover:scale-105 hover:shadow-xl`}
+              >
+                <div className="flex items-center justify-start space-x-3 w-full">
+                  <action.icon className="h-5 w-5" />
+                  <span>{action.label}</span>
+                </div>
+              </Button>
+            ))}
+          </div>
+
+          {/* Logout */}
+          <div className="p-6 border-t border-blue-600/30">
+            <Button
+              variant="ghost"
+              onClick={handleSignOut}
+              className="w-full text-white hover:bg-white/20 border border-white/30 rounded-xl transition-all duration-300 py-3"
+            >
+              <LogOut className="h-5 w-5 mr-2" />
+              Sair do Sistema
+            </Button>
+          </div>
+        </div>
+
+        {/* Main Content Desktop */}
+        <div className="flex-1 flex flex-col">
+          {/* Welcome Section */}
+          <div className="bg-white/5 backdrop-blur-sm border-b border-blue-600/30 p-8">
+            <div className="max-w-4xl">
+              <h2 className="text-4xl font-bold text-white mb-4">
+                Bem-vindo, {userProfile?.full_name || 'Usuário'}!
+              </h2>
+              <p className="text-xl text-blue-200">
+                Sistema de gestão de operações, navios e relatórios integrados
+              </p>
+            </div>
+          </div>
+
+          {/* Stats Cards */}
+          <div className="p-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30 text-white">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-blue-200 text-sm">Operações Hoje</p>
+                      <p className="text-3xl font-bold">12</p>
+                    </div>
+                    <div className="bg-blue-500/20 p-3 rounded-xl">
+                      <FileText className="h-6 w-6 text-blue-300" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-white/10 backdrop-blur-sm border-green-200/30 text-white">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-blue-200 text-sm">Navios Ativos</p>
+                      <p className="text-3xl font-bold">3</p>
+                    </div>
+                    <div className="bg-green-500/20 p-3 rounded-xl">
+                      <Ship className="h-6 w-6 text-green-300" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-white/10 backdrop-blur-sm border-red-200/30 text-white">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-blue-200 text-sm">RDOs Santos Brasil</p>
+                      <p className="text-3xl font-bold">5</p>
+                    </div>
+                    <div className="bg-red-500/20 p-3 rounded-xl">
+                      <Building2 className="h-6 w-6 text-red-300" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Recent Activity */}
+            <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
+              <CardContent className="p-6">
+                <h3 className="text-xl font-bold text-white mb-4">Atividade Recente</h3>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      <div className="bg-green-500/20 p-2 rounded">
+                        <FileText className="h-4 w-4 text-green-400" />
+                      </div>
+                      <span className="text-white">Novo relatório de transporte</span>
+                    </div>
+                    <span className="text-blue-200 text-sm">há 2 horas</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      <div className="bg-purple-500/20 p-2 rounded">
+                        <Ship className="h-4 w-4 text-purple-400" />
+                      </div>
+                      <span className="text-white">Navio atualizado</span>
+                    </div>
+                    <span className="text-blue-200 text-sm">há 4 horas</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      <div className="bg-red-500/20 p-2 rounded">
+                        <Building2 className="h-4 w-4 text-red-400" />
+                      </div>
+                      <span className="text-white">Novo RDO Santos Brasil criado</span>
+                    </div>
+                    <span className="text-blue-200 text-sm">há 1 dia</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile Content */}
+      <div className="lg:hidden p-4">
+        <div className="space-y-4">
+          {menuItems.map((item) => (
+            <Card key={item.path} className="w-full shadow-lg">
+              <CardContent className="p-0">
+                <Button
+                  onClick={() => navigate(item.path)}
+                  className={`w-full h-16 bg-gradient-to-r ${item.color} hover:${item.hoverColor} text-white text-lg font-semibold rounded-lg relative`}
+                >
+                  {item.hasNotification && (
+                    <span className="absolute top-3 right-3 flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                    </span>
+                  )}
+                  <item.icon className="h-6 w-6 mr-3" />
+                  {item.label}
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </div>
     </div>

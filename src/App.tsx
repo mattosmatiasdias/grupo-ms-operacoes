@@ -25,6 +25,9 @@ import NovoNavio from "./pages/NovoNavio";
 import ProducaoDiaria from "./pages/ProducaoDiaria";
 import EditarNavio from "./pages/EditarNavio";
 
+// Página do RDO Santos Brasil ← ADICIONE ESTA IMPORT
+import RdoSantosBrasil from "./pages/RdoSantosBrasil";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -53,6 +56,9 @@ const App = () => (
             <Route path="/novo-navio" element={<NovoNavio />} />
             <Route path="/navio/:id/editar" element={<EditarNavio />} />
             <Route path="/navio/:id/producao" element={<ProducaoDiaria />} />
+
+            {/* Rota do RDO Santos Brasil ← ADICIONE ESTA ROTA */}
+            <Route path="/rdo-santos-brasil" element={<RdoSantosBrasil />} />
 
             {/* Rota de erro 404 sempre por último */}
             <Route path="*" element={<NotFound />} />

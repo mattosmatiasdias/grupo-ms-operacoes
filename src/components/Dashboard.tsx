@@ -2,7 +2,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useNotifications } from '@/hooks/useNotifications';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Bell, FileText, Ship, LogOut, BarChart3, Menu, X, Calendar, ClipboardCheck, Car, AlertTriangle } from 'lucide-react';
+import { Bell, FileText, Ship, LogOut, BarChart3, Menu, X, Calendar, ClipboardCheck, Car, AlertTriangle, Building2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 
@@ -68,6 +68,13 @@ const Dashboard = () => {
       hasNotification: hasUnread
     },
     {
+      icon: Building2,
+      label: 'RDO SANTOS BRASIL',
+      path: '/rdo-santos-brasil',
+      color: 'from-red-600 to-red-700',
+      hoverColor: 'from-red-700 to-red-800'
+    },
+    {
       icon: BarChart3,
       label: 'VISUAIS E DASHBOARD',
       path: '/visuais',
@@ -83,6 +90,13 @@ const Dashboard = () => {
       path: '/novo-lancamento',
       color: 'from-cyan-500 to-cyan-600',
       hoverColor: 'from-cyan-600 to-cyan-700'
+    },
+    {
+      icon: Building2,
+      label: 'NOVO RDO SANTOS BRASIL',
+      path: '/rdo-santos-brasil/novo',
+      color: 'from-red-500 to-red-600',
+      hoverColor: 'from-red-600 to-red-700'
     }
   ];
 
@@ -178,7 +192,7 @@ const Dashboard = () => {
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-white">Gestão de Operações</h1>
-                <p className="text-blue-200 text-sm">( versão 4.1.3)</p>
+                <p className="text-blue-200 text-sm">( versão 4.1.4)</p>
               </div>
             </div>
           </div>
@@ -292,15 +306,15 @@ const Dashboard = () => {
                 </CardContent>
               </Card>
 
-              <Card className="bg-white/10 backdrop-blur-sm border-orange-200/30 text-white">
+              <Card className="bg-white/10 backdrop-blur-sm border-red-200/30 text-white">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-blue-200 text-sm">Notificações</p>
-                      <p className="text-3xl font-bold">{hasUnread ? '1' : '0'}</p>
+                      <p className="text-blue-200 text-sm">RDOs Santos Brasil</p>
+                      <p className="text-3xl font-bold">5</p>
                     </div>
-                    <div className="bg-orange-500/20 p-3 rounded-xl">
-                      <Bell className="h-6 w-6 text-orange-300" />
+                    <div className="bg-red-500/20 p-3 rounded-xl">
+                      <Building2 className="h-6 w-6 text-red-300" />
                     </div>
                   </div>
                 </CardContent>
@@ -332,10 +346,10 @@ const Dashboard = () => {
                   </div>
                   <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
                     <div className="flex items-center space-x-3">
-                      <div className="bg-blue-500/20 p-2 rounded">
-                        <Bell className="h-4 w-4 text-blue-400" />
+                      <div className="bg-red-500/20 p-2 rounded">
+                        <Building2 className="h-4 w-4 text-red-400" />
                       </div>
-                      <span className="text-white">Nova notificação</span>
+                      <span className="text-white">Novo RDO Santos Brasil criado</span>
                     </div>
                     <span className="text-blue-200 text-sm">há 1 dia</span>
                   </div>
