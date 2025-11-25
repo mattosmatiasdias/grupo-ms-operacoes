@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { BarChart3, TrendingUp, Download, Filter, Calendar, PieChart, ArrowLeft } from 'lucide-react';
+import { BarChart3, TrendingUp, Download, Filter, Calendar, PieChart, ArrowLeft, Ship, Package, Clock, Users } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -14,6 +14,23 @@ interface ChartData {
   horas: number;
   quantidade: number;
   porcentagem: number;
+}
+
+// Interface para dados dos navios
+interface NavioData {
+  id: string;
+  nome_navio: string;
+  carga: string;
+  berco: string;
+  quantidade_prevista: number;
+  cbs_total: number;
+  inicio_operacao: string;
+  final_operacao: string;
+  media_cb: number;
+  concluido: boolean;
+  horas_totais: number;
+  quantidade_equipamentos: number;
+  diaria: number;
 }
 
 const Visuais = () => {
@@ -44,7 +61,7 @@ const Visuais = () => {
   // Função para formatar data no formato brasileiro
   const formatarDataBR = (dataString: string) => {
     try {
-      const data = new Date(dataString + 'T00:00:00'); // Adiciona horário para evitar problemas de fuso
+      const data = new Date(dataString + 'T00:00:00');
       return data.toLocaleDateString('pt-BR');
     } catch (error) {
       console.error('Erro ao formatar data:', error);
@@ -52,7 +69,18 @@ const Visuais = () => {
     }
   };
 
-  // Buscar a última data disponível no banco de dados (da tabela registro_operacoes)
+  // Função para formatar data e hora
+  const formatarDataHoraBR = (dataString: string) => {
+    try {
+      const data = new Date(dataString);
+      return data.toLocaleString('pt-BR');
+    } catch (error) {
+      console.error('Erro ao formatar data/hora:', error);
+      return dataString;
+    }
+  };
+
+  // Buscar a última data disponível no banco de dados
   const buscarUltimaData = async () => {
     try {
       const { data, error } = await supabase
@@ -65,7 +93,6 @@ const Visuais = () => {
       if (error) throw error;
 
       if (data?.data) {
-        // Corrige o fuso horário da data vinda do banco
         return corrigirFusoHorarioData(data.data);
       }
       
@@ -76,7 +103,7 @@ const Visuais = () => {
     }
   };
 
-  // Obter data de 7 dias atrás (com correção de fuso)
+  // Obter data de 7 dias atrás
   const getDataInicialPadrao = async () => {
     try {
       const dataAtual = new Date();
@@ -97,8 +124,16 @@ const Visuais = () => {
     local: 'todos'
   });
 
+  const [filtrosNavios, setFiltrosNavios] = useState({
+    status: 'todos',
+    berco: 'todos',
+    carga: 'todos'
+  });
+
   const [dadosGrafico, setDadosGrafico] = useState<ChartData[]>([]);
+  const [dadosNavios, setDadosNavios] = useState<NavioData[]>([]);
   const [carregando, setCarregando] = useState(false);
+  const [carregandoNavios, setCarregandoNavios] = useState(false);
   const [inicializando, setInicializando] = useState(true);
 
   // Locais disponíveis para filtro
@@ -110,17 +145,131 @@ const Visuais = () => {
     { value: 'SANTOS BRASIL', label: 'SANTOS BRASIL' }
   ];
 
+  // Filtros para navios
+  const statusNavios = [
+    { value: 'todos', label: 'Todos os Status' },
+    { value: 'ativo', label: 'Em Operação' },
+    { value: 'concluido', label: 'Concluídos' }
+  ];
+
+  const bercos = [
+    { value: 'todos', label: 'Todos os Berços' },
+    { value: 'BERÇO 1', label: 'BERÇO 1' },
+    { value: 'BERÇO 2', label: 'BERÇO 2' },
+    { value: 'BERÇO 3', label: 'BERÇO 3' }
+  ];
+
+  const cargas = [
+    { value: 'todos', label: 'Todos os Tipos' },
+    { value: 'ALUMINA', label: 'ALUMINA' },
+    { value: 'CARVÃO', label: 'CARVÃO' },
+    { value: 'COQUE', label: 'COQUE' },
+    { value: 'BAUXITA', label: 'BAUXITA' }
+  ];
+
+  // Função para buscar dados dos navios
+  const buscarDadosNavios = async () => {
+    setCarregandoNavios(true);
+    
+    try {
+      console.log('🚢 Buscando dados dos navios...');
+      
+      let queryNavios = supabase
+        .from('navios')
+        .select('*')
+        .order('inicio_operacao', { ascending: false });
+
+      // Aplicar filtro de status
+      if (filtrosNavios.status !== 'todos') {
+        queryNavios = queryNavios.eq('concluido', filtrosNavios.status === 'concluido');
+      }
+
+      // Aplicar filtro de berço
+      if (filtrosNavios.berco !== 'todos') {
+        queryNavios = queryNavios.eq('berco', filtrosNavios.berco);
+      }
+
+      // Aplicar filtro de carga
+      if (filtrosNavios.carga !== 'todos') {
+        queryNavios = queryNavios.eq('carga', filtrosNavios.carga);
+      }
+
+      const { data: navios, error: errorNavios } = await queryNavios;
+
+      if (errorNavios) {
+        console.error('❌ Erro ao buscar navios:', errorNavios);
+        throw new Error(`Erro ao buscar navios: ${errorNavios.message}`);
+      }
+
+      console.log('✅ Navios encontrados:', navios?.length || 0);
+
+      if (!navios || navios.length === 0) {
+        setDadosNavios([]);
+        return;
+      }
+
+      // Para cada navio, buscar operações relacionadas e calcular totais
+      const naviosComTotais = await Promise.all(
+        navios.map(async (navio) => {
+          // Buscar operações deste navio
+          const { data: operacoes, error: errorOperacoes } = await supabase
+            .from('registro_operacoes')
+            .select(`
+              id,
+              equipamentos (
+                horas_trabalhadas
+              )
+            `)
+            .eq('navio_id', navio.id);
+
+          if (errorOperacoes) {
+            console.error(`❌ Erro ao buscar operações do navio ${navio.nome_navio}:`, errorOperacoes);
+          }
+
+          // Calcular totais
+          let horasTotais = 0;
+          let quantidadeEquipamentos = 0;
+
+          if (operacoes) {
+            operacoes.forEach(operacao => {
+              if (operacao.equipamentos && operacao.equipamentos.length > 0) {
+                operacao.equipamentos.forEach(equipamento => {
+                  horasTotais += Number(equipamento.horas_trabalhadas) || 0;
+                  quantidadeEquipamentos += 1;
+                });
+              }
+            });
+          }
+
+          // Calcular diária (horas totais / quantidade de equipamentos)
+          const diaria = quantidadeEquipamentos > 0 ? horasTotais / quantidadeEquipamentos : 0;
+
+          return {
+            ...navio,
+            horas_totais: parseFloat(horasTotais.toFixed(1)),
+            quantidade_equipamentos: quantidadeEquipamentos,
+            diaria: parseFloat(diaria.toFixed(1))
+          };
+        })
+      );
+
+      console.log('📊 Navios processados:', naviosComTotais);
+      setDadosNavios(naviosComTotais);
+
+    } catch (error: any) {
+      console.error('❌ Erro ao processar dados dos navios:', error);
+      setDadosNavios([]);
+    } finally {
+      setCarregandoNavios(false);
+    }
+  };
+
   // Função para buscar dados reais com JOIN entre as tabelas
   const buscarDadosEquipamentos = async () => {
     setCarregando(true);
     
     try {
       console.log('🔍 Buscando dados com JOIN entre tabelas...');
-      console.log('📅 Filtros aplicados:', {
-        dataInicial: filtros.dataInicial,
-        dataFinal: filtros.dataFinal,
-        local: filtros.local
-      });
 
       // Primeiro, buscar as operações que correspondem ao filtro de data
       let queryOperacoes = supabase
@@ -131,13 +280,11 @@ const Visuais = () => {
       // Aplicar filtro de data na tabela registro_operacoes
       if (filtros.dataInicial) {
         const dataInicialCorrigida = corrigirFusoHorarioData(filtros.dataInicial);
-        console.log('📅 Aplicando filtro data inicial (corrigida):', dataInicialCorrigida);
         queryOperacoes = queryOperacoes.gte('data', dataInicialCorrigida);
       }
 
       if (filtros.dataFinal) {
         const dataFinalCorrigida = corrigirFusoHorarioData(filtros.dataFinal);
-        console.log('📅 Aplicando filtro data final (corrigida):', dataFinalCorrigida);
         queryOperacoes = queryOperacoes.lte('data', dataFinalCorrigida);
       }
 
@@ -158,7 +305,6 @@ const Visuais = () => {
 
       // Extrair os IDs das operações encontradas
       const operacaoIds = operacoes.map(op => op.id);
-      console.log('📋 IDs das operações:', operacaoIds);
 
       // Agora buscar os equipamentos relacionados a essas operações
       let queryEquipamentos = supabase
@@ -168,7 +314,6 @@ const Visuais = () => {
 
       // Aplicar filtro de local se necessário
       if (filtros.local !== 'todos') {
-        console.log('🏭 Aplicando filtro local:', filtros.local);
         queryEquipamentos = queryEquipamentos.eq('local', filtros.local);
       }
 
@@ -222,13 +367,10 @@ const Visuais = () => {
 
       const dadosOrdenados = dadosComPorcentagem.sort((a, b) => b.horas - a.horas);
       
-      console.log('📊 Dados processados:', dadosOrdenados);
-      console.log('📈 Total de horas:', totalHoras);
       setDadosGrafico(dadosOrdenados);
 
     } catch (error: any) {
       console.error('❌ Erro ao processar dados:', error);
-      // Em caso de erro, definir array vazio
       setDadosGrafico([]);
     } finally {
       setCarregando(false);
@@ -264,8 +406,16 @@ const Visuais = () => {
   useEffect(() => {
     if (!inicializando && filtros.dataInicial && filtros.dataFinal) {
       buscarDadosEquipamentos();
+      buscarDadosNavios();
     }
   }, [filtros, inicializando]);
+
+  // Buscar dados dos navios quando filtros de navios mudarem
+  useEffect(() => {
+    if (!inicializando) {
+      buscarDadosNavios();
+    }
+  }, [filtrosNavios]);
 
   // Função para aplicar filtros
   const aplicarFiltros = () => {
@@ -281,6 +431,15 @@ const Visuais = () => {
       dataInicial,
       dataFinal,
       local: 'todos'
+    });
+  };
+
+  // Função para limpar filtros de navios
+  const limparFiltrosNavios = () => {
+    setFiltrosNavios({
+      status: 'todos',
+      berco: 'todos',
+      carga: 'todos'
     });
   };
 
@@ -307,20 +466,12 @@ const Visuais = () => {
     quantidade: acc.quantidade + item.quantidade
   }), { horas: 0, quantidade: 0 });
 
-  // Debug: mostrar dados filtrados no console
-  useEffect(() => {
-    if (!inicializando) {
-      console.log('📈 Dados do gráfico:', dadosGrafico);
-      console.log('🧮 Totais:', totais);
-      console.log('⚙️ Filtros aplicados:', {
-        dataInicial: filtros.dataInicial,
-        dataFinal: filtros.dataFinal,
-        dataInicialFormatada: formatarDataBR(filtros.dataInicial),
-        dataFinalFormatada: formatarDataBR(filtros.dataFinal),
-        local: filtros.local
-      });
-    }
-  }, [dadosGrafico, filtros, inicializando]);
+  // Calcular totais dos navios
+  const totaisNavios = dadosNavios.reduce((acc, navio) => ({
+    horas: acc.horas + navio.horas_totais,
+    equipamentos: acc.equipamentos + navio.quantidade_equipamentos,
+    navios: acc.navios + 1
+  }), { horas: 0, equipamentos: 0, navios: 0 });
 
   if (inicializando) {
     return (
@@ -351,7 +502,7 @@ const Visuais = () => {
             <div>
               <h1 className="text-3xl font-bold text-white mb-2">Visuais e Dashboard</h1>
               <p className="text-blue-200">
-                Horas trabalhadas por local - Dados reais das operações
+                Horas trabalhadas por local e informações detalhadas dos navios
               </p>
             </div>
           </div>
@@ -364,7 +515,7 @@ const Visuais = () => {
         </div>
       </div>
 
-      {/* Filtros */}
+      {/* Filtros Principais */}
       <Card className="mb-8 bg-white/10 backdrop-blur-sm border-blue-200/30">
         <CardHeader>
           <CardTitle className="text-white flex items-center gap-2">
@@ -452,6 +603,73 @@ const Visuais = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Cards de Métricas */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30 text-white">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-blue-200 text-sm">Total Horas Trabalhadas</p>
+                <p className="text-3xl font-bold">{totais.horas.toFixed(1)}h</p>
+                <p className="text-blue-200 text-xs">Soma de horas_trabalhadas</p>
+              </div>
+              <div className="bg-blue-500/20 p-3 rounded-xl">
+                <BarChart3 className="h-6 w-6 text-blue-300" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-white/10 backdrop-blur-sm border-green-200/30 text-white">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-blue-200 text-sm">Total Equipamentos</p>
+                <p className="text-3xl font-bold">{totais.quantidade}</p>
+                <p className="text-blue-200 text-xs">Registros filtrados</p>
+              </div>
+              <div className="bg-green-500/20 p-3 rounded-xl">
+                <TrendingUp className="h-6 w-6 text-green-300" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-white/10 backdrop-blur-sm border-purple-200/30 text-white">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-blue-200 text-sm">Navios em Operação</p>
+                <p className="text-3xl font-bold">
+                  {dadosNavios.filter(n => !n.concluido).length}
+                </p>
+                <p className="text-blue-200 text-xs">Ativos no sistema</p>
+              </div>
+              <div className="bg-purple-500/20 p-3 rounded-xl">
+                <Ship className="h-6 w-6 text-purple-300" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-white/10 backdrop-blur-sm border-orange-200/30 text-white">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-blue-200 text-sm">Média por Equipamento</p>
+                <p className="text-3xl font-bold">
+                  {totais.quantidade > 0 ? (totais.horas / totais.quantidade).toFixed(1) : '0'}h
+                </p>
+                <p className="text-blue-200 text-xs">Horas por equipamento</p>
+              </div>
+              <div className="bg-orange-500/20 p-3 rounded-xl">
+                <PieChart className="h-6 w-6 text-orange-300" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Gráfico de Horas Trabalhadas por Local */}
       <Card className="mb-8 bg-white/10 backdrop-blur-sm border-blue-200/30">
@@ -563,70 +781,188 @@ const Visuais = () => {
         </CardContent>
       </Card>
 
-      {/* Cards de Métricas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30 text-white">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-blue-200 text-sm">Total Horas Trabalhadas</p>
-                <p className="text-3xl font-bold">{totais.horas.toFixed(1)}h</p>
-                <p className="text-blue-200 text-xs">Soma de horas_trabalhadas</p>
-              </div>
-              <div className="bg-blue-500/20 p-3 rounded-xl">
-                <BarChart3 className="h-6 w-6 text-blue-300" />
-              </div>
+      {/* Seção de Navios - AGORA ABAIXO DO DASHBOARD EXISTENTE */}
+      <Card className="bg-white/10 backdrop-blur-sm border-green-200/30">
+        <CardHeader>
+          <CardTitle className="text-white flex items-center gap-2">
+            <Ship className="h-5 w-5" />
+            Informações dos Navios
+            {carregandoNavios && (
+              <span className="text-orange-400 text-sm font-normal">(Atualizando...)</span>
+            )}
+          </CardTitle>
+          <CardDescription className="text-blue-200">
+            Dados detalhados dos navios em operação
+            {totaisNavios.navios > 0 && (
+              <span className="text-green-300 ml-2">
+                • {totaisNavios.navios} navios • {totaisNavios.equipamentos} equipamentos • {totaisNavios.horas.toFixed(1)} horas totais
+              </span>
+            )}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {/* Filtros de Navios */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            {/* Status */}
+            <div className="space-y-2">
+              <Label htmlFor="status" className="text-white">Status</Label>
+              <Select 
+                value={filtrosNavios.status} 
+                onValueChange={(value) => setFiltrosNavios({ ...filtrosNavios, status: value })}
+              >
+                <SelectTrigger className="bg-white/5 border-green-300/30 text-white">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  {statusNavios.map((status) => (
+                    <SelectItem key={status.value} value={status.value}>
+                      {status.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          </CardContent>
-        </Card>
 
-        <Card className="bg-white/10 backdrop-blur-sm border-green-200/30 text-white">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-blue-200 text-sm">Total Equipamentos</p>
-                <p className="text-3xl font-bold">{totais.quantidade}</p>
-                <p className="text-blue-200 text-xs">Registros filtrados</p>
-              </div>
-              <div className="bg-green-500/20 p-3 rounded-xl">
-                <TrendingUp className="h-6 w-6 text-green-300" />
-              </div>
+            {/* Berço */}
+            <div className="space-y-2">
+              <Label htmlFor="berco" className="text-white">Berço</Label>
+              <Select 
+                value={filtrosNavios.berco} 
+                onValueChange={(value) => setFiltrosNavios({ ...filtrosNavios, berco: value })}
+              >
+                <SelectTrigger className="bg-white/5 border-green-300/30 text-white">
+                  <SelectValue placeholder="Berço" />
+                </SelectTrigger>
+                <SelectContent>
+                  {bercos.map((berco) => (
+                    <SelectItem key={berco.value} value={berco.value}>
+                      {berco.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          </CardContent>
-        </Card>
 
-        <Card className="bg-white/10 backdrop-blur-sm border-purple-200/30 text-white">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-blue-200 text-sm">Locais com Equipamentos</p>
-                <p className="text-3xl font-bold">{dadosGrafico.length}</p>
-                <p className="text-blue-200 text-xs">Locais distintos</p>
-              </div>
-              <div className="bg-purple-500/20 p-3 rounded-xl">
-                <Calendar className="h-6 w-6 text-purple-300" />
-              </div>
+            {/* Carga */}
+            <div className="space-y-2">
+              <Label htmlFor="carga" className="text-white">Carga</Label>
+              <Select 
+                value={filtrosNavios.carga} 
+                onValueChange={(value) => setFiltrosNavios({ ...filtrosNavios, carga: value })}
+              >
+                <SelectTrigger className="bg-white/5 border-green-300/30 text-white">
+                  <SelectValue placeholder="Carga" />
+                </SelectTrigger>
+                <SelectContent>
+                  {cargas.map((carga) => (
+                    <SelectItem key={carga.value} value={carga.value}>
+                      {carga.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          </CardContent>
-        </Card>
 
-        <Card className="bg-white/10 backdrop-blur-sm border-orange-200/30 text-white">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-blue-200 text-sm">Média por Equipamento</p>
-                <p className="text-3xl font-bold">
-                  {totais.quantidade > 0 ? (totais.horas / totais.quantidade).toFixed(1) : '0'}h
+            {/* Botões de Ação */}
+            <div className="flex items-end gap-2">
+              <Button 
+                onClick={limparFiltrosNavios}
+                variant="outline"
+                className="border-green-300/30 text-white hover:bg-white/10"
+                disabled={carregandoNavios}
+              >
+                Limpar Filtros
+              </Button>
+            </div>
+          </div>
+
+          {/* Grid de Navios */}
+          {carregandoNavios ? (
+            <div className="flex justify-center items-center h-32">
+              <div className="text-white animate-pulse">Carregando dados dos navios...</div>
+            </div>
+          ) : dadosNavios.length === 0 ? (
+            <div className="flex justify-center items-center h-32">
+              <div className="text-white text-center">
+                <p>Nenhum navio encontrado para os filtros aplicados</p>
+                <p className="text-sm text-blue-200 mt-2">
+                  Tente ajustar os filtros de status, berço ou carga
                 </p>
-                <p className="text-blue-200 text-xs">Horas por equipamento</p>
-              </div>
-              <div className="bg-orange-500/20 p-3 rounded-xl">
-                <PieChart className="h-6 w-6 text-orange-300" />
               </div>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+              {dadosNavios.map((navio) => (
+                <Card key={navio.id} className="bg-white/5 border-green-300/20 hover:border-green-300/40 transition-all">
+                  <CardContent className="p-6">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <h3 className="text-white font-bold text-lg">{navio.nome_navio}</h3>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className={`px-2 py-1 rounded-full text-xs ${
+                            navio.concluido 
+                              ? 'bg-gray-500/30 text-gray-300' 
+                              : 'bg-green-500/30 text-green-300'
+                          }`}>
+                            {navio.concluido ? 'Concluído' : 'Em Operação'}
+                          </span>
+                          <span className="px-2 py-1 rounded-full bg-blue-500/30 text-blue-300 text-xs">
+                            {navio.berco}
+                          </span>
+                        </div>
+                      </div>
+                      <Package className="h-8 w-8 text-green-300" />
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-blue-200">Carga:</span>
+                        <span className="text-white font-medium">{navio.carga}</span>
+                      </div>
+                      
+                      <div className="flex justify-between items-center">
+                        <span className="text-blue-200">Quantidade Prevista:</span>
+                        <span className="text-white font-medium">{navio.quantidade_prevista}</span>
+                      </div>
+
+                      <div className="flex justify-between items-center">
+                        <span className="text-blue-200">CBS Total:</span>
+                        <span className="text-white font-medium">{navio.cbs_total}</span>
+                      </div>
+
+                      <div className="border-t border-white/20 pt-3">
+                        <div className="grid grid-cols-2 gap-4 text-center">
+                          <div className="bg-white/5 rounded-lg p-2">
+                            <Clock className="h-4 w-4 text-blue-300 mx-auto mb-1" />
+                            <div className="text-white text-sm font-bold">{navio.horas_totais}h</div>
+                            <div className="text-blue-200 text-xs">Horas Totais</div>
+                          </div>
+                          <div className="bg-white/5 rounded-lg p-2">
+                            <Users className="h-4 w-4 text-green-300 mx-auto mb-1" />
+                            <div className="text-white text-sm font-bold">{navio.quantidade_equipamentos}</div>
+                            <div className="text-blue-200 text-xs">Equipamentos</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-white/10 rounded-lg p-3 text-center">
+                        <div className="text-orange-300 text-sm font-bold">{navio.diaria}h</div>
+                        <div className="text-blue-200 text-xs">Média Diária por Equipamento</div>
+                      </div>
+
+                      {navio.inicio_operacao && (
+                        <div className="text-xs text-blue-200">
+                          Início: {formatarDataHoraBR(navio.inicio_operacao)}
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 };

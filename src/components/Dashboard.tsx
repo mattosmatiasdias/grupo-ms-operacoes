@@ -83,23 +83,6 @@ const Dashboard = () => {
     }
   ];
 
-  const quickActions = [
-    {
-      icon: FileText,
-      label: 'NOVO LANÇAMENTO',
-      path: '/novo-lancamento',
-      color: 'from-cyan-500 to-cyan-600',
-      hoverColor: 'from-cyan-600 to-cyan-700'
-    },
-    {
-      icon: Building2,
-      label: 'NOVO RDO SANTOS BRASIL',
-      path: '/rdo-santos-brasil/novo',
-      color: 'from-red-500 to-red-600',
-      hoverColor: 'from-red-600 to-red-700'
-    }
-  ];
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900">
       {/* Header Mobile */}
@@ -161,21 +144,6 @@ const Dashboard = () => {
                 )}
               </Button>
             ))}
-            {quickActions.map((action) => (
-              <Button
-                key={action.path}
-                onClick={() => {
-                  navigate(action.path);
-                  setSidebarOpen(false);
-                }}
-                className={`w-full h-14 bg-gradient-to-r ${action.color} hover:${action.hoverColor} text-white font-semibold rounded-xl transition-all duration-300`}
-              >
-                <div className="flex items-center justify-start space-x-3 w-full">
-                  <action.icon className="h-5 w-5" />
-                  <span>{action.label}</span>
-                </div>
-              </Button>
-            ))}
           </div>
         </div>
       )}
@@ -192,7 +160,7 @@ const Dashboard = () => {
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-white">Gestão de Operações</h1>
-                <p className="text-blue-200 text-sm">( versão 4.1.4)</p>
+                <p className="text-blue-200 text-sm">( versão 5.0)</p>
               </div>
             </div>
           </div>
@@ -227,23 +195,6 @@ const Dashboard = () => {
                     <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
                   </span>
                 )}
-              </Button>
-            ))}
-          </div>
-
-          {/* Quick Actions */}
-          <div className="p-6 border-t border-blue-600/30">
-            <h3 className="text-blue-200 font-semibold text-sm uppercase tracking-wider mb-4">Ações Rápidas</h3>
-            {quickActions.map((action) => (
-              <Button
-                key={action.path}
-                onClick={() => navigate(action.path)}
-                className={`w-full h-14 bg-gradient-to-r ${action.color} hover:${action.hoverColor} text-white font-semibold rounded-xl transition-all duration-300 hover:scale-105 hover:shadow-xl`}
-              >
-                <div className="flex items-center justify-start space-x-3 w-full">
-                  <action.icon className="h-5 w-5" />
-                  <span>{action.label}</span>
-                </div>
               </Button>
             ))}
           </div>
@@ -346,10 +297,10 @@ const Dashboard = () => {
                   </div>
                   <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
                     <div className="flex items-center space-x-3">
-                      <div className="bg-red-500/20 p-2 rounded">
-                        <Building2 className="h-4 w-4 text-red-400" />
+                      <div className="bg-teal-500/20 p-2 rounded">
+                        <ClipboardCheck className="h-4 w-4 text-teal-400" />
                       </div>
-                      <span className="text-white">Novo RDO Santos Brasil criado</span>
+                      <span className="text-white">Nova vistoria registrada</span>
                     </div>
                     <span className="text-blue-200 text-sm">há 1 dia</span>
                   </div>
