@@ -6,7 +6,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Plus, Filter, Download, Search, Calendar, CheckCircle, XCircle, Clock, Truck, Edit, Trash2, Check, X } from 'lucide-react';
+import { 
+  ArrowLeft, Plus, Filter, Download, Search, Calendar, CheckCircle, 
+  XCircle, Clock, Truck, Edit, Trash2, Check, X, 
+  Building2, Factory, Settings 
+} from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface VistoriaEquipamento {
@@ -14,6 +18,12 @@ interface VistoriaEquipamento {
   tag: string;
   tag_generico: string;
   local: string;
+  modelo: string;
+  ano: string;
+  placa_serie: string;
+  chassi: string;
+  numero_motor: string;
+  renavam: string;
 }
 
 interface VistoriaRegistro {
@@ -30,12 +40,13 @@ interface VistoriaRegistro {
 
 const Vistorias = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'hydro' | 'albras' | 'equipamentos'>('hydro');
+  const [activeSection, setActiveSection] = useState<'hydro' | 'albras' | 'equipamentos'>('hydro');
   const [equipamentos, setEquipamentos] = useState<VistoriaEquipamento[]>([]);
   const [vistoriasHydro, setVistoriasHydro] = useState<VistoriaRegistro[]>([]);
   const [vistoriasAlbras, setVistoriasAlbras] = useState<VistoriaRegistro[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchEquipamentos, setSearchEquipamentos] = useState('');
 
   // Filtros
   const [filtros, setFiltros] = useState({
@@ -61,7 +72,13 @@ const Vistorias = () => {
   // Formulário para novo equipamento
   const [novoEquipamento, setNovoEquipamento] = useState({
     tag: '',
-    local: ''
+    local: '',
+    modelo: '',
+    ano: '',
+    placa_serie: '',
+    chassi: '',
+    numero_motor: '',
+    renavam: ''
   });
 
   // Formulário para edição de equipamento
@@ -89,7 +106,7 @@ const Vistorias = () => {
   const carregarVistorias = async () => {
     setLoading(true);
     try {
-      if (activeTab === 'hydro') {
+      if (activeSection === 'hydro') {
         const { data, error } = await supabase
           .from('vt_hydro')
           .select('*')
@@ -97,7 +114,7 @@ const Vistorias = () => {
         
         if (error) throw error;
         setVistoriasHydro(data || []);
-      } else if (activeTab === 'albras') {
+      } else if (activeSection === 'albras') {
         const { data, error } = await supabase
           .from('vt_albras')
           .select('*')
@@ -113,8 +130,8 @@ const Vistorias = () => {
     }
   };
 
-  // Aplicar filtros
-  const vistoriasFiltradas = (activeTab === 'hydro' ? vistoriasHydro : vistoriasAlbras).filter(vistoria => {
+  // Aplicar filtros para vistorias
+  const vistoriasFiltradas = (activeSection === 'hydro' ? vistoriasHydro : vistoriasAlbras).filter(vistoria => {
     const matchesSearch = vistoria.tag.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          vistoria.centro_custo.toLowerCase().includes(searchTerm.toLowerCase());
     
@@ -130,6 +147,14 @@ const Vistorias = () => {
     }
 
     return matchesSearch && matchesStatus && matchesPrevisto && matchesMes;
+  });
+
+  // Aplicar filtro para equipamentos
+  const equipamentosFiltrados = equipamentos.filter(equipamento => {
+    return equipamento.tag.toLowerCase().includes(searchEquipamentos.toLowerCase()) ||
+           equipamento.tag_generico.toLowerCase().includes(searchEquipamentos.toLowerCase()) ||
+           equipamento.modelo?.toLowerCase().includes(searchEquipamentos.toLowerCase()) ||
+           equipamento.placa_serie?.toLowerCase().includes(searchEquipamentos.toLowerCase());
   });
 
   // Verificar se TAG existe na tabela de equipamentos
@@ -150,7 +175,7 @@ const Vistorias = () => {
         return;
       }
 
-      const tableName = activeTab === 'hydro' ? 'vt_hydro' : 'vt_albras';
+      const tableName = activeSection === 'hydro' ? 'vt_hydro' : 'vt_albras';
       
       const { error } = await supabase
         .from(tableName)
@@ -182,7 +207,7 @@ const Vistorias = () => {
     if (!editandoVistoria) return;
 
     try {
-      const tableName = activeTab === 'hydro' ? 'vt_hydro' : 'vt_albras';
+      const tableName = activeSection === 'hydro' ? 'vt_hydro' : 'vt_albras';
       
       const { error } = await supabase
         .from(tableName)
@@ -217,7 +242,13 @@ const Vistorias = () => {
         .insert([{ 
           tag: novoEquipamento.tag, 
           tag_generico: tagGenerica, 
-          local: novoEquipamento.local 
+          local: novoEquipamento.local,
+          modelo: novoEquipamento.modelo,
+          ano: novoEquipamento.ano,
+          placa_serie: novoEquipamento.placa_serie,
+          chassi: novoEquipamento.chassi,
+          numero_motor: novoEquipamento.numero_motor,
+          renavam: novoEquipamento.renavam
         }]);
 
       if (error) throw error;
@@ -226,7 +257,13 @@ const Vistorias = () => {
       setShowFormEquipamento(false);
       setNovoEquipamento({
         tag: '',
-        local: ''
+        local: '',
+        modelo: '',
+        ano: '',
+        placa_serie: '',
+        chassi: '',
+        numero_motor: '',
+        renavam: ''
       });
     } catch (error) {
       console.error('Erro ao salvar equipamento:', error);
@@ -245,7 +282,13 @@ const Vistorias = () => {
         .update({ 
           tag: editandoEquipamento.tag, 
           tag_generico: tagGenerica, 
-          local: editandoEquipamento.local 
+          local: editandoEquipamento.local,
+          modelo: editandoEquipamento.modelo,
+          ano: editandoEquipamento.ano,
+          placa_serie: editandoEquipamento.placa_serie,
+          chassi: editandoEquipamento.chassi,
+          numero_motor: editandoEquipamento.numero_motor,
+          renavam: editandoEquipamento.renavam
         })
         .eq('id', editandoEquipamento.id);
 
@@ -278,10 +321,10 @@ const Vistorias = () => {
 
   useEffect(() => {
     carregarEquipamentos();
-    if (activeTab !== 'equipamentos') {
+    if (activeSection !== 'equipamentos') {
       carregarVistorias();
     }
-  }, [activeTab]);
+  }, [activeSection]);
 
   const meses = [
     'todos', 'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
@@ -306,10 +349,34 @@ const Vistorias = () => {
     return new Date(data).toLocaleDateString('pt-BR');
   };
 
+  const menuItems = [
+    {
+      id: 'hydro',
+      label: 'Vistorias HYDRO',
+      icon: Building2,
+      color: 'from-blue-600 to-blue-700',
+      hoverColor: 'from-blue-700 to-blue-800'
+    },
+    {
+      id: 'albras',
+      label: 'Vistorias ALBRAS',
+      icon: Factory,
+      color: 'from-green-600 to-green-700',
+      hoverColor: 'from-green-700 to-green-800'
+    },
+    {
+      id: 'equipamentos',
+      label: 'Cadastro de Equipamentos',
+      icon: Settings,
+      color: 'from-purple-600 to-purple-700',
+      hoverColor: 'from-purple-700 to-purple-800'
+    }
+  ];
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900">
       {/* Header */}
-      <div className="mb-8">
+      <div className="p-6 border-b border-blue-600/30">
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-4">
             <Button 
@@ -321,9 +388,9 @@ const Vistorias = () => {
               Voltar
             </Button>
             <div>
-              <h1 className="text-3xl font-bold text-white mb-2">Controle de Vistorias</h1>
+              <h1 className="text-3xl font-bold text-white mb-2">Sistema de Vistorias</h1>
               <p className="text-blue-200">
-                Gerenciamento de vistorias de equipamentos - HYDRO e ALBRAS
+                Controle completo de vistorias e equipamentos
               </p>
             </div>
           </div>
@@ -333,9 +400,9 @@ const Vistorias = () => {
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
               <Truck className="h-4 w-4 mr-2" />
-              Cadastrar Equipamento
+              Novo Equipamento
             </Button>
-            {activeTab !== 'equipamentos' && (
+            {activeSection !== 'equipamentos' && (
               <Button 
                 onClick={() => setShowFormVistoria(true)}
                 className="bg-green-600 hover:bg-green-700 text-white"
@@ -352,278 +419,343 @@ const Vistorias = () => {
         </div>
       </div>
 
-      {/* Tabs */}
-      <Card className="mb-6 bg-white/10 backdrop-blur-sm border-blue-200/30">
-        <CardContent className="p-0">
-          <div className="flex border-b border-blue-200/30">
-            <button
-              className={`flex-1 py-4 px-6 text-lg font-semibold transition-all ${
-                activeTab === 'hydro'
-                  ? 'text-white bg-blue-500/30 border-b-2 border-blue-400'
-                  : 'text-blue-200 hover:text-white hover:bg-white/5'
-              }`}
-              onClick={() => setActiveTab('hydro')}
-            >
-              Vistorias HYDRO
-            </button>
-            <button
-              className={`flex-1 py-4 px-6 text-lg font-semibold transition-all ${
-                activeTab === 'albras'
-                  ? 'text-white bg-green-500/30 border-b-2 border-green-400'
-                  : 'text-blue-200 hover:text-white hover:bg-white/5'
-              }`}
-              onClick={() => setActiveTab('albras')}
-            >
-              Vistorias ALBRAS
-            </button>
-            <button
-              className={`flex-1 py-4 px-6 text-lg font-semibold transition-all ${
-                activeTab === 'equipamentos'
-                  ? 'text-white bg-purple-500/30 border-b-2 border-purple-400'
-                  : 'text-blue-200 hover:text-white hover:bg-white/5'
-              }`}
-              onClick={() => setActiveTab('equipamentos')}
-            >
-              Equipamentos
-            </button>
+      <div className="flex flex-1">
+        {/* Menu Lateral */}
+        <div className="w-64 bg-blue-800/50 backdrop-blur-sm border-r border-blue-600/30">
+          <div className="p-4 space-y-2">
+            {menuItems.map((item) => (
+              <Button
+                key={item.id}
+                onClick={() => setActiveSection(item.id as any)}
+                className={`w-full h-16 bg-gradient-to-r ${item.color} hover:${item.hoverColor} text-white text-lg font-semibold rounded-xl transition-all duration-300 relative group hover:scale-105 hover:shadow-xl ${
+                  activeSection === item.id ? 'ring-2 ring-white ring-opacity-50' : ''
+                }`}
+              >
+                <div className="flex items-center justify-start space-x-3 w-full">
+                  <div className="bg-white/20 p-2 rounded-lg group-hover:bg-white/30 transition-colors">
+                    <item.icon className="h-5 w-5" />
+                  </div>
+                  <span className="text-left text-sm">{item.label}</span>
+                </div>
+              </Button>
+            ))}
           </div>
-        </CardContent>
-      </Card>
+        </div>
 
-      {/* Filtros e Busca (apenas para vistorias) */}
-      {activeTab !== 'equipamentos' && (
-        <Card className="mb-6 bg-white/10 backdrop-blur-sm border-blue-200/30">
-          <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
-              <Filter className="h-5 w-5" />
-              Filtros e Busca
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-              <div className="md:col-span-2">
-                <Label htmlFor="search" className="text-white">Buscar</Label>
-                <div className="relative">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-blue-200" />
-                  <Input
-                    id="search"
-                    placeholder="Buscar por TAG ou Centro de Custo..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="bg-white/5 border-blue-300/30 text-white pl-10"
-                  />
+        {/* Conteúdo Principal */}
+        <div className="flex-1 p-6">
+          {/* Filtros e Busca (apenas para vistorias) */}
+          {activeSection !== 'equipamentos' && (
+            <Card className="mb-6 bg-white/10 backdrop-blur-sm border-blue-200/30">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <Filter className="h-5 w-5" />
+                  Filtros e Busca - {activeSection === 'hydro' ? 'HYDRO' : 'ALBRAS'}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                  <div className="md:col-span-2">
+                    <Label htmlFor="search" className="text-white">Buscar</Label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-3 h-4 w-4 text-blue-200" />
+                      <Input
+                        id="search"
+                        placeholder="Buscar por TAG ou Centro de Custo..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="bg-white/5 border-blue-300/30 text-white pl-10"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="status" className="text-white">Status</Label>
+                    <Select value={filtros.status} onValueChange={(value) => setFiltros({ ...filtros, status: value })}>
+                      <SelectTrigger className="bg-white/5 border-blue-300/30 text-white">
+                        <SelectValue placeholder="Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="todos">Todos</SelectItem>
+                        <SelectItem value="Aprovado">Aprovado</SelectItem>
+                        <SelectItem value="Reprovado">Reprovado</SelectItem>
+                        <SelectItem value="Pendente">Pendente</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="previsto" className="text-white">Previsto</Label>
+                    <Select value={filtros.previsto} onValueChange={(value) => setFiltros({ ...filtros, previsto: value })}>
+                      <SelectTrigger className="bg-white/5 border-blue-300/30 text-white">
+                        <SelectValue placeholder="Previsto" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="todos">Todos</SelectItem>
+                        <SelectItem value="Previsto">Previsto</SelectItem>
+                        <SelectItem value="Não previsto">Não Previsto</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="mes" className="text-white">Mês de Vencimento</Label>
+                    <Select value={filtros.mes} onValueChange={(value) => setFiltros({ ...filtros, mes: value })}>
+                      <SelectTrigger className="bg-white/5 border-blue-300/30 text-white">
+                        <SelectValue placeholder="Mês" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {meses.map(mes => (
+                          <SelectItem key={mes} value={mes}>
+                            {mes === 'todos' ? 'Todos os meses' : mes.charAt(0).toUpperCase() + mes.slice(1)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-              </div>
-              
-              <div>
-                <Label htmlFor="status" className="text-white">Status</Label>
-                <Select value={filtros.status} onValueChange={(value) => setFiltros({ ...filtros, status: value })}>
-                  <SelectTrigger className="bg-white/5 border-blue-300/30 text-white">
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Todos</SelectItem>
-                    <SelectItem value="Aprovado">Aprovado</SelectItem>
-                    <SelectItem value="Reprovado">Reprovado</SelectItem>
-                    <SelectItem value="Pendente">Pendente</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              </CardContent>
+            </Card>
+          )}
 
-              <div>
-                <Label htmlFor="previsto" className="text-white">Previsto</Label>
-                <Select value={filtros.previsto} onValueChange={(value) => setFiltros({ ...filtros, previsto: value })}>
-                  <SelectTrigger className="bg-white/5 border-blue-300/30 text-white">
-                    <SelectValue placeholder="Previsto" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Todos</SelectItem>
-                    <SelectItem value="Previsto">Previsto</SelectItem>
-                    <SelectItem value="Não previsto">Não Previsto</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label htmlFor="mes" className="text-white">Mês de Vencimento</Label>
-                <Select value={filtros.mes} onValueChange={(value) => setFiltros({ ...filtros, mes: value })}>
-                  <SelectTrigger className="bg-white/5 border-blue-300/30 text-white">
-                    <SelectValue placeholder="Mês" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {meses.map(mes => (
-                      <SelectItem key={mes} value={mes}>
-                        {mes === 'todos' ? 'Todos os meses' : mes.charAt(0).toUpperCase() + mes.slice(1)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Conteúdo das Tabs */}
-      {activeTab === 'equipamentos' ? (
-        /* Tab Equipamentos */
-        <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
-          <CardHeader>
-            <CardTitle className="text-white">
-              Equipamentos Cadastrados
-              <span className="text-blue-200 text-sm font-normal ml-2">
-                ({equipamentos.length} equipamentos)
-              </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {equipamentos.length === 0 ? (
-              <div className="flex justify-center items-center h-32">
-                <div className="text-white text-center">
-                  <p>Nenhum equipamento cadastrado</p>
-                  <p className="text-sm text-blue-200 mt-2">
-                    Clique em "Cadastrar Equipamento" para adicionar o primeiro
-                  </p>
+          {/* Busca para Equipamentos */}
+          {activeSection === 'equipamentos' && (
+            <Card className="mb-6 bg-white/10 backdrop-blur-sm border-blue-200/30">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <Search className="h-5 w-5" />
+                  Buscar Equipamentos
+                </CardTitle>
+                <CardDescription className="text-blue-200">
+                  Pesquise por TAG, modelo, placa ou número de série
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="md:col-span-3">
+                    <Label htmlFor="search_equipamentos" className="text-white">Buscar</Label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-3 h-4 w-4 text-blue-200" />
+                      <Input
+                        id="search_equipamentos"
+                        placeholder="Buscar por TAG, modelo, placa, série..."
+                        value={searchEquipamentos}
+                        onChange={(e) => setSearchEquipamentos(e.target.value)}
+                        className="bg-white/5 border-blue-300/30 text-white pl-10"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-end">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setSearchEquipamentos('')}
+                      className="border-blue-300/30 text-white hover:bg-white/10 w-full"
+                    >
+                      Limpar Busca
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <div className="rounded-md border border-blue-200/30">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-purple-500/20 hover:bg-purple-500/20">
-                      <TableHead className="text-white">TAG</TableHead>
-                      <TableHead className="text-white">TAG Genérica</TableHead>
-                      <TableHead className="text-white">Local</TableHead>
-                      <TableHead className="text-white text-right">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {equipamentos.map((equipamento) => (
-                      <TableRow key={equipamento.id} className="border-blue-200/30 hover:bg-white/5">
-                        <TableCell className="text-white font-medium">{equipamento.tag}</TableCell>
-                        <TableCell className="text-white">{equipamento.tag_generico}</TableCell>
-                        <TableCell className="text-white">{equipamento.local || '-'}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setEditandoEquipamento(equipamento)}
-                              className="text-blue-600 border-blue-600 hover:bg-blue-600 hover:text-white"
-                            >
-                              <Edit className="h-3 w-3 mr-1" />
-                              Editar
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => excluirEquipamento(equipamento.id)}
-                              className="text-red-600 border-red-600 hover:bg-red-600 hover:text-white"
-                            >
-                              <Trash2 className="h-3 w-3 mr-1" />
-                              Excluir
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      ) : (
-        /* Tab Vistorias */
-        <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
-          <CardHeader>
-            <CardTitle className="text-white">
-              {activeTab === 'hydro' ? 'Vistorias HYDRO' : 'Vistorias ALBRAS'} 
-              <span className="text-blue-200 text-sm font-normal ml-2">
-                ({vistoriasFiltradas.length} registros)
-              </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="flex justify-center items-center h-32">
-                <div className="text-white animate-pulse">Carregando vistorias...</div>
-              </div>
-            ) : vistoriasFiltradas.length === 0 ? (
-              <div className="flex justify-center items-center h-32">
-                <div className="text-white text-center">
-                  <p>Nenhuma vistoria encontrada</p>
-                  <p className="text-sm text-blue-200 mt-2">
-                    {searchTerm || filtros.status !== 'todos' || filtros.previsto !== 'todos' || filtros.mes !== 'todos' 
-                      ? 'Tente ajustar os filtros de busca' 
-                      : 'Clique em "Nova Vistoria" para adicionar a primeira'}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-md border border-blue-200/30">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-blue-500/20 hover:bg-blue-500/20">
-                      <TableHead className="text-white">TAG</TableHead>
-                      <TableHead className="text-white">Centro de Custo</TableHead>
-                      <TableHead className="text-white">Previsto</TableHead>
-                      <TableHead className="text-white">Data Vencimento</TableHead>
-                      <TableHead className="text-white">Data Realização</TableHead>
-                      <TableHead className="text-white">Status</TableHead>
-                      <TableHead className="text-white">Motivo Reprovação</TableHead>
-                      <TableHead className="text-white text-right">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {vistoriasFiltradas.map((vistoria) => (
-                      <TableRow key={vistoria.id} className="border-blue-200/30 hover:bg-white/5">
-                        <TableCell className="text-white font-medium">{vistoria.tag}</TableCell>
-                        <TableCell className="text-white">{vistoria.centro_custo}</TableCell>
-                        <TableCell className="text-white">{vistoria.previsto}</TableCell>
-                        <TableCell className="text-white">{formatarData(vistoria.data_vencimento_vistoria)}</TableCell>
-                        <TableCell className="text-white">{formatarData(vistoria.data_realizacao_vistoria)}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            {getStatusIcon(vistoria.status)}
-                            <span className={`font-medium ${
-                              vistoria.status === 'Aprovado' ? 'text-green-400' :
-                              vistoria.status === 'Reprovado' ? 'text-red-400' : 'text-yellow-400'
-                            }`}>
-                              {vistoria.status}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-white max-w-xs truncate">
-                          {vistoria.motivo_reprovacao || '-'}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setEditandoVistoria(vistoria)}
-                            className="text-blue-600 border-blue-600 hover:bg-blue-600 hover:text-white"
-                          >
-                            <Edit className="h-3 w-3 mr-1" />
-                            Editar
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Conteúdo das Seções */}
+          {activeSection === 'equipamentos' ? (
+            /* Seção Equipamentos */
+            <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
+              <CardHeader>
+                <CardTitle className="text-white">
+                  Cadastro de Equipamentos
+                  <span className="text-blue-200 text-sm font-normal ml-2">
+                    ({equipamentosFiltrados.length} de {equipamentos.length} equipamentos)
+                    {searchEquipamentos && (
+                      <span className="text-orange-300"> • Filtrado por: "{searchEquipamentos}"</span>
+                    )}
+                  </span>
+                </CardTitle>
+                <CardDescription className="text-blue-200">
+                  Gerencie todos os equipamentos disponíveis para vistoria
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {equipamentosFiltrados.length === 0 ? (
+                  <div className="flex justify-center items-center h-32">
+                    <div className="text-white text-center">
+                      <p>
+                        {searchEquipamentos 
+                          ? 'Nenhum equipamento encontrado para a busca' 
+                          : 'Nenhum equipamento cadastrado'
+                        }
+                      </p>
+                      <p className="text-sm text-blue-200 mt-2">
+                        {searchEquipamentos 
+                          ? 'Tente ajustar os termos da busca' 
+                          : 'Clique em "Novo Equipamento" para adicionar o primeiro'
+                        }
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-md border border-blue-200/30">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-purple-500/20 hover:bg-purple-500/20">
+                          <TableHead className="text-white">Equipamento</TableHead>
+                          <TableHead className="text-white">TAG</TableHead>
+                          <TableHead className="text-white">Modelo</TableHead>
+                          <TableHead className="text-white">Ano</TableHead>
+                          <TableHead className="text-white">Placa/Série</TableHead>
+                          <TableHead className="text-white">Ações</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {equipamentosFiltrados.map((equipamentoFiltrado) => {
+                          // Buscar o equipamento completo na lista original
+                          const equipamentoCompleto = equipamentos.find(e => e.id === equipamentoFiltrado.id);
+                          
+                          return (
+                            <TableRow key={equipamentoFiltrado.id} className="border-blue-200/30 hover:bg-white/5">
+                              <TableCell className="text-white font-medium">
+                                <div>
+                                  <div>{equipamentoFiltrado.tag_generico}</div>
+                                  <div className="text-sm text-blue-200">{equipamentoFiltrado.local || 'Sem local'}</div>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-white">{equipamentoFiltrado.tag}</TableCell>
+                              <TableCell className="text-white">{equipamentoFiltrado.modelo || '-'}</TableCell>
+                              <TableCell className="text-white">{equipamentoFiltrado.ano || '-'}</TableCell>
+                              <TableCell className="text-white">{equipamentoFiltrado.placa_serie || '-'}</TableCell>
+                              <TableCell>
+                                <div className="flex gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      if (equipamentoCompleto) {
+                                        setEditandoEquipamento(equipamentoCompleto);
+                                      }
+                                    }}
+                                    className="text-blue-600 border-blue-600 hover:bg-blue-600 hover:text-white"
+                                  >
+                                    <Edit className="h-3 w-3 mr-1" />
+                                    Editar
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => excluirEquipamento(equipamentoFiltrado.id)}
+                                    className="text-red-600 border-red-600 hover:bg-red-600 hover:text-white"
+                                  >
+                                    <Trash2 className="h-3 w-3 mr-1" />
+                                    Excluir
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            /* Seção Vistorias */
+            <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
+              <CardHeader>
+                <CardTitle className="text-white">
+                  {activeSection === 'hydro' ? 'Vistorias HYDRO' : 'Vistorias ALBRAS'} 
+                  <span className="text-blue-200 text-sm font-normal ml-2">
+                    ({vistoriasFiltradas.length} registros)
+                  </span>
+                </CardTitle>
+                <CardDescription className="text-blue-200">
+                  Controle de vistorias realizadas e pendentes
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="flex justify-center items-center h-32">
+                    <div className="text-white animate-pulse">Carregando vistorias...</div>
+                  </div>
+                ) : vistoriasFiltradas.length === 0 ? (
+                  <div className="flex justify-center items-center h-32">
+                    <div className="text-white text-center">
+                      <p>Nenhuma vistoria encontrada</p>
+                      <p className="text-sm text-blue-200 mt-2">
+                        {searchTerm || filtros.status !== 'todos' || filtros.previsto !== 'todos' || filtros.mes !== 'todos' 
+                          ? 'Tente ajustar os filtros de busca' 
+                          : 'Clique em "Nova Vistoria" para adicionar a primeira'}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-md border border-blue-200/30">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-blue-500/20 hover:bg-blue-500/20">
+                          <TableHead className="text-white">TAG</TableHead>
+                          <TableHead className="text-white">Centro de Custo</TableHead>
+                          <TableHead className="text-white">Previsto</TableHead>
+                          <TableHead className="text-white">Data Vencimento</TableHead>
+                          <TableHead className="text-white">Data Realização</TableHead>
+                          <TableHead className="text-white">Status</TableHead>
+                          <TableHead className="text-white">Motivo Reprovação</TableHead>
+                          <TableHead className="text-white">Ações</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {vistoriasFiltradas.map((vistoria) => (
+                          <TableRow key={vistoria.id} className="border-blue-200/30 hover:bg-white/5">
+                            <TableCell className="text-white font-medium">{vistoria.tag}</TableCell>
+                            <TableCell className="text-white">{vistoria.centro_custo}</TableCell>
+                            <TableCell className="text-white">{vistoria.previsto}</TableCell>
+                            <TableCell className="text-white">{formatarData(vistoria.data_vencimento_vistoria)}</TableCell>
+                            <TableCell className="text-white">{formatarData(vistoria.data_realizacao_vistoria)}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                {getStatusIcon(vistoria.status)}
+                                <span className={`font-medium ${
+                                  vistoria.status === 'Aprovado' ? 'text-green-400' :
+                                  vistoria.status === 'Reprovado' ? 'text-red-400' : 'text-yellow-400'
+                                }`}>
+                                  {vistoria.status}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-white max-w-xs truncate">
+                              {vistoria.motivo_reprovacao || '-'}
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setEditandoVistoria(vistoria)}
+                                className="text-blue-600 border-blue-600 hover:bg-blue-600 hover:text-white"
+                              >
+                                <Edit className="h-3 w-3 mr-1" />
+                                Editar
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
 
       {/* Modal Nova Vistoria */}
       {showFormVistoria && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <Card className="bg-white/95 backdrop-blur-sm border-blue-200/30 w-full max-w-2xl">
+          <Card className="bg-white/95 backdrop-blur-sm border-blue-200/30 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <CardHeader>
-              <CardTitle className="text-gray-900">Nova Vistoria - {activeTab === 'hydro' ? 'HYDRO' : 'ALBRAS'}</CardTitle>
+              <CardTitle className="text-gray-900">Nova Vistoria - {activeSection === 'hydro' ? 'HYDRO' : 'ALBRAS'}</CardTitle>
               <CardDescription>Preencha os dados da nova vistoria</CardDescription>
             </CardHeader>
             <CardContent>
@@ -777,7 +909,7 @@ const Vistorias = () => {
       {/* Modal Editar Vistoria */}
       {editandoVistoria && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <Card className="bg-white/95 backdrop-blur-sm border-blue-200/30 w-full max-w-2xl">
+          <Card className="bg-white/95 backdrop-blur-sm border-blue-200/30 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <CardHeader>
               <CardTitle className="text-gray-900">Editar Vistoria</CardTitle>
               <CardDescription>Atualize os dados da vistoria</CardDescription>
@@ -897,16 +1029,16 @@ const Vistorias = () => {
         </div>
       )}
 
-      {/* Modal Cadastrar Equipamento */}
+      {/* Modal Novo Equipamento */}
       {showFormEquipamento && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <Card className="bg-white/95 backdrop-blur-sm border-blue-200/30 w-full max-w-md">
+          <Card className="bg-white/95 backdrop-blur-sm border-blue-200/30 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <CardHeader>
               <CardTitle className="text-gray-900">Cadastrar Novo Equipamento</CardTitle>
-              <CardDescription>Adicione um novo equipamento para vistoria</CardDescription>
+              <CardDescription>Preencha todos os dados do equipamento</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="tag_equipamento">TAG do Equipamento *</Label>
                   <Input
@@ -927,6 +1059,66 @@ const Vistorias = () => {
                     value={novoEquipamento.local}
                     onChange={(e) => setNovoEquipamento({ ...novoEquipamento, local: e.target.value })}
                     placeholder="Ex: Pátio Principal, Almoxarifado"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="modelo">Modelo</Label>
+                  <Input
+                    id="modelo"
+                    value={novoEquipamento.modelo}
+                    onChange={(e) => setNovoEquipamento({ ...novoEquipamento, modelo: e.target.value })}
+                    placeholder="Ex: Caterpillar 320D"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="ano">Ano</Label>
+                  <Input
+                    id="ano"
+                    value={novoEquipamento.ano}
+                    onChange={(e) => setNovoEquipamento({ ...novoEquipamento, ano: e.target.value })}
+                    placeholder="Ex: 2018"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="placa_serie">Placa ou Número de Série</Label>
+                  <Input
+                    id="placa_serie"
+                    value={novoEquipamento.placa_serie}
+                    onChange={(e) => setNovoEquipamento({ ...novoEquipamento, placa_serie: e.target.value })}
+                    placeholder="Ex: ABC1234 ou 123456789"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="chassi">Chassi</Label>
+                  <Input
+                    id="chassi"
+                    value={novoEquipamento.chassi}
+                    onChange={(e) => setNovoEquipamento({ ...novoEquipamento, chassi: e.target.value })}
+                    placeholder="Ex: 9BWZZZ377VT004251"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="numero_motor">Número do Motor</Label>
+                  <Input
+                    id="numero_motor"
+                    value={novoEquipamento.numero_motor}
+                    onChange={(e) => setNovoEquipamento({ ...novoEquipamento, numero_motor: e.target.value })}
+                    placeholder="Ex: C7.1-0123456"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="renavam">RENAVAM</Label>
+                  <Input
+                    id="renavam"
+                    value={novoEquipamento.renavam}
+                    onChange={(e) => setNovoEquipamento({ ...novoEquipamento, renavam: e.target.value })}
+                    placeholder="Ex: 12345678901"
                   />
                 </div>
               </div>
@@ -953,13 +1145,13 @@ const Vistorias = () => {
       {/* Modal Editar Equipamento */}
       {editandoEquipamento && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <Card className="bg-white/95 backdrop-blur-sm border-blue-200/30 w-full max-w-md">
+          <Card className="bg-white/95 backdrop-blur-sm border-blue-200/30 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <CardHeader>
               <CardTitle className="text-gray-900">Editar Equipamento</CardTitle>
               <CardDescription>Atualize os dados do equipamento</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="edit_tag_equipamento">TAG do Equipamento *</Label>
                   <Input
@@ -980,6 +1172,66 @@ const Vistorias = () => {
                     value={editandoEquipamento.local}
                     onChange={(e) => setEditandoEquipamento({ ...editandoEquipamento, local: e.target.value })}
                     placeholder="Ex: Pátio Principal, Almoxarifado"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit_modelo">Modelo</Label>
+                  <Input
+                    id="edit_modelo"
+                    value={editandoEquipamento.modelo}
+                    onChange={(e) => setEditandoEquipamento({ ...editandoEquipamento, modelo: e.target.value })}
+                    placeholder="Ex: Caterpillar 320D"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit_ano">Ano</Label>
+                  <Input
+                    id="edit_ano"
+                    value={editandoEquipamento.ano}
+                    onChange={(e) => setEditandoEquipamento({ ...editandoEquipamento, ano: e.target.value })}
+                    placeholder="Ex: 2018"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit_placa_serie">Placa ou Número de Série</Label>
+                  <Input
+                    id="edit_placa_serie"
+                    value={editandoEquipamento.placa_serie}
+                    onChange={(e) => setEditandoEquipamento({ ...editandoEquipamento, placa_serie: e.target.value })}
+                    placeholder="Ex: ABC1234 ou 123456789"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit_chassi">Chassi</Label>
+                  <Input
+                    id="edit_chassi"
+                    value={editandoEquipamento.chassi}
+                    onChange={(e) => setEditandoEquipamento({ ...editandoEquipamento, chassi: e.target.value })}
+                    placeholder="Ex: 9BWZZZ377VT004251"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit_numero_motor">Número do Motor</Label>
+                  <Input
+                    id="edit_numero_motor"
+                    value={editandoEquipamento.numero_motor}
+                    onChange={(e) => setEditandoEquipamento({ ...editandoEquipamento, numero_motor: e.target.value })}
+                    placeholder="Ex: C7.1-0123456"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit_renavam">RENAVAM</Label>
+                  <Input
+                    id="edit_renavam"
+                    value={editandoEquipamento.renavam}
+                    onChange={(e) => setEditandoEquipamento({ ...editandoEquipamento, renavam: e.target.value })}
+                    placeholder="Ex: 12345678901"
                   />
                 </div>
               </div>
