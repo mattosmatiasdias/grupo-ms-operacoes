@@ -228,6 +228,12 @@ const Vistorias = () => {
     }
   };
 
+  // Carregar todos os dados iniciais
+  const carregarTodosDados = async () => {
+    await carregarEquipamentos();
+    await carregarCDP(); // Agora carrega CDP sempre que a página é carregada
+  };
+
   // Aplicar filtros para vistorias
   const vistoriasFiltradas = (
     activeSection === 'hydro' || activeSection === 'op_portuaria' || activeSection === 'bacia' || activeSection === 'pavimentacao'
@@ -535,12 +541,14 @@ const Vistorias = () => {
   };
 
   useEffect(() => {
-    carregarEquipamentos();
+    // Carrega todos os dados iniciais (equipamentos e CDP) quando o componente monta
+    carregarTodosDados();
+  }, []);
+
+  useEffect(() => {
+    // Carrega vistorias apenas quando necessário
     if (activeSection !== 'equipamentos' && activeSection !== 'visao_geral' && activeSection !== 'cdp') {
       carregarVistorias();
-    }
-    if (activeSection === 'cdp') {
-      carregarCDP();
     }
   }, [activeSection]);
 
