@@ -196,7 +196,7 @@ const Auth = () => {
                       <p className="font-medium">Ativação de Conta</p>
                       <p className="text-muted-foreground">
                         Após o cadastro, sua conta ficará inativa. Entre em contato com 
-                        <strong> Mattos Matias</strong> ou <strong>George Kennedy</strong> para ativação.
+                        <strong> Mattos Matias</strong> ou <strong>Samuel Freitas</strong> para ativação.
                       </p>
                     </div>
                   </div>
