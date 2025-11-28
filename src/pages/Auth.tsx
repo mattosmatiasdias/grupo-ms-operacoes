@@ -1,12 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react'; // ← ADICIONE useEffect
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Navigate } from 'react-router-dom';
-import { AlertCircle, UserPlus } from 'lucide-react';
+import { Navigate, useNavigate } from 'react-router-dom'; // ← ADICIONE useNavigate
+import { AlertCircle, UserPlus, Loader2 } from 'lucide-react'; // ← ADICIONE Loader2
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -14,10 +14,40 @@ const Auth = () => {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true); // ← ADICIONE este estado
   const { signIn, signUp, user, session } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate(); // ← ADICIONE useNavigate
 
-  // Redirect if already authenticated
+  // Verificar autenticação ao carregar o componente
+  useEffect(() => {
+    const checkAuthentication = async () => {
+      // Se já tem usuário e sessão, redireciona para a página inicial
+      if (user && session) {
+        navigate('/');
+        return;
+      }
+      
+      // Se não tem autenticação, mostra o formulário
+      setCheckingAuth(false);
+    };
+
+    checkAuthentication();
+  }, [user, session, navigate]);
+
+  // Se ainda está verificando autenticação, mostra loading
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 animate-spin text-white mx-auto mb-4" />
+          <p className="text-white text-lg">Verificando autenticação...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Se já está autenticado, redireciona (fallback)
   if (user && session) {
     return <Navigate to="/" replace />;
   }
@@ -42,6 +72,8 @@ const Auth = () => {
             title: "Login realizado com sucesso!",
             description: "Bem-vindo ao sistema"
           });
+          // O redirecionamento será feito automaticamente pelo useEffect
+          // quando user e session forem atualizados
         }
       } else {
         const { error } = await signUp(email, password, fullName);
@@ -59,6 +91,10 @@ const Auth = () => {
             description: "Sua conta foi criada mas precisa ser ativada. Entre em contato com Mattos Matias ou George Kennedy para ativação."
           });
           setIsLogin(true);
+          // Limpa os campos após cadastro bem-sucedido
+          setEmail('');
+          setPassword('');
+          setFullName('');
         }
       }
     } catch (error) {
@@ -93,6 +129,7 @@ const Auth = () => {
                     onChange={(e) => setFullName(e.target.value)}
                     required
                     disabled={loading}
+                    placeholder="Seu nome completo"
                   />
                 </div>
               )}
@@ -106,6 +143,7 @@ const Auth = () => {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   disabled={loading}
+                  placeholder="seu@email.com"
                 />
               </div>
               
@@ -118,6 +156,7 @@ const Auth = () => {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   disabled={loading}
+                  placeholder="Sua senha"
                 />
               </div>
 
@@ -127,7 +166,14 @@ const Auth = () => {
                 style={{ boxShadow: 'var(--shadow-button)' }}
                 disabled={loading}
               >
-                {loading ? "Carregando..." : (isLogin ? "Entrar" : "Cadastrar")}
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {isLogin ? "Entrando..." : "Cadastrando..."}
+                  </>
+                ) : (
+                  isLogin ? "Entrar" : "Cadastrar"
+                )}
               </Button>
 
               <div className="text-center">
