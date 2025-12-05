@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Plus, Search, Filter, Calendar, Clock, Ship, Factory, Warehouse, Building, BarChart3, Users, UserX, Menu, RefreshCw, Database } from 'lucide-react';
+import { ArrowLeft, Plus, Search, Filter, Calendar, Clock, Ship, Factory, Warehouse, Building, BarChart3, Users, UserX, Menu, RefreshCw, Database, EyeOff } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -607,9 +607,10 @@ const RelatorioTransporte = () => {
             let count = 0;
             let label = '';
             let totalHoras = 0;
+            let opsDoTipo: OperacaoCompleta[] = [];
 
             if (['HYDRO', 'NAVIO', 'ALBRAS', 'SANTOS BRASIL'].includes(op)) {
-              const opsDoTipo = operacoesFiltradas.filter(operacao => operacao.op === op);
+              opsDoTipo = operacoesFiltradas.filter(operacao => operacao.op === op);
               count = opsDoTipo.length;
               totalHoras = opsDoTipo.reduce((sum, operacao) => 
                 sum + operacao.equipamentos.reduce((eqSum, eq) => eqSum + (Number(eq.horas_trabalhadas) || 0), 0), 0
@@ -627,7 +628,19 @@ const RelatorioTransporte = () => {
               <Card 
                 key={op} 
                 className="bg-white/10 backdrop-blur-sm border-blue-200/30 hover:shadow-lg transition-all hover:scale-105 cursor-pointer"
-                onClick={() => setOperacaoSelecionada(op)}
+                onClick={() => {
+                  if (op === 'AJUDANTES') {
+                    setOperacaoSelecionada('AJUDANTES');
+                  } else if (op === 'AUSENCIAS') {
+                    setOperacaoSelecionada('AUSENCIAS');
+                  } else {
+                    setOperacaoSelecionada(op);
+                    // Se houver apenas uma operação do tipo, vai direto para visualização
+                    if (opsDoTipo.length === 1) {
+                      navigate(`/operacao/${opsDoTipo[0].id}/visualizar`);
+                    }
+                  }
+                }}
               >
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
@@ -1003,6 +1016,8 @@ interface OperacaoDetalhadaProps {
 }
 
 const OperacaoDetalhada = ({ operacao, getOperacaoDisplayName, formatarDataBR }: OperacaoDetalhadaProps) => {
+  const navigate = useNavigate();
+  
   if (!operacao) {
     return (
       <div className="text-center py-12">
@@ -1028,9 +1043,19 @@ const OperacaoDetalhada = ({ operacao, getOperacaoDisplayName, formatarDataBR }:
             {getOperacaoDisplayName(operacao)} • {formatarDataBR(operacao.data)}
           </p>
         </div>
-        <Badge className="bg-green-500/20 text-green-300 text-lg px-3 py-1">
-          Total: {totalHoras.toFixed(1)}h
-        </Badge>
+        <div className="flex items-center space-x-2">
+          <Button 
+            variant="outline"
+            onClick={() => navigate(`/operacao/${operacao.id}/visualizar`)}
+            className="text-blue-300 hover:text-white hover:bg-blue-500/20 border-blue-300/30"
+          >
+            <EyeOff className="h-4 w-4 mr-2" />
+            Visualizar Completa
+          </Button>
+          <Badge className="bg-green-500/20 text-green-300 text-lg px-3 py-1">
+            Total: {totalHoras.toFixed(1)}h
+          </Badge>
+        </div>
       </div>
 
       <Card className="bg-white/5 border-blue-200/30">
@@ -1076,6 +1101,8 @@ interface OperacoesTableProps {
 }
 
 const OperacoesTable = ({ operacoes, getOperacaoDisplayName, formatarDataBR }: OperacoesTableProps) => {
+  const navigate = useNavigate();
+  
   if (operacoes.length === 0) {
     return (
       <div className="text-center py-12">
@@ -1099,6 +1126,7 @@ const OperacoesTable = ({ operacoes, getOperacaoDisplayName, formatarDataBR }: O
             <TableHead className="font-semibold text-blue-200 py-3">Equipamento</TableHead>
             <TableHead className="font-semibold text-blue-200 py-3">Motorista/Operador</TableHead>
             <TableHead className="font-semibold text-blue-200 py-3">Horas Trabalhadas</TableHead>
+            <TableHead className="font-semibold text-blue-200 py-3 text-center">Ações</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -1151,6 +1179,20 @@ const OperacoesTable = ({ operacoes, getOperacaoDisplayName, formatarDataBR }: O
                       <Badge className="bg-green-500/20 text-green-300 hover:bg-green-500/20 border-0 text-sm font-medium">
                         {horasTrabalhadas.toFixed(1)}h
                       </Badge>
+                    </div>
+                  </TableCell>
+                  <TableCell className="py-4">
+                    <div className="flex justify-center">
+                      <Button 
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => navigate(`/operacao/${op.id}/visualizar`)}
+                        className="text-blue-300 hover:text-white hover:bg-blue-500/20 transition-colors"
+                        title="Visualizar operação completa"
+                      >
+                        <EyeOff className="h-4 w-4 mr-1" />
+                        Visualizar
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>

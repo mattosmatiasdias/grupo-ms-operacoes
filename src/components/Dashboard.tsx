@@ -1,8 +1,9 @@
+// src/components/Dashboard.tsx (versão atualizada)
 import { useAuth } from '@/hooks/useAuth';
 import { useNotifications } from '@/hooks/useNotifications';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Bell, FileText, Ship, LogOut, BarChart3, Menu, X, Calendar, ClipboardCheck, Car, AlertTriangle, Building2 } from 'lucide-react';
+import { Bell, FileText, Ship, LogOut, BarChart3, Menu, X, Calendar, ClipboardCheck, Car, AlertTriangle, Building2, Percent } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 
@@ -60,6 +61,13 @@ const Dashboard = () => {
       hoverColor: 'from-indigo-700 to-indigo-800'
     },
     {
+      icon: Percent,
+      label: 'RATEIOS',
+      path: '/rateios',
+      color: 'from-amber-600 to-amber-700',
+      hoverColor: 'from-amber-700 to-amber-800'
+    },
+    {
       icon: Bell,
       label: 'NOTIFICAÇÕES',
       path: '/notificacao',
@@ -70,7 +78,7 @@ const Dashboard = () => {
     {
       icon: Building2,
       label: 'RDO SANTOS BRASIL',
-      path: '/rdo-santos-brasil',
+      path: '/santos-brasil', // ← CORRIGIDO: era '/rdo-santos-brasil'
       color: 'from-red-600 to-red-700',
       hoverColor: 'from-red-700 to-red-800'
     },
@@ -80,6 +88,23 @@ const Dashboard = () => {
       path: '/visuais',
       color: 'from-orange-500 to-orange-600',
       hoverColor: 'from-orange-600 to-orange-700'
+    }
+  ];
+
+  const quickActions = [
+    {
+      icon: FileText,
+      label: 'NOVO LANÇAMENTO',
+      path: '/novo-lancamento',
+      color: 'from-cyan-500 to-cyan-600',
+      hoverColor: 'from-cyan-600 to-cyan-700'
+    },
+    {
+      icon: Building2,
+      label: 'NOVO RDO SANTOS BRASIL',
+      path: '/santos-brasil/novo', // ← CORRIGIDO: era '/rdo-santos-brasil/novo'
+      color: 'from-red-500 to-red-600',
+      hoverColor: 'from-red-600 to-red-700'
     }
   ];
 
@@ -144,6 +169,21 @@ const Dashboard = () => {
                 )}
               </Button>
             ))}
+            {quickActions.map((action) => (
+              <Button
+                key={action.path}
+                onClick={() => {
+                  navigate(action.path);
+                  setSidebarOpen(false);
+                }}
+                className={`w-full h-14 bg-gradient-to-r ${action.color} hover:${action.hoverColor} text-white font-semibold rounded-xl transition-all duration-300`}
+              >
+                <div className="flex items-center justify-start space-x-3 w-full">
+                  <action.icon className="h-5 w-5" />
+                  <span>{action.label}</span>
+                </div>
+              </Button>
+            ))}
           </div>
         </div>
       )}
@@ -160,7 +200,7 @@ const Dashboard = () => {
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-white">Gestão de Operações</h1>
-                <p className="text-blue-200 text-sm">( versão 5.5)</p>
+                <p className="text-blue-200 text-sm">( versão 4.1.3)</p>
               </div>
             </div>
           </div>
@@ -199,6 +239,23 @@ const Dashboard = () => {
             ))}
           </div>
 
+          {/* Quick Actions */}
+          <div className="p-6 border-t border-blue-600/30">
+            <h3 className="text-blue-200 font-semibold text-sm uppercase tracking-wider mb-4">Ações Rápidas</h3>
+            {quickActions.map((action) => (
+              <Button
+                key={action.path}
+                onClick={() => navigate(action.path)}
+                className={`w-full h-14 bg-gradient-to-r ${action.color} hover:${action.hoverColor} text-white font-semibold rounded-xl transition-all duration-300 hover:scale-105 hover:shadow-xl`}
+              >
+                <div className="flex items-center justify-start space-x-3 w-full">
+                  <action.icon className="h-5 w-5" />
+                  <span>{action.label}</span>
+                </div>
+              </Button>
+            ))}
+          </div>
+
           {/* Logout */}
           <div className="p-6 border-t border-blue-600/30">
             <Button
@@ -226,7 +283,7 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* Stats Cards */}
+          {/* Stats Cards - ATUALIZADO COM CARD DE RATEIOS */}
           <div className="p-8">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
               <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30 text-white">
@@ -257,22 +314,22 @@ const Dashboard = () => {
                 </CardContent>
               </Card>
 
-              <Card className="bg-white/10 backdrop-blur-sm border-red-200/30 text-white">
+              <Card className="bg-white/10 backdrop-blur-sm border-amber-200/30 text-white">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-blue-200 text-sm">RDOs Santos Brasil</p>
-                      <p className="text-3xl font-bold">5</p>
+                      <p className="text-blue-200 text-sm">Rateios Pendentes</p>
+                      <p className="text-3xl font-bold">8</p>
                     </div>
-                    <div className="bg-red-500/20 p-3 rounded-xl">
-                      <Building2 className="h-6 w-6 text-red-300" />
+                    <div className="bg-amber-500/20 p-3 rounded-xl">
+                      <Percent className="h-6 w-6 text-amber-300" />
                     </div>
                   </div>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Recent Activity */}
+            {/* Recent Activity - ATUALIZADO COM ITEM DE RATEIOS */}
             <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
               <CardContent className="p-6">
                 <h3 className="text-xl font-bold text-white mb-4">Atividade Recente</h3>
@@ -288,21 +345,21 @@ const Dashboard = () => {
                   </div>
                   <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
                     <div className="flex items-center space-x-3">
+                      <div className="bg-amber-500/20 p-2 rounded">
+                        <Percent className="h-4 w-4 text-amber-400" />
+                      </div>
+                      <span className="text-white">Rateio processado</span>
+                    </div>
+                    <span className="text-blue-200 text-sm">há 3 horas</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                    <div className="flex items-center space-x-3">
                       <div className="bg-purple-500/20 p-2 rounded">
                         <Ship className="h-4 w-4 text-purple-400" />
                       </div>
                       <span className="text-white">Navio atualizado</span>
                     </div>
                     <span className="text-blue-200 text-sm">há 4 horas</span>
-                  </div>
-                  <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <div className="bg-teal-500/20 p-2 rounded">
-                        <ClipboardCheck className="h-4 w-4 text-teal-400" />
-                      </div>
-                      <span className="text-white">Nova vistoria registrada</span>
-                    </div>
-                    <span className="text-blue-200 text-sm">há 1 dia</span>
                   </div>
                 </div>
               </CardContent>

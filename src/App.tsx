@@ -1,10 +1,11 @@
+// src/App.tsx
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
-import { ProtectedRoute } from "@/components/auth/ProtectedRoute"; // ← ADICIONE ESTA IMPORT
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
 // Import de TODAS as páginas
 import Index from "./pages/Index";
@@ -31,6 +32,9 @@ import RdoSantosBrasil from "./pages/RdoSantosBrasil";
 
 // Página do módulo de Vistorias
 import Vistorias from "./pages/Vistorias";
+
+// Página do módulo de Rateios ← ADICIONE ESTA IMPORT
+import Rateios from "./pages/Rateios";
 
 const queryClient = new QueryClient();
 
@@ -131,6 +135,13 @@ const App = () => (
             <Route path="/vistorias" element={
               <ProtectedRoute>
                 <Vistorias />
+              </ProtectedRoute>
+            } />
+
+            {/* Rota do módulo de Rateios ← ADICIONE ESTA ROTA */}
+            <Route path="/rateios" element={
+              <ProtectedRoute>
+                <Rateios />
               </ProtectedRoute>
             } />
 
