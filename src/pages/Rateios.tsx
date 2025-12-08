@@ -683,33 +683,29 @@ const Rateios = () => {
   });
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900">
+    <div className="min-h-screen bg-gray-900 text-white">
       {/* Header */}
-      <div className="bg-blue-800/50 backdrop-blur-sm border-b border-blue-600/30">
-        <div className="px-6 py-4">
-          <div className="flex items-center justify-between">
+      <div className="bg-blue-900/80 backdrop-blur-md shadow-lg sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-4">
             <div className="flex items-center space-x-4">
               <Button 
                 variant="ghost" 
                 onClick={() => navigate('/')} 
-                className="text-white hover:bg-white/20 px-4 py-2 rounded-lg transition-all"
+                className="text-blue-300 hover:bg-blue-800/50"
+                title="Voltar para Dashboard"
               >
-                <ArrowLeft className="h-5 w-5 mr-2" />
-                Voltar
+                <ArrowLeft className="h-5 w-5" />
+                <span className="ml-2">Dashboard</span>
               </Button>
-              <div>
-                <h1 className="text-2xl font-bold text-white">Módulo de Rateios</h1>
-                <p className="text-blue-200 text-sm">
-                  Alocação de custos por centro de resultado - Período: 16 a 15 do mês seguinte
-                </p>
-              </div>
+              <h1 className="text-2xl font-bold text-white">Módulo de Rateios</h1>
             </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-3">
               {/* Botão Atualizar */}
               <Button
                 variant="outline"
                 onClick={carregarDados}
-                className="text-gray-800 border-blue-300/30 hover:bg-white/90 bg-white/80 hover:text-gray-900"
+                className="border-blue-300 text-white hover:bg-white/20"
                 disabled={loading}
               >
                 <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
@@ -735,7 +731,7 @@ const Rateios = () => {
                   setShowForm(true);
                   setEditingBM(null);
                 }}
-                className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2.5 rounded-lg font-semibold transition-all shadow-sm hover:shadow-md"
+                className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-2.5 rounded-lg font-semibold transition-all shadow-sm hover:shadow-md"
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Novo BM
@@ -748,7 +744,7 @@ const Rateios = () => {
       {/* Cards de Resumo */}
       <div className="px-6 py-4">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30 hover:shadow-lg transition-shadow">
+          <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30 hover:shadow-lg transition-all hover:scale-[1.02]">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -762,7 +758,7 @@ const Rateios = () => {
             </CardContent>
           </Card>
 
-          <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30 hover:shadow-lg transition-shadow">
+          <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30 hover:shadow-lg transition-all hover:scale-[1.02]">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -779,7 +775,7 @@ const Rateios = () => {
             </CardContent>
           </Card>
 
-          <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30 hover:shadow-lg transition-shadow">
+          <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30 hover:shadow-lg transition-all hover:scale-[1.02]">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -793,7 +789,7 @@ const Rateios = () => {
             </CardContent>
           </Card>
 
-          <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30 hover:shadow-lg transition-shadow">
+          <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30 hover:shadow-lg transition-all hover:scale-[1.02]">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -810,113 +806,117 @@ const Rateios = () => {
       </div>
 
       {/* Filtros */}
-      <div className="px-6 py-4">
-        <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
-          <CardContent className="p-4">
-            <div className="flex items-center mb-4">
-              <Filter className="h-5 w-5 text-blue-300 mr-2" />
-              <h3 className="text-lg font-semibold text-white">Filtros</h3>
+      <div className="px-6 py-4 border-b border-blue-600/30 bg-blue-800/30 backdrop-blur-sm">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-white flex items-center space-x-2">
+              <Calendar className="h-4 w-4 text-blue-300" />
+              <span>Período Referência</span>
+            </Label>
+            <Select value={filtroPeriodo} onValueChange={setFiltroPeriodo}>
+              <SelectTrigger className="h-10 bg-white/5 border-blue-300/30 text-white focus:border-blue-300">
+                <SelectValue placeholder="Todos os períodos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos os períodos</SelectItem>
+                {PERIODOS_REFERENCIA.map((periodo) => (
+                  <SelectItem key={periodo.label} value={periodo.label}>
+                    {periodo.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-white flex items-center space-x-2">
+              <Users className="h-4 w-4 text-blue-300" />
+              <span>Fornecedor</span>
+            </Label>
+            <Select value={filtroFornecedor} onValueChange={setFiltroFornecedor}>
+              <SelectTrigger className="h-10 bg-white/5 border-blue-300/30 text-white focus:border-blue-300">
+                <SelectValue placeholder="Todos os fornecedores" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos os fornecedores</SelectItem>
+                {fornecedores.map((fornecedor) => (
+                  <SelectItem key={fornecedor.id} value={fornecedor.id}>
+                    {fornecedor.nome_fornecedor}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-white flex items-center space-x-2">
+              <FileText className="h-4 w-4 text-blue-300" />
+              <span>Número BM</span>
+            </Label>
+            <Select value={filtroBM} onValueChange={setFiltroBM}>
+              <SelectTrigger className="h-10 bg-white/5 border-blue-300/30 text-white focus:border-blue-300">
+                <SelectValue placeholder="Todos os BMs" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos os BMs</SelectItem>
+                {bms.map((bm) => (
+                  <SelectItem key={bm.id} value={bm.id}>
+                    {bm.numero_bm}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-white flex items-center space-x-2">
+              <Building2 className="h-4 w-4 text-blue-300" />
+              <span>Centro Resultado</span>
+            </Label>
+            <Select value={filtroCentroResultado} onValueChange={setFiltroCentroResultado}>
+              <SelectTrigger className="h-10 bg-white/5 border-blue-300/30 text-white focus:border-blue-300">
+                <SelectValue placeholder="Todos os centros" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos os centros</SelectItem>
+                {centrosResultado.map((centro) => (
+                  <SelectItem key={centro} value={centro}>
+                    {centro}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-white opacity-0">Pesquisa</Label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-blue-300 h-4 w-4" />
+              <Input
+                placeholder="Buscar..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="h-10 pl-10 bg-white/5 border-blue-300/30 text-white placeholder:text-blue-300/70"
+              />
+              {searchTerm && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-blue-300 hover:text-white"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div>
-                <Label htmlFor="filtro-periodo" className="text-blue-200 text-sm">Período Referência</Label>
-                <Select value={filtroPeriodo} onValueChange={setFiltroPeriodo}>
-                  <SelectTrigger className="bg-white/10 border-blue-300/30 text-white">
-                    <SelectValue placeholder="Todos os períodos" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-blue-800 border-blue-600 text-white">
-                    <SelectItem value="todos">Todos os períodos</SelectItem>
-                    {PERIODOS_REFERENCIA.map((periodo) => (
-                      <SelectItem key={periodo.label} value={periodo.label}>
-                        {periodo.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div>
-                <Label htmlFor="filtro-fornecedor" className="text-blue-200 text-sm">Fornecedor</Label>
-                <Select value={filtroFornecedor} onValueChange={setFiltroFornecedor}>
-                  <SelectTrigger className="bg-white/10 border-blue-300/30 text-white">
-                    <SelectValue placeholder="Todos os fornecedores" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-blue-800 border-blue-600 text-white">
-                    <SelectItem value="todos">Todos os fornecedores</SelectItem>
-                    {fornecedores.map((fornecedor) => (
-                      <SelectItem key={fornecedor.id} value={fornecedor.id}>
-                        {fornecedor.nome_fornecedor}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div>
-                <Label htmlFor="filtro-bm" className="text-blue-200 text-sm">Número BM</Label>
-                <Select value={filtroBM} onValueChange={setFiltroBM}>
-                  <SelectTrigger className="bg-white/10 border-blue-300/30 text-white">
-                    <SelectValue placeholder="Todos os BMs" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-blue-800 border-blue-600 text-white">
-                    <SelectItem value="todos">Todos os BMs</SelectItem>
-                    {bms.map((bm) => (
-                      <SelectItem key={bm.id} value={bm.id}>
-                        {bm.numero_bm}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div>
-                <Label htmlFor="filtro-centro" className="text-blue-200 text-sm">Centro Resultado</Label>
-                <Select value={filtroCentroResultado} onValueChange={setFiltroCentroResultado}>
-                  <SelectTrigger className="bg-white/10 border-blue-300/30 text-white">
-                    <SelectValue placeholder="Todos os centros" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-blue-800 border-blue-600 text-white">
-                    <SelectItem value="todos">Todos os centros</SelectItem>
-                    {centrosResultado.map((centro) => (
-                      <SelectItem key={centro} value={centro}>
-                        {centro}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Barra de Pesquisa */}
-      <div className="px-6 mb-6">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-blue-300 h-4 w-4" />
-          <Input
-            placeholder="Buscar por número BM, fornecedor, centro de resultado ou valor..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 bg-white/10 border-blue-300/30 text-white placeholder:text-blue-300/70"
-          />
-          {searchTerm && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setSearchTerm('')}
-              className="absolute right-2 top-1/2 transform -translate-y-1/2 text-blue-300 hover:text-white"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          )}
+          </div>
         </div>
       </div>
 
       {/* Modal de Formulário (BM e Fornecedor) */}
       {showForm && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="bg-gradient-to-br from-blue-800 to-blue-900 border-blue-300/30 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <CardHeader className="border-b border-blue-300/30">
               <div className="flex justify-between items-center">
                 <CardTitle className="text-white">
@@ -947,7 +947,7 @@ const Rateios = () => {
                       id="nome_fornecedor"
                       value={novoFornecedor.nome_fornecedor}
                       onChange={(e) => setNovoFornecedor({ nome_fornecedor: e.target.value })}
-                      className="bg-white/10 border-blue-300/30 text-white"
+                      className="h-10 bg-white/5 border-blue-300/30 text-white focus:border-blue-300"
                       placeholder="Digite o nome do fornecedor"
                     />
                   </div>
@@ -956,13 +956,13 @@ const Rateios = () => {
                     <Button
                       variant="outline"
                       onClick={() => setShowForm(false)}
-                      className="border-blue-300 text-white hover:bg-white/20"
+                      className="h-10 border-blue-300 text-white hover:bg-white/20"
                     >
                       Cancelar
                     </Button>
                     <Button
                       onClick={handleCadastrarFornecedor}
-                      className="bg-purple-600 hover:bg-purple-700 text-white"
+                      className="h-10 bg-purple-600 hover:bg-purple-700 text-white"
                     >
                       <Save className="h-4 w-4 mr-2" />
                       Cadastrar Fornecedor
@@ -979,10 +979,10 @@ const Rateios = () => {
                       value={novoBM.fornecedor_id}
                       onValueChange={(value) => setNovoBM({...novoBM, fornecedor_id: value})}
                     >
-                      <SelectTrigger className="bg-white/10 border-blue-300/30 text-white">
+                      <SelectTrigger className="h-10 bg-white/5 border-blue-300/30 text-white focus:border-blue-300">
                         <SelectValue placeholder="Selecione um fornecedor" />
                       </SelectTrigger>
-                      <SelectContent className="bg-blue-800 border-blue-600 text-white">
+                      <SelectContent className="bg-gray-900 border-blue-300/30">
                         {fornecedores.map((fornecedor) => (
                           <SelectItem key={fornecedor.id} value={fornecedor.id}>
                             {fornecedor.nome_fornecedor}
@@ -1001,7 +1001,7 @@ const Rateios = () => {
                         id="numero_bm"
                         value={novoBM.numero_bm}
                         onChange={(e) => setNovoBM({...novoBM, numero_bm: e.target.value})}
-                        className="bg-white/10 border-blue-300/30 text-white"
+                        className="h-10 bg-white/5 border-blue-300/30 text-white focus:border-blue-300"
                         placeholder="Ex: BM-001"
                       />
                     </div>
@@ -1014,7 +1014,7 @@ const Rateios = () => {
                         id="valor_bm"
                         value={novoBM.valor_bm}
                         onChange={(e) => setNovoBM({...novoBM, valor_bm: e.target.value})}
-                        className="bg-white/10 border-blue-300/30 text-white"
+                        className="h-10 bg-white/5 border-blue-300/30 text-white focus:border-blue-300"
                         placeholder="0,00"
                         type="number"
                         step="0.01"
@@ -1030,10 +1030,10 @@ const Rateios = () => {
                       value={novoBM.periodo_referencia}
                       onValueChange={(value) => setNovoBM({...novoBM, periodo_referencia: value})}
                     >
-                      <SelectTrigger className="bg-white/10 border-blue-300/30 text-white">
+                      <SelectTrigger className="h-10 bg-white/5 border-blue-300/30 text-white focus:border-blue-300">
                         <SelectValue placeholder="Selecione o período" />
                       </SelectTrigger>
-                      <SelectContent className="bg-blue-800 border-blue-600 text-white">
+                      <SelectContent className="bg-gray-900 border-blue-300/30">
                         {PERIODOS_REFERENCIA.map((periodo) => (
                           <SelectItem key={periodo.label} value={periodo.label}>
                             {periodo.label}
@@ -1053,7 +1053,7 @@ const Rateios = () => {
                         type="date"
                         value={novoBM.periodo_bm_start}
                         onChange={(e) => setNovoBM({...novoBM, periodo_bm_start: e.target.value})}
-                        className="bg-white/10 border-blue-300/30 text-white"
+                        className="h-10 bg-white/5 border-blue-300/30 text-white focus:border-blue-300"
                       />
                     </div>
                     
@@ -1066,7 +1066,7 @@ const Rateios = () => {
                         type="date"
                         value={novoBM.periodo_bm_end}
                         onChange={(e) => setNovoBM({...novoBM, periodo_bm_end: e.target.value})}
-                        className="bg-white/10 border-blue-300/30 text-white"
+                        className="h-10 bg-white/5 border-blue-300/30 text-white focus:border-blue-300"
                       />
                     </div>
                   </div>
@@ -1078,13 +1078,13 @@ const Rateios = () => {
                         setShowForm(false);
                         setEditingBM(null);
                       }}
-                      className="border-blue-300 text-white hover:bg-white/20"
+                      className="h-10 border-blue-300 text-white hover:bg-white/20"
                     >
                       Cancelar
                     </Button>
                     <Button
                       onClick={editingBM ? handleAtualizarBM : handleCadastrarBM}
-                      className="bg-green-600 hover:bg-green-700 text-white"
+                      className="h-10 bg-green-600 hover:bg-green-700 text-white"
                     >
                       <Save className="h-4 w-4 mr-2" />
                       {editingBM ? 'Atualizar BM' : 'Cadastrar BM'}
@@ -1099,18 +1099,18 @@ const Rateios = () => {
 
       {/* Modal de Rateio */}
       <Dialog open={showRateioDialog} onOpenChange={setShowRateioDialog}>
-        <DialogContent className="bg-gradient-to-br from-blue-800 to-blue-900 border-blue-300/30 text-white max-w-md">
+        <DialogContent className="bg-white/10 backdrop-blur-sm border-blue-200/30 text-white max-w-md">
           <DialogHeader>
-            <DialogTitle>Realizar Rateio</DialogTitle>
+            <DialogTitle className="text-white">Realizar Rateio</DialogTitle>
           </DialogHeader>
           
           {selectedBMForRateio && (
             <div className="space-y-4">
-              <div className="bg-blue-700/30 p-3 rounded-lg">
+              <div className="bg-blue-600/20 p-3 rounded-lg">
                 <p className="text-sm text-blue-200">BM Selecionado:</p>
-                <p className="font-semibold">{selectedBMForRateio.numero_bm}</p>
-                <p className="text-sm">Valor Total: {formatarMoeda(selectedBMForRateio.valor_bm)}</p>
-                <p className="text-sm">Saldo Disponível: {formatarMoeda(calcularSaldoBM(selectedBMForRateio))}</p>
+                <p className="font-semibold text-white">{selectedBMForRateio.numero_bm}</p>
+                <p className="text-sm text-white">Valor Total: {formatarMoeda(selectedBMForRateio.valor_bm)}</p>
+                <p className="text-sm text-blue-300">Saldo Disponível: {formatarMoeda(calcularSaldoBM(selectedBMForRateio))}</p>
               </div>
               
               <div>
@@ -1121,10 +1121,10 @@ const Rateios = () => {
                   value={novoRateio.centro_resultado}
                   onValueChange={(value) => setNovoRateio({...novoRateio, centro_resultado: value})}
                 >
-                  <SelectTrigger className="bg-white/10 border-blue-300/30 text-white">
+                  <SelectTrigger className="h-10 bg-white/5 border-blue-300/30 text-white focus:border-blue-300">
                     <SelectValue placeholder="Selecione o centro" />
                   </SelectTrigger>
-                  <SelectContent className="bg-blue-800 border-blue-600 text-white">
+                  <SelectContent className="bg-gray-900 border-blue-300/30">
                     {centrosResultado.map((centro) => (
                       <SelectItem key={centro} value={centro}>
                         {centro}
@@ -1144,7 +1144,7 @@ const Rateios = () => {
                       id="porcentagem_rateio"
                       value={novoRateio.porcentagem_rateio}
                       onChange={(e) => setNovoRateio({...novoRateio, porcentagem_rateio: e.target.value})}
-                      className="bg-white/10 border-blue-300/30 text-white"
+                      className="h-10 bg-white/5 border-blue-300/30 text-white focus:border-blue-300"
                       placeholder="Ex: 25"
                       type="number"
                       step="0.01"
@@ -1152,7 +1152,7 @@ const Rateios = () => {
                     <Button
                       type="button"
                       onClick={calcularValorPorPorcentagem}
-                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                      className="h-10 bg-blue-600 hover:bg-blue-700 text-white"
                       size="sm"
                     >
                       Calcular
@@ -1169,7 +1169,7 @@ const Rateios = () => {
                       id="valor_rateado"
                       value={novoRateio.valor_rateado}
                       onChange={(e) => setNovoRateio({...novoRateio, valor_rateado: e.target.value})}
-                      className="bg-white/10 border-blue-300/30 text-white"
+                      className="h-10 bg-white/5 border-blue-300/30 text-white focus:border-blue-300"
                       placeholder="0,00"
                       type="number"
                       step="0.01"
@@ -1177,7 +1177,7 @@ const Rateios = () => {
                     <Button
                       type="button"
                       onClick={calcularPorcentagemPorValor}
-                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                      className="h-10 bg-blue-600 hover:bg-blue-700 text-white"
                       size="sm"
                     >
                       Calcular
@@ -1190,13 +1190,13 @@ const Rateios = () => {
                 <Button
                   variant="outline"
                   onClick={() => setShowRateioDialog(false)}
-                  className="border-blue-300 text-white hover:bg-white/20"
+                  className="h-10 border-blue-300 text-white hover:bg-white/20"
                 >
                   Cancelar
                 </Button>
                 <Button
                   onClick={aplicarRateio}
-                  className="bg-green-600 hover:bg-green-700 text-white"
+                  className="h-10 bg-green-600 hover:bg-green-700 text-white"
                 >
                   <Save className="h-4 w-4 mr-2" />
                   Aplicar Rateio
@@ -1207,225 +1207,230 @@ const Rateios = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Seção de BMs */}
-      <div className="px-6 space-y-6 pb-8">
-        <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
-          <CardHeader className="border-b border-blue-200/30">
-            <div className="flex justify-between items-center">
+      {/* Conteúdo Principal */}
+      <div className="flex px-6 pb-6 gap-6">
+        {/* Seção de BMs */}
+        <div className="flex-1">
+          <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30 h-full">
+            <CardHeader className="border-b border-blue-200/30">
+              <div className="flex justify-between items-center">
+                <CardTitle className="text-white flex items-center space-x-2">
+                  <FileText className="h-5 w-5" />
+                  <span>Boletins de Medição (BMs)</span>
+                  <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-300/30">
+                    {bmsFiltrados.length} registros
+                  </Badge>
+                </CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader className="bg-blue-600/20 backdrop-blur-sm">
+                    <TableRow>
+                      <TableHead className="text-blue-200 text-xs py-3">Número BM</TableHead>
+                      <TableHead className="text-blue-200 text-xs py-3">Fornecedor</TableHead>
+                      <TableHead className="text-blue-200 text-xs py-3">Valor</TableHead>
+                      <TableHead className="text-blue-200 text-xs py-3">Período Referência</TableHead>
+                      <TableHead className="text-blue-200 text-xs py-3">Status</TableHead>
+                      <TableHead className="text-blue-200 text-xs py-3 text-right">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {loading ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-8">
+                          <div className="flex justify-center">
+                            <div className="w-8 h-8 border-4 border-blue-200 border-t-white rounded-full animate-spin"></div>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ) : bmsFiltrados.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-12">
+                          <p className="text-white">Nenhum BM encontrado com os filtros atuais</p>
+                          <Button 
+                            onClick={() => {
+                              setFormType('bm');
+                              setShowForm(true);
+                            }}
+                            className="bg-orange-500 hover:bg-orange-600 text-white mt-4"
+                          >
+                            <Plus className="h-4 w-4 mr-2" />
+                            Cadastrar Primeiro BM
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      bmsFiltrados.map((bm) => {
+                        const saldo = calcularSaldoBM(bm);
+                        const porcentagem = calcularPorcentagemRateada(bm);
+                        
+                        return (
+                          <TableRow key={bm.id} className="hover:bg-white/5 border-b border-blue-200/10">
+                            <TableCell className="font-medium text-white py-3">
+                              {bm.numero_bm}
+                            </TableCell>
+                            <TableCell className="py-3">
+                              <div className="text-white">{bm.fornecedor_nome || 'N/A'}</div>
+                            </TableCell>
+                            <TableCell className="py-3">
+                              <div className="text-white font-medium">
+                                {formatarMoeda(bm.valor_bm)}
+                              </div>
+                              {saldo < bm.valor_bm && (
+                                <div className="text-xs text-blue-300">
+                                  Rateado: {formatarMoeda(bm.valor_bm - saldo)}
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell className="py-3">
+                              <div className="text-sm text-white">
+                                {formatarData(bm.periodo_referencia_start)} a {formatarData(bm.periodo_referencia_end)}
+                              </div>
+                            </TableCell>
+                            <TableCell className="py-3">
+                              {saldo === 0 ? (
+                                <Badge className="bg-green-500/20 text-green-300 border-green-300/30 text-xs">
+                                  <CheckCircle className="h-3 w-3 mr-1" />
+                                  Total Rateado
+                                </Badge>
+                              ) : porcentagem > 0 ? (
+                                <Badge className="bg-blue-500/20 text-blue-300 border-blue-300/30 text-xs">
+                                  <AlertCircle className="h-3 w-3 mr-1" />
+                                  {porcentagem.toFixed(0)}% Rateado
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="bg-yellow-500/20 text-yellow-300 border-yellow-300/30 text-xs">
+                                  Pendente
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="py-3 text-right space-x-2">
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => abrirModalRateio(bm)}
+                                className="bg-amber-500/20 text-amber-300 border-amber-300/30 hover:bg-amber-500/30 hover:text-white"
+                                disabled={saldo <= 0}
+                              >
+                                <Percent className="h-3 w-3 mr-1" />
+                                Ratear
+                              </Button>
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => iniciarEdicaoBM(bm)}
+                                className="bg-blue-500/20 text-blue-300 border-blue-300/30 hover:bg-blue-500/30 hover:text-white"
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => gerarPDFRateioBM(bm)}
+                                className="bg-green-500/20 text-green-300 border-green-300/30 hover:bg-green-500/30 hover:text-white"
+                              >
+                                <Download className="h-3 w-3" />
+                              </Button>
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => handleExcluirBM(bm.id)}
+                                className="bg-red-500/20 text-red-300 border-red-300/30 hover:bg-red-500/30 hover:text-white"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Seção de Rateios */}
+        <div className="flex-1">
+          <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30 h-full">
+            <CardHeader className="border-b border-blue-200/30">
               <CardTitle className="text-white flex items-center space-x-2">
-                <FileText className="h-5 w-5" />
-                <span>Boletins de Medição (BMs)</span>
-                <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-300/30">
-                  {bmsFiltrados.length} registros
+                <Percent className="h-5 w-5" />
+                <span>Rateios Realizados</span>
+                <Badge variant="outline" className="bg-amber-500/20 text-amber-300 border-amber-300/30">
+                  {rateiosFiltrados.length} registros
                 </Badge>
               </CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader className="bg-blue-500/10">
-                  <TableRow>
-                    <TableHead className="text-blue-200">Número BM</TableHead>
-                    <TableHead className="text-blue-200">Fornecedor</TableHead>
-                    <TableHead className="text-blue-200">Valor</TableHead>
-                    <TableHead className="text-blue-200">Período Referência</TableHead>
-                    <TableHead className="text-blue-200">Status</TableHead>
-                    <TableHead className="text-blue-200 text-right">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading ? (
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader className="bg-blue-600/20 backdrop-blur-sm">
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8">
-                        <div className="flex justify-center">
-                          <div className="w-8 h-8 border-4 border-blue-200 border-t-white rounded-full animate-spin"></div>
-                        </div>
-                      </TableCell>
+                      <TableHead className="text-blue-200 text-xs py-3">BM</TableHead>
+                      <TableHead className="text-blue-200 text-xs py-3">Fornecedor</TableHead>
+                      <TableHead className="text-blue-200 text-xs py-3">Centro Resultado</TableHead>
+                      <TableHead className="text-blue-200 text-xs py-3">Valor Rateado</TableHead>
+                      <TableHead className="text-blue-200 text-xs py-3">Porcentagem</TableHead>
+                      <TableHead className="text-blue-200 text-xs py-3">Data</TableHead>
+                      <TableHead className="text-blue-200 text-xs py-3 text-right">Ações</TableHead>
                     </TableRow>
-                  ) : bmsFiltrados.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-12">
-                        <p className="text-white">Nenhum BM encontrado com os filtros atuais</p>
-                        <Button 
-                          onClick={() => {
-                            setFormType('bm');
-                            setShowForm(true);
-                          }}
-                          className="bg-amber-600 hover:bg-amber-700 text-white mt-4"
-                        >
-                          <Plus className="h-4 w-4 mr-2" />
-                          Cadastrar Primeiro BM
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    bmsFiltrados.map((bm) => {
-                      const saldo = calcularSaldoBM(bm);
-                      const porcentagem = calcularPorcentagemRateada(bm);
-                      
-                      return (
-                        <TableRow key={bm.id} className="hover:bg-white/5">
-                          <TableCell className="font-medium text-white">
-                            {bm.numero_bm}
+                  </TableHeader>
+                  <TableBody>
+                    {rateiosFiltrados.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-12">
+                          <p className="text-white">Nenhum rateio encontrado com os filtros atuais</p>
+                          <p className="text-blue-300 text-sm mt-2">
+                            Selecione um BM e clique em "Ratear" para criar o primeiro rateio
+                          </p>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      rateiosFiltrados.map((rateio) => (
+                        <TableRow key={rateio.id} className="hover:bg-white/5 border-b border-blue-200/10">
+                          <TableCell className="font-medium text-white py-3">
+                            {rateio.bm_numero || 'N/A'}
                           </TableCell>
-                          <TableCell>
-                            <div className="text-white">{bm.fornecedor_nome || 'N/A'}</div>
+                          <TableCell className="text-white py-3">
+                            {rateio.fornecedor_nome || 'N/A'}
                           </TableCell>
-                          <TableCell>
-                            <div className="text-white font-medium">
-                              {formatarMoeda(bm.valor_bm)}
-                            </div>
-                            {saldo < bm.valor_bm && (
-                              <div className="text-xs text-blue-300">
-                                Rateado: {formatarMoeda(bm.valor_bm - saldo)}
-                              </div>
-                            )}
+                          <TableCell className="text-white py-3">
+                            {rateio.centro_resultado}
                           </TableCell>
-                          <TableCell>
-                            <div className="text-sm text-white">
-                              {formatarData(bm.periodo_referencia_start)} a {formatarData(bm.periodo_referencia_end)}
-                            </div>
+                          <TableCell className="text-white font-medium py-3">
+                            {formatarMoeda(rateio.valor_rateado)}
                           </TableCell>
-                          <TableCell>
-                            {saldo === 0 ? (
-                              <Badge className="bg-green-500/20 text-green-300">
-                                <CheckCircle className="h-3 w-3 mr-1" />
-                                Total Rateado
-                              </Badge>
-                            ) : porcentagem > 0 ? (
-                              <Badge className="bg-blue-500/20 text-blue-300">
-                                <AlertCircle className="h-3 w-3 mr-1" />
-                                {porcentagem.toFixed(0)}% Rateado
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="text-yellow-300">
-                                Pendente
-                              </Badge>
-                            )}
+                          <TableCell className="py-3">
+                            <Badge className="bg-blue-500/20 text-blue-300 border-blue-300/30 text-xs">
+                              {rateio.porcentagem_rateio.toFixed(2)}%
+                            </Badge>
                           </TableCell>
-                          <TableCell className="text-right space-x-2">
+                          <TableCell className="text-white text-sm py-3">
+                            {formatarData(rateio.created_at)}
+                          </TableCell>
+                          <TableCell className="py-3 text-right">
                             <Button 
                               variant="outline" 
                               size="sm"
-                              onClick={() => abrirModalRateio(bm)}
-                              className="border-amber-300 text-gray-800 hover:bg-amber-500/20 bg-amber-100/80 hover:text-gray-900"
-                              disabled={saldo <= 0}
-                            >
-                              <Percent className="h-3 w-3 mr-1" />
-                              Ratear
-                            </Button>
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => iniciarEdicaoBM(bm)}
-                              className="border-blue-300 text-gray-800 hover:bg-blue-500/20 bg-blue-100/80 hover:text-gray-900"
-                            >
-                              <Pencil className="h-3 w-3" />
-                            </Button>
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => gerarPDFRateioBM(bm)}
-                              className="border-green-300 text-gray-800 hover:bg-green-500/20 bg-green-100/80 hover:text-gray-900"
-                            >
-                              <Download className="h-3 w-3" />
-                            </Button>
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => handleExcluirBM(bm.id)}
-                              className="border-red-300 text-gray-800 hover:bg-red-500/20 bg-red-100/80 hover:text-gray-900"
+                              onClick={() => handleExcluirRateio(rateio.id)}
+                              className="bg-red-500/20 text-red-300 border-red-300/30 hover:bg-red-500/30 hover:text-white"
                             >
                               <Trash2 className="h-3 w-3" />
                             </Button>
                           </TableCell>
                         </TableRow>
-                      );
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Seção de Rateios */}
-        <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
-          <CardHeader className="border-b border-blue-200/30">
-            <CardTitle className="text-white flex items-center space-x-2">
-              <Percent className="h-5 w-5" />
-              <span>Rateios Realizados</span>
-              <Badge variant="outline" className="bg-amber-500/20 text-amber-300 border-amber-300/30">
-                {rateiosFiltrados.length} registros
-              </Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader className="bg-blue-500/10">
-                  <TableRow>
-                    <TableHead className="text-blue-200">BM</TableHead>
-                    <TableHead className="text-blue-200">Fornecedor</TableHead>
-                    <TableHead className="text-blue-200">Centro Resultado</TableHead>
-                    <TableHead className="text-blue-200">Valor Rateado</TableHead>
-                    <TableHead className="text-blue-200">Porcentagem</TableHead>
-                    <TableHead className="text-blue-200">Data</TableHead>
-                    <TableHead className="text-blue-200 text-right">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rateiosFiltrados.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-12">
-                        <p className="text-white">Nenhum rateio encontrado com os filtros atuais</p>
-                        <p className="text-blue-300 text-sm mt-2">
-                          Selecione um BM e clique em "Ratear" para criar o primeiro rateio
-                        </p>
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    rateiosFiltrados.map((rateio) => (
-                      <TableRow key={rateio.id} className="hover:bg-white/5">
-                        <TableCell className="font-medium text-white">
-                          {rateio.bm_numero || 'N/A'}
-                        </TableCell>
-                        <TableCell className="text-white">
-                          {rateio.fornecedor_nome || 'N/A'}
-                        </TableCell>
-                        <TableCell className="text-white">
-                          {rateio.centro_resultado}
-                        </TableCell>
-                        <TableCell className="text-white font-medium">
-                          {formatarMoeda(rateio.valor_rateado)}
-                        </TableCell>
-                        <TableCell>
-                          <Badge className="bg-blue-500/20 text-blue-300">
-                            {rateio.porcentagem_rateio.toFixed(2)}%
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-white text-sm">
-                          {formatarData(rateio.created_at)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => handleExcluirRateio(rateio.id)}
-                            className="border-red-300 text-gray-800 hover:bg-red-500/20 bg-red-100/80 hover:text-gray-900"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );

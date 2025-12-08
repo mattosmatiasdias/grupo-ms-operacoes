@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { BarChart3, TrendingUp, Download, Filter, Calendar, PieChart, ArrowLeft, Ship, Package, Clock, Users } from 'lucide-react';
+import { BarChart3, TrendingUp, Download, Filter, Calendar, PieChart, ArrowLeft, Clock, Users } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -16,48 +16,9 @@ interface ChartData {
   porcentagem: number;
 }
 
-// Interface para dados dos navios
-interface NavioData {
-  id: string;
-  nome_navio: string;
-  carga: string;
-  berco: string;
-  quantidade_prevista: number;
-  cbs_total: number;
-  inicio_operacao: string;
-  final_operacao: string;
-  media_cb: number;
-  concluido: boolean;
-  horas_totais: number;
-  quantidade_equipamentos: number;
-  diaria: number;
-}
-
 const Visuais = () => {
   const navigate = useNavigate();
   
-  // Função para corrigir o fuso horário - converte para o fuso local
-  const corrigirFusoHorarioData = (dataString: string) => {
-    try {
-      // Se a data já está no formato YYYY-MM-DD, apenas retorna
-      if (dataString.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        return dataString;
-      }
-      
-      // Se vem como string completa, extrai a parte da data
-      const data = new Date(dataString);
-      
-      // Corrige o fuso horário adicionando o offset
-      const offset = data.getTimezoneOffset();
-      data.setMinutes(data.getMinutes() - offset);
-      
-      return data.toISOString().split('T')[0];
-    } catch (error) {
-      console.error('Erro ao corrigir fuso horário:', error);
-      return dataString;
-    }
-  };
-
   // Função para formatar data no formato brasileiro
   const formatarDataBR = (dataString: string) => {
     try {
@@ -69,224 +30,154 @@ const Visuais = () => {
     }
   };
 
-  // Função para formatar data e hora
-  const formatarDataHoraBR = (dataString: string) => {
-    try {
-      const data = new Date(dataString);
-      return data.toLocaleString('pt-BR');
-    } catch (error) {
-      console.error('Erro ao formatar data/hora:', error);
-      return dataString;
+  // Função para obter o período de 16 a 15 do mês seguinte com base na data atual
+  const getPeriodoPadrao = () => {
+    const hoje = new Date();
+    const anoAtual = hoje.getFullYear();
+    const mesAtual = hoje.getMonth() + 1; // getMonth() retorna 0-11
+    
+    let dataInicial, dataFinal;
+    
+    // Se o dia atual é 16 ou maior, o período atual é 16 do mês atual a 15 do próximo mês
+    if (hoje.getDate() >= 16) {
+      dataInicial = `${anoAtual}-${String(mesAtual).padStart(2, '0')}-16`;
+      
+      // Calcular próxima data: 15 do próximo mês
+      let proximoMes = mesAtual + 1;
+      let proximoAno = anoAtual;
+      if (proximoMes > 12) {
+        proximoMes = 1;
+        proximoAno = anoAtual + 1;
+      }
+      dataFinal = `${proximoAno}-${String(proximoMes).padStart(2, '0')}-15`;
+    } 
+    // Se o dia atual é 15 ou menor, o período atual é 16 do mês anterior a 15 do mês atual
+    else {
+      let mesAnterior = mesAtual - 1;
+      let anoAnterior = anoAtual;
+      if (mesAnterior < 1) {
+        mesAnterior = 12;
+        anoAnterior = anoAtual - 1;
+      }
+      dataInicial = `${anoAnterior}-${String(mesAnterior).padStart(2, '0')}-16`;
+      dataFinal = `${anoAtual}-${String(mesAtual).padStart(2, '0')}-15`;
     }
+    
+    return { dataInicial, dataFinal };
   };
 
-  // Buscar a última data disponível no banco de dados
-  const buscarUltimaData = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('registro_operacoes')
-        .select('data')
-        .order('data', { ascending: false })
-        .limit(1)
-        .single();
-
-      if (error) throw error;
-
-      if (data?.data) {
-        return corrigirFusoHorarioData(data.data);
+  // Função para obter períodos disponíveis para seleção (últimos 6 períodos)
+  const getPeriodosDisponiveis = () => {
+    const periodos = [];
+    const hoje = new Date();
+    const anoAtual = hoje.getFullYear();
+    const mesAtual = hoje.getMonth() + 1;
+    
+    // Gerar últimos 6 períodos (incluindo o atual)
+    for (let i = 0; i < 6; i++) {
+      let mes = mesAtual - i;
+      let ano = anoAtual;
+      
+      while (mes < 1) {
+        mes += 12;
+        ano -= 1;
       }
       
-      return new Date().toISOString().split('T')[0];
-    } catch (error) {
-      console.error('Erro ao buscar última data:', error);
-      return new Date().toISOString().split('T')[0];
+      const dataInicial = `${ano}-${String(mes).padStart(2, '0')}-16`;
+      
+      // Calcular data final (15 do próximo mês)
+      let proximoMes = mes + 1;
+      let proximoAno = ano;
+      if (proximoMes > 12) {
+        proximoMes = 1;
+        proximoAno = ano + 1;
+      }
+      const dataFinal = `${proximoAno}-${String(proximoMes).padStart(2, '0')}-15`;
+      
+      periodos.push({
+        value: `${dataInicial}_${dataFinal}`,
+        label: `${formatarDataBR(dataInicial)} a ${formatarDataBR(dataFinal)}`
+      });
     }
-  };
-
-  // Obter data de 7 dias atrás
-  const getDataInicialPadrao = async () => {
-    try {
-      const dataAtual = new Date();
-      const seteDiasAtras = new Date(dataAtual);
-      seteDiasAtras.setDate(dataAtual.getDate() - 7);
-      return corrigirFusoHorarioData(seteDiasAtras.toISOString());
-    } catch (error) {
-      console.error('Erro ao obter data inicial:', error);
-      const dataAtual = new Date();
-      dataAtual.setDate(dataAtual.getDate() - 7);
-      return dataAtual.toISOString().split('T')[0];
-    }
+    
+    return periodos;
   };
 
   const [filtros, setFiltros] = useState({
-    dataInicial: '',
-    dataFinal: '',
+    periodo: '', // Formato: "YYYY-MM-DD_YYYY-MM-DD"
     local: 'todos'
   });
 
-  const [filtrosNavios, setFiltrosNavios] = useState({
-    status: 'todos',
-    berco: 'todos',
-    carga: 'todos'
-  });
-
   const [dadosGrafico, setDadosGrafico] = useState<ChartData[]>([]);
-  const [dadosNavios, setDadosNavios] = useState<NavioData[]>([]);
   const [carregando, setCarregando] = useState(false);
-  const [carregandoNavios, setCarregandoNavios] = useState(false);
   const [inicializando, setInicializando] = useState(true);
+  const [periodos, setPeriodos] = useState<{value: string, label: string}[]>([]);
 
   // Locais disponíveis para filtro
   const locais = [
     { value: 'todos', label: 'Todos os Locais' },
     { value: 'HYDRO', label: 'HYDRO' },
-    { value: 'NAVIO', label: 'NAVIO' },
     { value: 'ALBRAS', label: 'ALBRAS' },
-    { value: 'SANTOS BRASIL', label: 'SANTOS BRASIL' }
+    { value: 'SANTOS BRASIL', label: 'SANTOS BRASIL' },
+    { value: 'NÃO INFORMADO', label: 'Não Informado' }
   ];
 
-  // Filtros para navios
-  const statusNavios = [
-    { value: 'todos', label: 'Todos os Status' },
-    { value: 'ativo', label: 'Em Operação' },
-    { value: 'concluido', label: 'Concluídos' }
-  ];
+  // Inicializar períodos quando o componente montar
+  useEffect(() => {
+    const inicializar = async () => {
+      setInicializando(true);
+      try {
+        // Obter períodos disponíveis
+        const periodosDisponiveis = getPeriodosDisponiveis();
+        setPeriodos(periodosDisponiveis);
+        
+        // Definir período atual como padrão
+        const periodoPadrao = getPeriodoPadrao();
+        const periodoAtual = `${periodoPadrao.dataInicial}_${periodoPadrao.dataFinal}`;
+        
+        setFiltros({
+          periodo: periodoAtual,
+          local: 'todos'
+        });
 
-  const bercos = [
-    { value: 'todos', label: 'Todos os Berços' },
-    { value: 'BERÇO 1', label: 'BERÇO 1' },
-    { value: 'BERÇO 2', label: 'BERÇO 2' },
-    { value: 'BERÇO 3', label: 'BERÇO 3' }
-  ];
-
-  const cargas = [
-    { value: 'todos', label: 'Todos os Tipos' },
-    { value: 'ALUMINA', label: 'ALUMINA' },
-    { value: 'CARVÃO', label: 'CARVÃO' },
-    { value: 'COQUE', label: 'COQUE' },
-    { value: 'BAUXITA', label: 'BAUXITA' }
-  ];
-
-  // Função para buscar dados dos navios
-  const buscarDadosNavios = async () => {
-    setCarregandoNavios(true);
-    
-    try {
-      console.log('🚢 Buscando dados dos navios...');
-      
-      let queryNavios = supabase
-        .from('navios')
-        .select('*')
-        .order('inicio_operacao', { ascending: false });
-
-      // Aplicar filtro de status
-      if (filtrosNavios.status !== 'todos') {
-        queryNavios = queryNavios.eq('concluido', filtrosNavios.status === 'concluido');
+        console.log('📅 Período inicializado:', periodoAtual);
+      } catch (error) {
+        console.error('Erro ao inicializar:', error);
+      } finally {
+        setInicializando(false);
       }
+    };
 
-      // Aplicar filtro de berço
-      if (filtrosNavios.berco !== 'todos') {
-        queryNavios = queryNavios.eq('berco', filtrosNavios.berco);
-      }
-
-      // Aplicar filtro de carga
-      if (filtrosNavios.carga !== 'todos') {
-        queryNavios = queryNavios.eq('carga', filtrosNavios.carga);
-      }
-
-      const { data: navios, error: errorNavios } = await queryNavios;
-
-      if (errorNavios) {
-        console.error('❌ Erro ao buscar navios:', errorNavios);
-        throw new Error(`Erro ao buscar navios: ${errorNavios.message}`);
-      }
-
-      console.log('✅ Navios encontrados:', navios?.length || 0);
-
-      if (!navios || navios.length === 0) {
-        setDadosNavios([]);
-        return;
-      }
-
-      // Para cada navio, buscar operações relacionadas e calcular totais
-      const naviosComTotais = await Promise.all(
-        navios.map(async (navio) => {
-          // Buscar operações deste navio
-          const { data: operacoes, error: errorOperacoes } = await supabase
-            .from('registro_operacoes')
-            .select(`
-              id,
-              equipamentos (
-                horas_trabalhadas
-              )
-            `)
-            .eq('navio_id', navio.id);
-
-          if (errorOperacoes) {
-            console.error(`❌ Erro ao buscar operações do navio ${navio.nome_navio}:`, errorOperacoes);
-          }
-
-          // Calcular totais
-          let horasTotais = 0;
-          let quantidadeEquipamentos = 0;
-
-          if (operacoes) {
-            operacoes.forEach(operacao => {
-              if (operacao.equipamentos && operacao.equipamentos.length > 0) {
-                operacao.equipamentos.forEach(equipamento => {
-                  horasTotais += Number(equipamento.horas_trabalhadas) || 0;
-                  quantidadeEquipamentos += 1;
-                });
-              }
-            });
-          }
-
-          // Calcular diária (horas totais / quantidade de equipamentos)
-          const diaria = quantidadeEquipamentos > 0 ? horasTotais / quantidadeEquipamentos : 0;
-
-          return {
-            ...navio,
-            horas_totais: parseFloat(horasTotais.toFixed(1)),
-            quantidade_equipamentos: quantidadeEquipamentos,
-            diaria: parseFloat(diaria.toFixed(1))
-          };
-        })
-      );
-
-      console.log('📊 Navios processados:', naviosComTotais);
-      setDadosNavios(naviosComTotais);
-
-    } catch (error: any) {
-      console.error('❌ Erro ao processar dados dos navios:', error);
-      setDadosNavios([]);
-    } finally {
-      setCarregandoNavios(false);
-    }
-  };
+    inicializar();
+  }, []);
 
   // Função para buscar dados reais com JOIN entre as tabelas
   const buscarDadosEquipamentos = async () => {
     setCarregando(true);
     
     try {
-      console.log('🔍 Buscando dados com JOIN entre tabelas...');
+      if (!filtros.periodo) {
+        console.log('❌ Período não selecionado');
+        setDadosGrafico([]);
+        return;
+      }
+
+      // Extrair datas do período selecionado
+      const [dataInicial, dataFinal] = filtros.periodo.split('_');
+      
+      console.log('🔍 Buscando dados para período:', {
+        dataInicial: formatarDataBR(dataInicial),
+        dataFinal: formatarDataBR(dataFinal),
+        local: filtros.local
+      });
 
       // Primeiro, buscar as operações que correspondem ao filtro de data
       let queryOperacoes = supabase
         .from('registro_operacoes')
         .select('id, op, data')
+        .gte('data', dataInicial)
+        .lte('data', dataFinal)
         .order('data', { ascending: false });
-
-      // Aplicar filtro de data na tabela registro_operacoes
-      if (filtros.dataInicial) {
-        const dataInicialCorrigida = corrigirFusoHorarioData(filtros.dataInicial);
-        queryOperacoes = queryOperacoes.gte('data', dataInicialCorrigida);
-      }
-
-      if (filtros.dataFinal) {
-        const dataFinalCorrigida = corrigirFusoHorarioData(filtros.dataFinal);
-        queryOperacoes = queryOperacoes.lte('data', dataFinalCorrigida);
-      }
 
       const { data: operacoes, error: errorOperacoes } = await queryOperacoes;
 
@@ -298,7 +189,7 @@ const Visuais = () => {
       console.log('✅ Operações encontradas:', operacoes?.length || 0);
 
       if (!operacoes || operacoes.length === 0) {
-        console.log('📭 Nenhuma operação encontrada para os filtros de data');
+        console.log('📭 Nenhuma operação encontrada para o período selecionado');
         setDadosGrafico([]);
         return;
       }
@@ -367,6 +258,7 @@ const Visuais = () => {
 
       const dadosOrdenados = dadosComPorcentagem.sort((a, b) => b.horas - a.horas);
       
+      console.log('📊 Dados processados:', dadosOrdenados);
       setDadosGrafico(dadosOrdenados);
 
     } catch (error: any) {
@@ -377,45 +269,12 @@ const Visuais = () => {
     }
   };
 
-  // Inicializar datas padrão quando o componente montar
+  // Buscar dados quando filtros mudarem
   useEffect(() => {
-    const inicializarDatas = async () => {
-      setInicializando(true);
-      try {
-        const dataFinal = await buscarUltimaData();
-        const dataInicial = await getDataInicialPadrao();
-        
-        setFiltros({
-          dataInicial,
-          dataFinal,
-          local: 'todos'
-        });
-
-        console.log('📅 Datas inicializadas:', { dataInicial, dataFinal });
-      } catch (error) {
-        console.error('Erro ao inicializar datas:', error);
-      } finally {
-        setInicializando(false);
-      }
-    };
-
-    inicializarDatas();
-  }, []);
-
-  // Buscar dados quando as datas forem inicializadas ou filtros mudarem
-  useEffect(() => {
-    if (!inicializando && filtros.dataInicial && filtros.dataFinal) {
+    if (!inicializando && filtros.periodo) {
       buscarDadosEquipamentos();
-      buscarDadosNavios();
     }
   }, [filtros, inicializando]);
-
-  // Buscar dados dos navios quando filtros de navios mudarem
-  useEffect(() => {
-    if (!inicializando) {
-      buscarDadosNavios();
-    }
-  }, [filtrosNavios]);
 
   // Função para aplicar filtros
   const aplicarFiltros = () => {
@@ -423,23 +282,13 @@ const Visuais = () => {
   };
 
   // Função para limpar filtros
-  const limparFiltros = async () => {
-    const dataFinal = await buscarUltimaData();
-    const dataInicial = await getDataInicialPadrao();
+  const limparFiltros = () => {
+    const periodoPadrao = getPeriodoPadrao();
+    const periodoAtual = `${periodoPadrao.dataInicial}_${periodoPadrao.dataFinal}`;
     
     setFiltros({
-      dataInicial,
-      dataFinal,
+      periodo: periodoAtual,
       local: 'todos'
-    });
-  };
-
-  // Função para limpar filtros de navios
-  const limparFiltrosNavios = () => {
-    setFiltrosNavios({
-      status: 'todos',
-      berco: 'todos',
-      carga: 'todos'
     });
   };
 
@@ -465,13 +314,6 @@ const Visuais = () => {
     horas: acc.horas + item.horas,
     quantidade: acc.quantidade + item.quantidade
   }), { horas: 0, quantidade: 0 });
-
-  // Calcular totais dos navios
-  const totaisNavios = dadosNavios.reduce((acc, navio) => ({
-    horas: acc.horas + navio.horas_totais,
-    equipamentos: acc.equipamentos + navio.quantidade_equipamentos,
-    navios: acc.navios + 1
-  }), { horas: 0, equipamentos: 0, navios: 0 });
 
   if (inicializando) {
     return (
@@ -500,9 +342,9 @@ const Visuais = () => {
               Voltar
             </Button>
             <div>
-              <h1 className="text-3xl font-bold text-white mb-2">Visuais e Dashboard</h1>
+              <h1 className="text-3xl font-bold text-white mb-2">Dashboard de Operações</h1>
               <p className="text-blue-200">
-                Horas trabalhadas por local e informações detalhadas dos navios
+                Análise de horas trabalhadas por local - Período: 16 a 15 do mês seguinte
               </p>
             </div>
           </div>
@@ -520,54 +362,46 @@ const Visuais = () => {
         <CardHeader>
           <CardTitle className="text-white flex items-center gap-2">
             <Filter className="h-5 w-5" />
-            Filtros - Operações e Equipamentos
+            Filtros - Período e Local
           </CardTitle>
           <CardDescription className="text-blue-200">
-            Filtre as horas trabalhadas por data da operação
-            {filtros.dataInicial && filtros.dataFinal && (
-              <span className="block text-orange-300 mt-1">
-                Período: {formatarDataBR(filtros.dataInicial)} até {formatarDataBR(filtros.dataFinal)}
-                {dadosGrafico.length > 0 && (
-                  <span className="text-green-300 ml-2">
-                    • {totais.quantidade} equipamentos • {totais.horas.toFixed(1)} horas totais
-                  </span>
-                )}
-              </span>
-            )}
+            Selecione o período (16 a 15) e local para análise das horas trabalhadas
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {/* Data Inicial */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Período */}
             <div className="space-y-2">
-              <Label htmlFor="dataInicial" className="text-white">Data Inicial</Label>
-              <Input
-                id="dataInicial"
-                type="date"
-                value={filtros.dataInicial}
-                onChange={(e) => setFiltros({ ...filtros, dataInicial: e.target.value })}
-                className="bg-white/5 border-blue-300/30 text-white"
-                max={filtros.dataFinal}
-              />
-            </div>
-
-            {/* Data Final */}
-            <div className="space-y-2">
-              <Label htmlFor="dataFinal" className="text-white">Data Final</Label>
-              <Input
-                id="dataFinal"
-                type="date"
-                value={filtros.dataFinal}
-                onChange={(e) => setFiltros({ ...filtros, dataFinal: e.target.value })}
-                className="bg-white/5 border-blue-300/30 text-white"
-                min={filtros.dataInicial}
-              />
+              <Label htmlFor="periodo" className="text-white">Período (16 a 15)</Label>
+              <Select 
+                value={filtros.periodo} 
+                onValueChange={(value) => setFiltros({ ...filtros, periodo: value })}
+              >
+                <SelectTrigger className="bg-white/5 border-blue-300/30 text-white">
+                  <SelectValue placeholder="Selecione o período" />
+                </SelectTrigger>
+                <SelectContent>
+                  {periodos.map((periodo) => (
+                    <SelectItem key={periodo.value} value={periodo.value}>
+                      {periodo.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {filtros.periodo && (
+                <p className="text-orange-300 text-xs mt-1">
+                  Período selecionado
+                </p>
+              )}
             </div>
 
             {/* Local */}
             <div className="space-y-2">
               <Label htmlFor="local" className="text-white">Local</Label>
-              <Select value={filtros.local} onValueChange={(value) => setFiltros({ ...filtros, local: value })}>
+              <Select 
+                value={filtros.local} 
+                onValueChange={(value) => setFiltros({ ...filtros, local: value })}
+              >
                 <SelectTrigger className="bg-white/5 border-blue-300/30 text-white">
                   <SelectValue placeholder="Selecione o local" />
                 </SelectTrigger>
@@ -586,7 +420,7 @@ const Visuais = () => {
               <Button 
                 onClick={aplicarFiltros}
                 className="bg-orange-500 hover:bg-orange-600 text-white flex-1"
-                disabled={carregando}
+                disabled={carregando || !filtros.periodo}
               >
                 <Filter className="h-4 w-4 mr-2" />
                 {carregando ? 'Aplicando...' : 'Aplicar Filtros'}
@@ -605,7 +439,7 @@ const Visuais = () => {
       </Card>
 
       {/* Cards de Métricas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30 text-white">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -627,7 +461,7 @@ const Visuais = () => {
               <div>
                 <p className="text-blue-200 text-sm">Total Equipamentos</p>
                 <p className="text-3xl font-bold">{totais.quantidade}</p>
-                <p className="text-blue-200 text-xs">Registros filtrados</p>
+                <p className="text-blue-200 text-xs">Registros no período</p>
               </div>
               <div className="bg-green-500/20 p-3 rounded-xl">
                 <TrendingUp className="h-6 w-6 text-green-300" />
@@ -640,31 +474,14 @@ const Visuais = () => {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-blue-200 text-sm">Navios em Operação</p>
-                <p className="text-3xl font-bold">
-                  {dadosNavios.filter(n => !n.concluido).length}
-                </p>
-                <p className="text-blue-200 text-xs">Ativos no sistema</p>
-              </div>
-              <div className="bg-purple-500/20 p-3 rounded-xl">
-                <Ship className="h-6 w-6 text-purple-300" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white/10 backdrop-blur-sm border-orange-200/30 text-white">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
                 <p className="text-blue-200 text-sm">Média por Equipamento</p>
                 <p className="text-3xl font-bold">
                   {totais.quantidade > 0 ? (totais.horas / totais.quantidade).toFixed(1) : '0'}h
                 </p>
                 <p className="text-blue-200 text-xs">Horas por equipamento</p>
               </div>
-              <div className="bg-orange-500/20 p-3 rounded-xl">
-                <PieChart className="h-6 w-6 text-orange-300" />
+              <div className="bg-purple-500/20 p-3 rounded-xl">
+                <PieChart className="h-6 w-6 text-purple-300" />
               </div>
             </div>
           </CardContent>
@@ -676,24 +493,40 @@ const Visuais = () => {
         <CardHeader>
           <CardTitle className="text-white flex items-center gap-2">
             <PieChart className="h-5 w-5" />
-            Horas Trabalhadas - Operações
+            Distribuição de Horas Trabalhadas
             {carregando && (
               <span className="text-orange-400 text-sm font-normal">(Atualizando...)</span>
             )}
           </CardTitle>
           <CardDescription className="text-blue-200">
-            Distribuição das horas trabalhadas por local (filtrado por data da operação)
-            {totais.horas > 0 && (
-              <span className="text-green-300 ml-2">
-                Soma total: {totais.horas.toFixed(1)} horas
-              </span>
+            {filtros.periodo && (
+              <>
+                Período: {formatarDataBR(filtros.periodo.split('_')[0])} a {formatarDataBR(filtros.periodo.split('_')[1])}
+                {totais.horas > 0 && (
+                  <span className="text-green-300 ml-2">
+                    • {totais.quantidade} equipamentos • {totais.horas.toFixed(1)} horas totais
+                  </span>
+                )}
+              </>
             )}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {carregando ? (
+          {!filtros.periodo ? (
             <div className="flex justify-center items-center h-64">
-              <div className="text-white animate-pulse">Carregando dados das operações...</div>
+              <div className="text-white text-center">
+                <p>Selecione um período para visualizar os dados</p>
+                <p className="text-sm text-blue-200 mt-2">
+                  Os períodos seguem o padrão de 16 a 15 do mês seguinte
+                </p>
+              </div>
+            </div>
+          ) : carregando ? (
+            <div className="flex justify-center items-center h-64">
+              <div className="text-center">
+                <div className="w-12 h-12 border-4 border-blue-200 border-t-white rounded-full animate-spin mx-auto mb-4"></div>
+                <p className="text-white">Carregando dados das operações...</p>
+              </div>
             </div>
           ) : dadosGrafico.length === 0 ? (
             <div className="flex justify-center items-center h-64">
@@ -766,10 +599,12 @@ const Visuais = () => {
                 <div className="border-t border-white/20 pt-4">
                   <div className="grid grid-cols-2 gap-4 text-center">
                     <div className="bg-white/5 rounded-lg p-3">
+                      <Clock className="h-4 w-4 text-blue-300 mx-auto mb-2" />
                       <div className="text-blue-200 text-sm">Total de Horas</div>
                       <div className="text-white text-xl font-bold">{totais.horas.toFixed(1)}h</div>
                     </div>
                     <div className="bg-white/5 rounded-lg p-3">
+                      <Users className="h-4 w-4 text-green-300 mx-auto mb-2" />
                       <div className="text-blue-200 text-sm">Total de Equipamentos</div>
                       <div className="text-white text-xl font-bold">{totais.quantidade}</div>
                     </div>
@@ -781,184 +616,83 @@ const Visuais = () => {
         </CardContent>
       </Card>
 
-      {/* Seção de Navios - AGORA ABAIXO DO DASHBOARD EXISTENTE */}
-      <Card className="bg-white/10 backdrop-blur-sm border-green-200/30">
+      {/* Tabela Detalhada */}
+      <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
         <CardHeader>
           <CardTitle className="text-white flex items-center gap-2">
-            <Ship className="h-5 w-5" />
-            Informações dos Navios
-            {carregandoNavios && (
-              <span className="text-orange-400 text-sm font-normal">(Atualizando...)</span>
-            )}
+            <BarChart3 className="h-5 w-5" />
+            Detalhamento por Local
           </CardTitle>
           <CardDescription className="text-blue-200">
-            Dados detalhados dos navios em operação
-            {totaisNavios.navios > 0 && (
-              <span className="text-green-300 ml-2">
-                • {totaisNavios.navios} navios • {totaisNavios.equipamentos} equipamentos • {totaisNavios.horas.toFixed(1)} horas totais
-              </span>
-            )}
+            Análise detalhada das horas trabalhadas em cada local
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {/* Filtros de Navios */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            {/* Status */}
-            <div className="space-y-2">
-              <Label htmlFor="status" className="text-white">Status</Label>
-              <Select 
-                value={filtrosNavios.status} 
-                onValueChange={(value) => setFiltrosNavios({ ...filtrosNavios, status: value })}
-              >
-                <SelectTrigger className="bg-white/5 border-green-300/30 text-white">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  {statusNavios.map((status) => (
-                    <SelectItem key={status.value} value={status.value}>
-                      {status.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          {!filtros.periodo ? (
+            <div className="text-center py-8 text-blue-200">
+              Selecione um período para ver os detalhes
             </div>
-
-            {/* Berço */}
-            <div className="space-y-2">
-              <Label htmlFor="berco" className="text-white">Berço</Label>
-              <Select 
-                value={filtrosNavios.berco} 
-                onValueChange={(value) => setFiltrosNavios({ ...filtrosNavios, berco: value })}
-              >
-                <SelectTrigger className="bg-white/5 border-green-300/30 text-white">
-                  <SelectValue placeholder="Berço" />
-                </SelectTrigger>
-                <SelectContent>
-                  {bercos.map((berco) => (
-                    <SelectItem key={berco.value} value={berco.value}>
-                      {berco.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Carga */}
-            <div className="space-y-2">
-              <Label htmlFor="carga" className="text-white">Carga</Label>
-              <Select 
-                value={filtrosNavios.carga} 
-                onValueChange={(value) => setFiltrosNavios({ ...filtrosNavios, carga: value })}
-              >
-                <SelectTrigger className="bg-white/5 border-green-300/30 text-white">
-                  <SelectValue placeholder="Carga" />
-                </SelectTrigger>
-                <SelectContent>
-                  {cargas.map((carga) => (
-                    <SelectItem key={carga.value} value={carga.value}>
-                      {carga.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Botões de Ação */}
-            <div className="flex items-end gap-2">
-              <Button 
-                onClick={limparFiltrosNavios}
-                variant="outline"
-                className="border-green-300/30 text-white hover:bg-white/10"
-                disabled={carregandoNavios}
-              >
-                Limpar Filtros
-              </Button>
-            </div>
-          </div>
-
-          {/* Grid de Navios */}
-          {carregandoNavios ? (
-            <div className="flex justify-center items-center h-32">
-              <div className="text-white animate-pulse">Carregando dados dos navios...</div>
-            </div>
-          ) : dadosNavios.length === 0 ? (
-            <div className="flex justify-center items-center h-32">
-              <div className="text-white text-center">
-                <p>Nenhum navio encontrado para os filtros aplicados</p>
-                <p className="text-sm text-blue-200 mt-2">
-                  Tente ajustar os filtros de status, berço ou carga
-                </p>
-              </div>
+          ) : dadosGrafico.length === 0 ? (
+            <div className="text-center py-8 text-blue-200">
+              Nenhum dado disponível para o período selecionado
             </div>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-              {dadosNavios.map((navio) => (
-                <Card key={navio.id} className="bg-white/5 border-green-300/20 hover:border-green-300/40 transition-all">
-                  <CardContent className="p-6">
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <h3 className="text-white font-bold text-lg">{navio.nome_navio}</h3>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className={`px-2 py-1 rounded-full text-xs ${
-                            navio.concluido 
-                              ? 'bg-gray-500/30 text-gray-300' 
-                              : 'bg-green-500/30 text-green-300'
-                          }`}>
-                            {navio.concluido ? 'Concluído' : 'Em Operação'}
-                          </span>
-                          <span className="px-2 py-1 rounded-full bg-blue-500/30 text-blue-300 text-xs">
-                            {navio.berco}
-                          </span>
+            <div className="overflow-x-auto">
+              <table className="w-full text-white">
+                <thead>
+                  <tr className="border-b border-white/20">
+                    <th className="text-left py-3 px-4">Local</th>
+                    <th className="text-right py-3 px-4">Equipamentos</th>
+                    <th className="text-right py-3 px-4">Horas Trabalhadas</th>
+                    <th className="text-right py-3 px-4">Porcentagem</th>
+                    <th className="text-right py-3 px-4">Média por Equip.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dadosGrafico.map((item, index) => (
+                    <tr key={item.local} className="border-b border-white/10 hover:bg-white/5">
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-3 h-3 rounded ${cores[index % cores.length]}`} />
+                          {item.local}
                         </div>
-                      </div>
-                      <Package className="h-8 w-8 text-green-300" />
-                    </div>
-
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-center">
-                        <span className="text-blue-200">Carga:</span>
-                        <span className="text-white font-medium">{navio.carga}</span>
-                      </div>
-                      
-                      <div className="flex justify-between items-center">
-                        <span className="text-blue-200">Quantidade Prevista:</span>
-                        <span className="text-white font-medium">{navio.quantidade_prevista}</span>
-                      </div>
-
-                      <div className="flex justify-between items-center">
-                        <span className="text-blue-200">CBS Total:</span>
-                        <span className="text-white font-medium">{navio.cbs_total}</span>
-                      </div>
-
-                      <div className="border-t border-white/20 pt-3">
-                        <div className="grid grid-cols-2 gap-4 text-center">
-                          <div className="bg-white/5 rounded-lg p-2">
-                            <Clock className="h-4 w-4 text-blue-300 mx-auto mb-1" />
-                            <div className="text-white text-sm font-bold">{navio.horas_totais}h</div>
-                            <div className="text-blue-200 text-xs">Horas Totais</div>
+                      </td>
+                      <td className="text-right py-3 px-4">
+                        <span className="font-medium">{item.quantidade}</span>
+                      </td>
+                      <td className="text-right py-3 px-4">
+                        <span className="font-bold">{item.horas.toFixed(1)}h</span>
+                      </td>
+                      <td className="text-right py-3 px-4">
+                        <div className="flex items-center justify-end gap-2">
+                          <div className="w-24 bg-white/10 rounded-full h-2">
+                            <div 
+                              className="bg-blue-400 h-2 rounded-full"
+                              style={{ width: `${item.porcentagem}%` }}
+                            />
                           </div>
-                          <div className="bg-white/5 rounded-lg p-2">
-                            <Users className="h-4 w-4 text-green-300 mx-auto mb-1" />
-                            <div className="text-white text-sm font-bold">{navio.quantidade_equipamentos}</div>
-                            <div className="text-blue-200 text-xs">Equipamentos</div>
-                          </div>
+                          <span className="w-8 text-right">{item.porcentagem}%</span>
                         </div>
-                      </div>
-
-                      <div className="bg-white/10 rounded-lg p-3 text-center">
-                        <div className="text-orange-300 text-sm font-bold">{navio.diaria}h</div>
-                        <div className="text-blue-200 text-xs">Média Diária por Equipamento</div>
-                      </div>
-
-                      {navio.inicio_operacao && (
-                        <div className="text-xs text-blue-200">
-                          Início: {formatarDataHoraBR(navio.inicio_operacao)}
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                      </td>
+                      <td className="text-right py-3 px-4">
+                        <span className="text-orange-300 font-medium">
+                          {item.quantidade > 0 ? (item.horas / item.quantidade).toFixed(1) : '0'}h
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {/* Linha de totais */}
+                  <tr className="bg-white/10 font-bold">
+                    <td className="py-3 px-4">TOTAL</td>
+                    <td className="text-right py-3 px-4">{totais.quantidade}</td>
+                    <td className="text-right py-3 px-4">{totais.horas.toFixed(1)}h</td>
+                    <td className="text-right py-3 px-4">100%</td>
+                    <td className="text-right py-3 px-4">
+                      {totais.quantidade > 0 ? (totais.horas / totais.quantidade).toFixed(1) : '0'}h
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           )}
         </CardContent>

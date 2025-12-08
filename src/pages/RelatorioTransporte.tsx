@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,9 +7,43 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Plus, Search, Filter, Calendar, Clock, Ship, Factory, Warehouse, Building, BarChart3, Users, UserX, Menu, RefreshCw, Database, EyeOff } from 'lucide-react';
+import { ArrowLeft, Plus, Search, Filter, Calendar, Clock, Ship, Factory, Warehouse, Building, BarChart3, Users, UserX, Menu, RefreshCw, Database, EyeOff, Loader2, LucideIcon } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+
+// 1. Interfaces e Tipos
+interface Navio {
+  id: string;
+  nome_navio: string;
+  carga: string;
+}
+
+interface Equipamento {
+  id: string;
+  tag: string;
+  motorista_operador: string;
+  horas_trabalhadas: number;
+  grupo_operacao: string;
+  hora_inicial: string | null;
+  hora_final: string | null;
+}
+
+interface Ajudante {
+  id: string;
+  nome: string;
+  hora_inicial: string;
+  hora_final: string;
+  observacao: string;
+  data: string;
+}
+
+interface Ausencia {
+  id: string;
+  nome: string;
+  justificado: boolean;
+  obs: string;
+  data: string;
+}
 
 interface OperacaoCompleta {
   id: string;
@@ -21,125 +55,141 @@ interface OperacaoCompleta {
   observacao: string | null;
   carga: string | null;
   navio_id: string | null;
-  navios: {
-    id: string;
-    nome_navio: string;
-    carga: string;
-  } | null;
-  equipamentos: Array<{
-    id: string;
-    tag: string;
-    motorista_operador: string;
-    horas_trabalhadas: number;
-    grupo_operacao: string;
-    hora_inicial: string | null;
-    hora_final: string | null;
-  }>;
-  ajudantes: Array<{
-    id: string;
-    nome: string;
-    hora_inicial: string;
-    hora_final: string;
-    observacao: string;
-    data: string;
-  }>;
-  ausencias: Array<{
-    id: string;
-    nome: string;
-    justificado: boolean;
-    obs: string;
-    data: string;
-  }>;
+  navios: Navio | null;
+  equipamentos: Equipamento[];
+  ajudantes: Ajudante[];
+  ausencias: Ausencia[];
 }
 
-const RelatorioTransporte = () => {
-  const navigate = useNavigate();
+// 2. Funções de Utilidade
+const corrigirFusoHorarioData = (dataString: string): string => {
+  try {
+    if (!dataString || dataString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      return dataString;
+    }
+    const data = new Date(dataString);
+    if (isNaN(data.getTime())) {
+      return dataString;
+    }
+    const offset = data.getTimezoneOffset();
+    data.setMinutes(data.getMinutes() - offset);
+    return data.toISOString().split('T')[0];
+  } catch (error) {
+    console.error('Erro ao corrigir fuso horário:', error);
+    return dataString;
+  }
+};
+
+const formatarDataBR = (dataString: string): string => {
+  try {
+    if (!dataString) return 'Data inválida';
+    const data = new Date(dataString + 'T00:00:00');
+    if (isNaN(data.getTime())) return dataString;
+    return data.toLocaleDateString('pt-BR');
+  } catch (error) {
+    console.error('Erro ao formatar data:', error);
+    return dataString;
+  }
+};
+
+const formatarHoras = (totalHoras: number): string => {
+  if (totalHoras === 0) return '0h';
+  return `${totalHoras.toFixed(1)}h`;
+};
+
+const getOperacaoIcon = (op: string): LucideIcon => {
+  switch (op) {
+    case 'NAVIO':
+      return Ship;
+    case 'ALBRAS':
+      return Factory;
+    case 'SANTOS BRASIL':
+      return Warehouse;
+    case 'HYDRO':
+      return Building;
+    default:
+      return BarChart3;
+  }
+};
+
+// 3. Custom Hook
+const useTransporteData = () => {
   const { toast } = useToast();
   
+  // Estado Principal
   const [operacaoSelecionada, setOperacaoSelecionada] = useState<string>('TODOS');
+  const [operacaoIdSelecionado, setOperacaoIdSelecionado] = useState<string | null>(null);
   const [operacoes, setOperacoes] = useState<OperacaoCompleta[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [menuAberto, setMenuAberto] = useState(true);
   const [atualizando, setAtualizando] = useState(false);
   
+  // Estado de Filtro
   const [dataFiltro, setDataFiltro] = useState('');
   const [horaInicialFiltro, setHoraInicialFiltro] = useState('Todos');
   const [operadorFiltro, setOperadorFiltro] = useState('');
 
-  // Função para corrigir o fuso horário - converte para o fuso local
-  const corrigirFusoHorarioData = (dataString: string) => {
-    try {
-      // Se a data já está no formato YYYY-MM-DD, apenas retorna
-      if (dataString.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        return dataString;
-      }
-      
-      // Se vem como string completa, extrai a parte da data
-      const data = new Date(dataString);
-      
-      // Corrige o fuso horário adicionando o offset
-      const offset = data.getTimezoneOffset();
-      data.setMinutes(data.getMinutes() - offset);
-      
-      return data.toISOString().split('T')[0];
-    } catch (error) {
-      console.error('Erro ao corrigir fuso horário:', error);
-      return dataString;
-    }
-  };
+  // Estado de Filtro Aplicado
+  const [filtroAplicado, setFiltroAplicado] = useState({
+    data: '',
+    hora: 'Todos',
+    operador: '',
+  });
 
-  // Função para formatar data no formato brasileiro
-  const formatarDataBR = (dataString: string) => {
+  // Função para buscar última data de forma segura
+  const buscarUltimaData = useCallback(async (): Promise<string> => {
     try {
-      const data = new Date(dataString + 'T00:00:00'); // Adiciona horário para evitar problemas de fuso
-      return data.toLocaleDateString('pt-BR');
-    } catch (error) {
-      console.error('Erro ao formatar data:', error);
-      return dataString;
-    }
-  };
-
-  // Buscar a última data disponível no banco de dados
-  const buscarUltimaData = async () => {
-    try {
+      const hoje = new Date().toISOString().split('T')[0];
+      
       const { data, error } = await supabase
         .from('registro_operacoes')
         .select('data')
         .order('data', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro ao buscar última data:', error);
+        return hoje;
+      }
 
       if (data?.data) {
-        // Corrige o fuso horário da data vinda do banco
-        return corrigirFusoHorarioData(data.data);
+        const dataCorrigida = corrigirFusoHorarioData(data.data);
+        return dataCorrigida || hoje;
       }
       
-      return new Date().toISOString().split('T')[0];
+      return hoje;
     } catch (error) {
-      console.error('Erro ao buscar última data:', error);
+      console.error('Erro inesperado ao buscar última data:', error);
       return new Date().toISOString().split('T')[0];
     }
-  };
+  }, []);
 
-  const fetchOperacoes = async (dataEspecifica?: string) => {
+  // Inicializar dataFiltro com a data de hoje
+  useEffect(() => {
+    const inicializarData = async () => {
+      const ultimaData = await buscarUltimaData();
+      setDataFiltro(ultimaData);
+      setFiltroAplicado(prev => ({ ...prev, data: ultimaData }));
+    };
+    inicializarData();
+  }, [buscarUltimaData]);
+
+  const fetchOperacoes = useCallback(async () => {
     setLoading(true);
     setError(null);
+    
     try {
-      console.log('🔍 Iniciando carregamento de operações...');
+      let dataParaFiltrar = filtroAplicado.data;
       
-      // Determinar qual data usar para o filtro
-      let dataParaFiltrar = dataEspecifica || dataFiltro;
+      // Se não tiver data filtro aplicada, usa a data atual
       if (!dataParaFiltrar) {
-        dataParaFiltrar = await buscarUltimaData();
+        dataParaFiltrar = new Date().toISOString().split('T')[0];
+        setFiltroAplicado(prev => ({ ...prev, data: dataParaFiltrar }));
         setDataFiltro(dataParaFiltrar);
       }
 
-      console.log('📅 Data para filtrar (corrigida):', dataParaFiltrar);
-
-      // Primeiro, buscar as operações principais
+      // Construir query base
       let queryOperacoes = supabase
         .from('registro_operacoes')
         .select(`
@@ -151,127 +201,96 @@ const RelatorioTransporte = () => {
           )
         `);
 
-      // Aplicar filtro de data diretamente na consulta
+      // Aplicar filtro de data se existir
       if (dataParaFiltrar) {
-        console.log('📅 Aplicando filtro de data na consulta:', dataParaFiltrar);
         queryOperacoes = queryOperacoes.eq('data', dataParaFiltrar);
       }
 
+      // Executar query
       const { data: operacoesData, error: operacoesError } = await queryOperacoes
         .order('data', { ascending: false })
         .order('hora_inicial', { ascending: false });
 
       if (operacoesError) {
-        console.error('❌ Erro ao carregar operações:', operacoesError);
         throw new Error(`Erro ao carregar operações: ${operacoesError.message}`);
       }
 
+      // Se não houver dados, limpar e retornar
       if (!operacoesData || operacoesData.length === 0) {
-        console.log('📭 Nenhuma operação encontrada para a data:', dataParaFiltrar);
         setOperacoes([]);
         setLoading(false);
         return;
       }
-
-      console.log('✅ Operações carregadas:', operacoesData.length);
       
-      // Corrigir fusos horários das datas
+      // Corrigir fuso horário das datas
       const operacoesComFusoCorrigido = operacoesData.map(op => ({
         ...op,
         data: corrigirFusoHorarioData(op.data)
       }));
 
-      console.log('📊 Datas das operações (corrigidas):', operacoesComFusoCorrigido.map(op => ({ id: op.id, data: op.data, op: op.op })));
-
       // Buscar dados relacionados para cada operação
       const operacoesCompletas = await Promise.all(
         operacoesComFusoCorrigido.map(async (operacao) => {
           try {
-            // Buscar equipamentos
-            const { data: equipamentos, error: equipamentosError } = await supabase
-              .from('equipamentos')
-              .select('*')
-              .eq('registro_operacoes_id', operacao.id);
+            const [equipamentosResult, ajudantesResult, ausenciasResult] = await Promise.all([
+              supabase.from('equipamentos').select('*').eq('registro_operacoes_id', operacao.id),
+              supabase.from('ajudantes').select('*').eq('registro_operacoes_id', operacao.id),
+              supabase.from('ausencias').select('*').eq('registro_operacoes_id', operacao.id)
+            ]);
 
-            if (equipamentosError) {
-              console.error(`❌ Erro ao carregar equipamentos para operação ${operacao.id}:`, equipamentosError);
-            }
+            // Corrigir fusos horários
+            const ajudantesCorrigidos = ajudantesResult.data ? ajudantesResult.data.map(ajudante => ({
+              ...ajudante,
+              data: corrigirFusoHorarioData(ajudante.data)
+            })) : [];
 
-            // Buscar ajudantes e corrigir fusos horários
-            const { data: ajudantes, error: ajudantesError } = await supabase
-              .from('ajudantes')
-              .select('*')
-              .eq('registro_operacoes_id', operacao.id);
-
-            let ajudantesCorrigidos = [];
-            if (ajudantes) {
-              ajudantesCorrigidos = ajudantes.map(ajudante => ({
-                ...ajudante,
-                data: corrigirFusoHorarioData(ajudante.data)
-              }));
-            }
-
-            if (ajudantesError) {
-              console.error(`❌ Erro ao carregar ajudantes para operação ${operacao.id}:`, ajudantesError);
-            }
-
-            // Buscar ausências e corrigir fusos horários
-            const { data: ausencias, error: ausenciasError } = await supabase
-              .from('ausencias')
-              .select('*')
-              .eq('registro_operacoes_id', operacao.id);
-
-            let ausenciasCorrigidas = [];
-            if (ausencias) {
-              ausenciasCorrigidas = ausencias.map(ausencia => ({
-                ...ausencia,
-                data: corrigirFusoHorarioData(ausencia.data)
-              }));
-            }
-
-            if (ausenciasError) {
-              console.error(`❌ Erro ao carregar ausências para operação ${operacao.id}:`, ausenciasError);
-            }
+            const ausenciasCorrigidas = ausenciasResult.data ? ausenciasResult.data.map(ausencia => ({
+              ...ausencia,
+              data: corrigirFusoHorarioData(ausencia.data)
+            })) : [];
 
             return {
               ...operacao,
-              equipamentos: equipamentos || [],
+              equipamentos: equipamentosResult.data || [],
               ajudantes: ajudantesCorrigidos,
               ausencias: ausenciasCorrigidas,
-            };
+            } as OperacaoCompleta;
           } catch (error) {
-            console.error(`❌ Erro ao carregar dados relacionados para operação ${operacao.id}:`, error);
+            console.error(`Erro ao carregar dados para operação ${operacao.id}:`, error);
             return {
               ...operacao,
               equipamentos: [],
               ajudantes: [],
               ausencias: [],
-            };
+            } as OperacaoCompleta;
           }
         })
       );
 
-      console.log('✅ Dados carregados:', operacoesCompletas.length, 'operações completas');
       setOperacoes(operacoesCompletas);
       
-    } catch (error: any) {
-      console.error('❌ Erro ao carregar operações:', error);
-      setError(error.message || 'Erro desconhecido ao carregar dados');
+    } catch (e: any) {
+      console.error('Erro ao buscar operações:', e);
+      setError(e.message || 'Erro desconhecido ao carregar dados');
       toast({
         title: "Erro",
-        description: "Não foi possível carregar os dados.",
+        description: "Não foi possível carregar os dados. Tente novamente.",
         variant: "destructive"
       });
     } finally {
       setLoading(false);
     }
-  };
+  }, [filtroAplicado.data, toast]);
 
+  // Efeito para carregar dados quando o filtro aplicado muda
   useEffect(() => {
-    fetchOperacoes();
-  }, []); // Carrega apenas uma vez ao montar o componente
+    if (filtroAplicado.data) {
+      fetchOperacoes();
+    }
+  }, [filtroAplicado, fetchOperacoes]);
 
-  const handleAtualizarDados = async () => {
+  // Funções de Ação
+  const handleAtualizarDados = useCallback(async () => {
     setAtualizando(true);
     try {
       await fetchOperacoes();
@@ -284,16 +303,14 @@ const RelatorioTransporte = () => {
     } finally {
       setAtualizando(false);
     }
-  };
+  }, [fetchOperacoes, toast]);
 
-  const handleExecutarSQL = async () => {
+  const handleExecutarSQL = useCallback(async () => {
     setAtualizando(true);
     try {
-      // Executar o comando SQL usando Supabase
-      const { data, error } = await supabase.rpc('executar_atualizacao_horarios');
+      const { error } = await supabase.rpc('executar_atualizacao_horarios');
       
       if (error) {
-        console.error('❌ Erro ao executar SQL:', error);
         throw new Error(`Erro ao executar comando: ${error.message}`);
       }
 
@@ -301,367 +318,908 @@ const RelatorioTransporte = () => {
         title: "Comando executado",
         description: "O comando SQL foi executado com sucesso."
       });
-
-      // Atualizar os dados após executar o SQL
       await fetchOperacoes();
-      
-    } catch (error: any) {
-      console.error('❌ Erro ao executar SQL:', error);
+    } catch (e: any) {
+      console.error('Erro ao executar SQL:', e);
       toast({
-        title: "Erro",
-        description: error.message || "Erro ao executar comando SQL",
+        title: "Erro ao executar comando",
+        description: e.message,
         variant: "destructive"
       });
     } finally {
       setAtualizando(false);
     }
-  };
+  }, [fetchOperacoes, toast]);
 
-  const aplicarFiltros = () => {
-    console.log('🎯 Aplicando filtros com data:', dataFiltro);
-    fetchOperacoes(dataFiltro);
-  };
+  const aplicarFiltros = useCallback(() => {
+    setFiltroAplicado({
+      data: dataFiltro,
+      hora: horaInicialFiltro,
+      operador: operadorFiltro,
+    });
+  }, [dataFiltro, horaInicialFiltro, operadorFiltro]);
 
-  const limparFiltros = () => {
+  const limparFiltros = useCallback(async () => {
+    const ultimaData = await buscarUltimaData();
+    setDataFiltro(ultimaData);
     setHoraInicialFiltro('Todos');
     setOperadorFiltro('');
+    setFiltroAplicado({
+      data: ultimaData,
+      hora: 'Todos',
+      operador: '',
+    });
+    setOperacaoIdSelecionado(null);
     setOperacaoSelecionada('TODOS');
-    // Não limpa a dataFiltro, apenas os outros filtros
-  };
+  }, [buscarUltimaData]);
 
+  // 4. Cálculos e Filtros (useMemo)
   const operacoesFiltradas = useMemo(() => {
-    let filtered = operacoes;
-
-    console.log('🔍 Aplicando filtros adicionais...');
-    console.log('📅 Data filtro:', dataFiltro);
-    console.log('📊 Total operações antes dos filtros adicionais:', filtered.length);
-
-    // Filtro por hora inicial (mantido no frontend)
-    if (horaInicialFiltro !== 'Todos') {
-      filtered = filtered.filter(op => op.hora_inicial === horaInicialFiltro);
-      console.log('📊 Após filtro de hora:', filtered.length);
-    }
-    
-    // Filtro por operador (mantido no frontend)
-    if (operadorFiltro.trim() !== '') {
-      filtered = filtered.filter(op => 
+    return operacoes.filter(op => {
+      // Filtro de Hora Inicial (Turno)
+      const filtroHora = filtroAplicado.hora === 'Todos' || op.hora_inicial === filtroAplicado.hora;
+      
+      // Filtro de Operador (Busca em equipamentos)
+      const filtroOperador = !filtroAplicado.operador || 
         op.equipamentos.some(eq => 
-          eq.motorista_operador?.toLowerCase().includes(operadorFiltro.toLowerCase())
-        )
-      );
-      console.log('📊 Após filtro de operador:', filtered.length);
-    }
+          eq.motorista_operador?.toLowerCase().includes(filtroAplicado.operador.toLowerCase())
+        );
 
-    console.log('✅ Total de operações filtradas:', filtered.length);
-    
-    return filtered;
-  }, [operacoes, horaInicialFiltro, operadorFiltro, dataFiltro]);
-
-  const totaisPorOperacao = useMemo(() => {
-    const totais: { [key: string]: number } = {};
-    
-    operacoesFiltradas.forEach(op => {
-      const totalHoras = op.equipamentos.reduce((sum, eq) => 
-        sum + (Number(eq.horas_trabalhadas) || 0), 0
-      );
-      totais[op.op] = (totais[op.op] || 0) + totalHoras;
+      return filtroHora && filtroOperador;
     });
-    
-    return totais;
-  }, [operacoesFiltradas]);
+  }, [operacoes, filtroAplicado]);
 
-  const totaisAjudantesAusencias = useMemo(() => {
-    let totalAjudantes = 0;
-    let totalAusencias = 0;
-
-    operacoesFiltradas.forEach(op => {
-      totalAjudantes += op.ajudantes?.length || 0;
-      totalAusencias += op.ausencias?.length || 0;
-    });
-
-    console.log('👥 Totais ajudantes/ausências:', { totalAjudantes, totalAusencias });
-    
-    return { totalAjudantes, totalAusencias };
-  }, [operacoesFiltradas]);
-
-  // Agrupar operações por tipo para o menu lateral
   const operacoesPorTipo = useMemo(() => {
-    const grupos: { [key: string]: OperacaoCompleta[] } = {};
-    
-    operacoesFiltradas.forEach(op => {
-      if (!grupos[op.op]) {
-        grupos[op.op] = [];
+    return operacoesFiltradas.reduce((acc, op) => {
+      // Para NAVIO, usar nome do navio + carga como chave
+      if (op.op === 'NAVIO' && op.navios) {
+        const chave = `${op.navios.nome_navio} - ${op.navios.carga}`;
+        acc[chave] = acc[chave] || [];
+        acc[chave].push(op);
+      } else {
+        // Para outros tipos, usar apenas o tipo
+        acc[op.op] = acc[op.op] || [];
+        acc[op.op].push(op);
       }
-      grupos[op.op].push(op);
-    });
-    
-    return grupos;
+      return acc;
+    }, {} as Record<string, OperacaoCompleta[]>);
   }, [operacoesFiltradas]);
 
-  const formatarHoras = (horas: number) => {
-    return `${horas.toFixed(2)}h`;
+  // 5. Retorno do Hook
+  return {
+    // Estado
+    operacaoSelecionada,
+    setOperacaoSelecionada,
+    operacaoIdSelecionado,
+    setOperacaoIdSelecionado,
+    operacoes,
+    loading,
+    error,
+    atualizando,
+    
+    // Estado de Filtro
+    dataFiltro,
+    setDataFiltro,
+    horaInicialFiltro,
+    setHoraInicialFiltro,
+    operadorFiltro,
+    setOperadorFiltro,
+    
+    // Funções de Ação
+    handleAtualizarDados,
+    handleExecutarSQL,
+    aplicarFiltros,
+    limparFiltros,
+    
+    // Dados Calculados
+    operacoesFiltradas,
+    operacoesPorTipo,
+    
+    // Utilidades
+    formatarHoras,
+    formatarDataBR,
+    getOperacaoIcon,
+    
+    // Filtro aplicado atual
+    filtroAplicado,
+  };
+};
+
+// Componente HeaderControles
+interface HeaderControlesProps extends ReturnType<typeof useTransporteData> {
+  navigate: ReturnType<typeof useNavigate>;
+  menuAberto: boolean;
+  setMenuAberto: (aberto: boolean) => void;
+}
+
+const HeaderControles: React.FC<HeaderControlesProps> = ({ 
+  navigate, 
+  menuAberto, 
+  setMenuAberto, 
+  handleAtualizarDados, 
+  handleExecutarSQL, 
+  atualizando 
+}) => {
+  return (
+    <div className="bg-blue-900/80 backdrop-blur-md shadow-lg sticky top-0 z-10">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between items-center py-4">
+          <div className="flex items-center space-x-4">
+            <Button 
+              variant="ghost" 
+              onClick={() => navigate('/dashboard')}
+              className="text-blue-300 hover:bg-blue-800/50"
+              title="Voltar para Dashboard"
+            >
+              <ArrowLeft className="h-5 w-5" />
+              <span className="ml-2">Dashboard</span>
+            </Button>
+            <h1 className="text-2xl font-bold text-white">Relatório de Operações</h1>
+          </div>
+          
+          <div className="flex items-center space-x-3">
+            <Button 
+              onClick={handleExecutarSQL} 
+              disabled={atualizando}
+              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2.5 rounded-lg font-semibold transition-all shadow-sm hover:shadow-md"
+              title="Executar Atualização de Horários (SQL)"
+            >
+              {atualizando ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <Database className="h-4 w-4 mr-2" />
+              )}
+              SQL
+            </Button>
+            
+            <Button 
+              onClick={handleAtualizarDados} 
+              disabled={atualizando}
+              variant="outline"
+              className="border-blue-300 text-white hover:bg-white/20"
+              title="Atualizar Dados"
+            >
+              {atualizando ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+            </Button>
+            
+            <Button 
+              variant="outline"
+              onClick={() => setMenuAberto(!menuAberto)}
+              className="md:hidden border-blue-300 text-white hover:bg-white/20"
+              title="Alternar Menu Lateral"
+            >
+              <Menu className="h-4 w-4" />
+            </Button>
+            
+            <Button 
+              onClick={() => navigate('/novo-lancamento')} 
+              className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-2.5 rounded-lg font-semibold transition-all shadow-sm hover:shadow-md"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Nova Operação
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Componente FiltrosArea
+interface FiltrosAreaProps extends ReturnType<typeof useTransporteData> {}
+
+const FiltrosArea: React.FC<FiltrosAreaProps> = ({
+  dataFiltro,
+  setDataFiltro,
+  horaInicialFiltro,
+  setHoraInicialFiltro,
+  operadorFiltro,
+  setOperadorFiltro,
+  aplicarFiltros,
+  limparFiltros,
+  formatarDataBR,
+}) => {
+  return (
+    <div className="px-6 py-4 border-b border-blue-600/30 bg-blue-800/30 backdrop-blur-sm">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        {/* Filtro de Data */}
+        <div className="space-y-2">
+          <Label className="text-sm font-medium text-white flex items-center space-x-2">
+            <Calendar className="h-4 w-4 text-blue-300" />
+            <span>Data da Operação</span>
+          </Label>
+          <div className="flex space-x-2">
+            <Input 
+              type="date" 
+              value={dataFiltro}
+              onChange={(e) => setDataFiltro(e.target.value)}
+              className="h-10 bg-white/5 border-blue-300/30 text-white focus:border-blue-300 transition-colors"
+            />
+            <Button 
+              onClick={aplicarFiltros}
+              className="h-10 bg-blue-500 hover:bg-blue-600 text-white"
+              title="Buscar dados para a data selecionada"
+            >
+              <Search className="h-4 w-4" />
+            </Button>
+          </div>
+          <p className="text-xs text-blue-300">
+            {dataFiltro ? `Mostrando: ${formatarDataBR(dataFiltro)}` : 'Selecione uma data'}
+          </p>
+        </div>
+        
+        {/* Filtro de Turno */}
+        <div className="space-y-2">
+          <Label className="text-sm font-medium text-white flex items-center space-x-2">
+            <Clock className="h-4 w-4 text-blue-300" />
+            <span>Turno</span>
+          </Label>
+          <Select value={horaInicialFiltro} onValueChange={setHoraInicialFiltro}>
+            <SelectTrigger className="h-10 bg-white/5 border-blue-300/30 text-white focus:border-blue-300">
+              <SelectValue placeholder="Todos os turnos" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Todos">Todos os Turnos</SelectItem>
+              <SelectItem value="07:00:00">Manhã (07:00)</SelectItem>
+              <SelectItem value="19:00:00">Noite (19:00)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        
+        {/* Filtro de Operador */}
+        <div className="space-y-2">
+          <Label className="text-sm font-medium text-white flex items-center space-x-2">
+            <Search className="h-4 w-4 text-blue-300" />
+            <span>Operador</span>
+          </Label>
+          <Input 
+            type="text"
+            value={operadorFiltro}
+            onChange={(e) => setOperadorFiltro(e.target.value)}
+            placeholder="Buscar por nome..."
+            className="h-10 bg-white/5 border-blue-300/30 text-white focus:border-blue-300 transition-colors"
+          />
+        </div>
+        
+        {/* Botão Aplicar Filtros */}
+        <div className="space-y-2">
+          <Label className="text-sm font-medium text-white opacity-0">Ações</Label>
+          <Button 
+            onClick={aplicarFiltros}
+            className="w-full h-10 bg-green-600 hover:bg-green-700 text-white font-medium"
+          >
+            <Filter className="h-4 w-4 mr-2" />
+            Aplicar Filtros
+          </Button>
+        </div>
+
+        {/* Botão Limpar Filtros */}
+        <div className="space-y-2">
+          <Label className="text-sm font-medium text-white opacity-0">Limpar</Label>
+          <Button 
+            onClick={limparFiltros}
+            className="w-full h-10 bg-gray-600 hover:bg-gray-700 text-white font-medium"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Limpar Filtros
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Componente ResumoCards
+interface ResumoCardsProps {
+  operacoesFiltradas: OperacaoCompleta[];
+  setOperacaoSelecionada: (op: string) => void;
+  setOperacaoIdSelecionado: (id: string | null) => void;
+  loading: boolean;
+}
+
+const ResumoCards: React.FC<ResumoCardsProps> = ({
+  operacoesFiltradas,
+  setOperacaoSelecionada,
+  setOperacaoIdSelecionado,
+  loading,
+}) => {
+  const tiposOperacao = ['HYDRO', 'ALBRAS', 'SANTOS BRASIL'];
+  
+  const formatarHoras = (totalHoras: number): string => {
+    if (totalHoras === 0) return '0h';
+    return `${totalHoras.toFixed(1)}h`;
   };
 
-  const getOperacaoIcon = (op: string) => {
+  const getOperacaoIcon = (op: string): LucideIcon => {
     switch (op) {
-      case 'NAVIO': return Ship;
-      case 'HYDRO': return Factory;
-      case 'ALBRAS': return Warehouse;
-      case 'SANTOS BRASIL': return Building;
-      case 'AJUDANTES': return Users;
-      case 'AUSENCIAS': return UserX;
-      default: return BarChart3;
+      case 'ALBRAS':
+        return Factory;
+      case 'SANTOS BRASIL':
+        return Warehouse;
+      case 'HYDRO':
+        return Building;
+      default:
+        return BarChart3;
     }
-  };
-
-  const getOperacaoDisplayName = (op: OperacaoCompleta) => {
-    if (op.op === 'NAVIO' && op.navios) {
-      return `${op.navios.nome_navio} - ${op.navios.carga}`;
-    }
-    if (op.op === 'ALBRAS' && op.carga) {
-      return `${op.op} - ${op.carga}`;
-    }
-    return op.op;
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-200 border-t-white rounded-full animate-spin mx-auto mb-4"></div>
-          <h2 className="text-2xl font-bold text-white mb-2">Carregando Operações</h2>
-          <p className="text-blue-200">Buscando dados do sistema...</p>
+      <div className="px-6 py-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <Card key={index} className="bg-white/10 backdrop-blur-sm border-blue-200/30">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-2">
+                    <div className="h-4 w-20 bg-blue-300/20 rounded animate-pulse"></div>
+                    <div className="h-6 w-8 bg-blue-300/20 rounded animate-pulse"></div>
+                  </div>
+                  <div className="p-3 rounded-lg bg-blue-500/20">
+                    <div className="h-6 w-6 bg-blue-300/20 rounded animate-pulse"></div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </div>
     );
   }
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900 flex items-center justify-center">
-        <Card className="max-w-md mx-auto border-blue-200 bg-white/10 backdrop-blur-sm">
-          <CardContent className="pt-6 text-center">
-            <div className="w-12 h-12 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Database className="h-6 w-6 text-blue-300" />
+  // Calcular totais para cada tipo
+  const totaisPorTipo = tiposOperacao.reduce((acc, tipo) => {
+    const opsDoTipo = operacoesFiltradas.filter(op => op.op === tipo);
+    const count = opsDoTipo.length;
+    const totalHoras = opsDoTipo.reduce((sum, operacao) => 
+      sum + operacao.equipamentos.reduce((eqSum, eq) => eqSum + (Number(eq.horas_trabalhadas) || 0), 0), 0
+    );
+    
+    // Para NAVIO, calcular separadamente
+    const naviosOps = operacoesFiltradas.filter(op => op.op === 'NAVIO');
+    const naviosCount = naviosOps.length;
+    const naviosTotalHoras = naviosOps.reduce((sum, operacao) => 
+      sum + operacao.equipamentos.reduce((eqSum, eq) => eqSum + (Number(eq.horas_trabalhadas) || 0), 0), 0
+    );
+
+    acc[tipo] = { count, totalHoras };
+    acc['NAVIO'] = { count: naviosCount, totalHoras: naviosTotalHoras };
+    
+    return acc;
+  }, {} as Record<string, { count: number, totalHoras: number }>);
+
+  return (
+    <div className="px-6 py-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {/* Card NAVIO */}
+        <Card 
+          className="bg-white/10 backdrop-blur-sm border-blue-200/30 hover:shadow-lg transition-all hover:scale-[1.02] cursor-pointer"
+          onClick={() => {
+            setOperacaoSelecionada('NAVIO');
+            setOperacaoIdSelecionado(null);
+          }}
+        >
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-blue-200">NAVIO</p>
+                <p className="text-2xl font-bold text-white">{totaisPorTipo['NAVIO']?.count || 0}</p>
+                <p className="text-xs text-blue-300">
+                  {totaisPorTipo['NAVIO']?.count || 0} ops • {formatarHoras(totaisPorTipo['NAVIO']?.totalHoras || 0)}
+                </p>
+              </div>
+              <div className="p-3 rounded-lg bg-blue-500/20">
+                <Ship className="h-6 w-6 text-blue-300" />
+              </div>
             </div>
-            <h2 className="text-xl font-bold text-white mb-2">Erro ao Carregar Dados</h2>
-            <p className="text-blue-200 mb-4">{error}</p>
-            <Button 
-              onClick={() => window.location.reload()} 
-              className="bg-blue-500 hover:bg-blue-600 text-white"
-            >
-              Tentar Novamente
-            </Button>
           </CardContent>
         </Card>
+
+        {/* Cards dos outros tipos */}
+        {tiposOperacao.map((op) => {
+          const Icon = getOperacaoIcon(op);
+          const { count = 0, totalHoras = 0 } = totaisPorTipo[op] || {};
+          const label = `${count} ops • ${formatarHoras(totalHoras)}`;
+          
+          return (
+            <Card 
+              key={op} 
+              className="bg-white/10 backdrop-blur-sm border-blue-200/30 hover:shadow-lg transition-all hover:scale-[1.02] cursor-pointer"
+              onClick={() => {
+                setOperacaoSelecionada(op);
+                setOperacaoIdSelecionado(null);
+              }}
+            >
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-blue-200">{op}</p>
+                    <p className="text-2xl font-bold text-white">{count}</p>
+                    <p className="text-xs text-blue-300">{label}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-blue-500/20">
+                    <Icon className="h-6 w-6 text-blue-300" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
+    </div>
+  );
+};
+
+// Componente TabelaOperacao
+interface TabelaOperacaoProps {
+  operacao: OperacaoCompleta | null;
+  formatarDataBR: (data: string) => string;
+  formatarHoras: (horas: number) => string;
+}
+
+const TabelaOperacao: React.FC<TabelaOperacaoProps> = ({ 
+  operacao, 
+  formatarDataBR, 
+  formatarHoras 
+}) => {
+  const navigate = useNavigate();
+  
+  if (!operacao) {
+    return (
+      <Card className="h-full bg-white/10 backdrop-blur-sm border-blue-200/30">
+        <CardHeader>
+          <CardTitle className="text-white">Selecione uma operação</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-blue-300">Clique em uma operação no menu lateral para ver os detalhes.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const totalHoras = operacao.equipamentos.reduce((sum, eq) => 
+    sum + (Number(eq.horas_trabalhadas) || 0), 0
+  );
+
+  const displayName = operacao.op === 'NAVIO' && operacao.navios 
+    ? `${operacao.navios.nome_navio} - ${operacao.navios.carga}`
+    : operacao.op;
+
+  // Agrupar equipamentos por grupo_operacao
+  const equipamentosPorGrupo = operacao.equipamentos.reduce((acc, eq) => {
+    const grupo = eq.grupo_operacao || 'Sem grupo';
+    if (!acc[grupo]) {
+      acc[grupo] = [];
+    }
+    acc[grupo].push(eq);
+    return acc;
+  }, {} as Record<string, Equipamento[]>);
+
+  return (
+    <Card className="h-full bg-white/10 backdrop-blur-sm border-blue-200/30 flex flex-col">
+      <CardHeader className="pb-3">
+        <div className="flex justify-between items-center">
+          <div className="flex-1">
+            <CardTitle className="text-white text-lg truncate">{displayName}</CardTitle>
+            <div className="grid grid-cols-3 gap-2 mt-2">
+              <div>
+                <p className="text-xs text-blue-300">Data</p>
+                <p className="text-sm font-medium text-white">{formatarDataBR(operacao.data)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-blue-300">Início</p>
+                <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-300/30 text-xs">
+                  {operacao.hora_inicial}
+                </Badge>
+              </div>
+              <div>
+                <p className="text-xs text-blue-300">Final</p>
+                <Badge variant="outline" className="bg-green-500/20 text-green-300 border-green-300/30 text-xs">
+                  {operacao.hora_final}
+                </Badge>
+              </div>
+            </div>
+            <div className="mt-2 flex justify-between items-center">
+              <div>
+                <p className="text-xs text-blue-300">Total de Horas</p>
+                <p className="text-lg font-bold text-green-300">{formatarHoras(totalHoras)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-blue-300">Total Equipamentos</p>
+                <p className="text-lg font-bold text-white">{operacao.equipamentos.length}</p>
+              </div>
+              <Button 
+                variant="outline"
+                size="sm"
+                onClick={() => navigate(`/operacao/${operacao.id}/visualizar`)}
+                className="text-blue-300 hover:text-white hover:bg-blue-500/20 border-blue-300/30"
+              >
+                <EyeOff className="h-4 w-4 mr-1" />
+                Detalhes
+              </Button>
+            </div>
+            {operacao.observacao && (
+              <div className="mt-2">
+                <p className="text-xs text-blue-300">Observações</p>
+                <p className="text-sm text-white">{operacao.observacao}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </CardHeader>
+      
+      <CardContent className="pt-0 flex-1 overflow-hidden flex flex-col">
+        <div className="mt-4 flex-1 min-h-0">
+          <h4 className="text-sm font-semibold text-blue-200 mb-2">
+            Equipamentos por Grupo de Operação ({operacao.equipamentos.length})
+          </h4>
+          {operacao.equipamentos.length === 0 ? (
+            <p className="text-sm text-blue-300">Nenhum equipamento registrado</p>
+          ) : (
+            <div className="overflow-auto h-full">
+              {Object.entries(equipamentosPorGrupo).map(([grupo, equipamentos]) => {
+                const horasGrupo = equipamentos.reduce((sum, eq) => sum + (Number(eq.horas_trabalhadas) || 0), 0);
+                
+                return (
+                  <div key={grupo} className="mb-6 last:mb-0">
+                    <div className="flex items-center justify-between mb-2 p-2 bg-blue-600/20 rounded-lg">
+                      <div className="flex items-center space-x-2">
+                        <Badge variant="outline" className="bg-blue-500/30 text-blue-200 border-blue-300/50">
+                          {grupo}
+                        </Badge>
+                        <span className="text-xs text-blue-300">
+                          {equipamentos.length} equipamento{equipamentos.length !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                      <Badge className="bg-green-500/20 text-green-300 text-xs">
+                        {formatarHoras(horasGrupo)}
+                      </Badge>
+                    </div>
+                    
+                    <div className="border border-blue-200/20 rounded-lg overflow-hidden mb-4">
+                      <Table>
+                        <TableHeader className="bg-blue-600/20">
+                          <TableRow>
+                            <TableHead className="text-blue-200 text-xs py-2 w-1/4">Tag</TableHead>
+                            <TableHead className="text-blue-200 text-xs py-2 w-1/2">Motorista/Operador</TableHead>
+                            <TableHead className="text-blue-200 text-xs py-2 w-1/4 text-right">Horas</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {equipamentos.map((eq) => (
+                            <TableRow key={eq.id} className="hover:bg-white/5 border-b border-blue-200/10 last:border-b-0">
+                              <TableCell className="py-2">
+                                <Badge variant="outline" className="bg-purple-500/20 text-purple-300 border-purple-300/30 text-xs whitespace-nowrap">
+                                  {eq.tag}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="py-2">
+                                <p className="text-sm text-white">{eq.motorista_operador}</p>
+                              </TableCell>
+                              <TableCell className="py-2 text-right">
+                                <Badge className="bg-green-500/20 text-green-300 border-green-400/30 text-xs">
+                                  {Number(eq.horas_trabalhadas).toFixed(1)}h
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+// Componente TabelaAjudantes
+interface TabelaAjudantesProps {
+  ajudantes: Ajudante[];
+}
+
+const TabelaAjudantes: React.FC<TabelaAjudantesProps> = ({ ajudantes }) => {
+  if (ajudantes.length === 0) {
+    return (
+      <Card className="h-full bg-white/10 backdrop-blur-sm border-blue-200/30">
+        <CardHeader>
+          <CardTitle className="text-white">Ajudantes</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-blue-300">Nenhum ajudante registrado</p>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900">
-      {/* Header */}
-      <div className="bg-blue-800/50 backdrop-blur-sm border-b border-blue-600/30 shadow-sm">
-        <div className="px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Button 
-                variant="ghost" 
-                onClick={() => navigate('/')} 
-                className="text-white hover:bg-white/20 px-4 py-2 rounded-lg transition-all"
-              >
-                <ArrowLeft className="h-5 w-5 mr-2" />
-                Voltar
-              </Button>
-              <div>
-                <h1 className="text-2xl font-bold text-white">Relatório de Transporte</h1>
-                <p className="text-blue-200 text-sm">
-                  {operacoes.length} operações carregadas • {operacoesFiltradas.length} correspondem aos filtros
-                  {dataFiltro && ` • Data: ${formatarDataBR(dataFiltro)}`}
-                </p>
-              </div>
+    <Card className="h-full bg-white/10 backdrop-blur-sm border-blue-200/30 flex flex-col">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-white">Ajudantes ({ajudantes.length})</CardTitle>
+      </CardHeader>
+      <CardContent className="flex-1 overflow-hidden min-h-0">
+        <div className="overflow-auto h-full border border-blue-200/20 rounded-lg">
+          <Table>
+            <TableHeader className="sticky top-0 bg-blue-600/20 backdrop-blur-sm z-10">
+              <TableRow>
+                <TableHead className="text-blue-200 text-xs py-3 w-2/3">Nome</TableHead>
+                <TableHead className="text-blue-200 text-xs py-3 w-1/6">Início</TableHead>
+                <TableHead className="text-blue-200 text-xs py-3 w-1/6">Final</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {ajudantes.map((ajudante) => (
+                <TableRow key={ajudante.id} className="hover:bg-white/5 border-b border-blue-200/10">
+                  <TableCell className="py-3">
+                    <p className="text-sm text-white truncate">{ajudante.nome}</p>
+                  </TableCell>
+                  <TableCell className="py-3">
+                    <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-300/30 text-xs whitespace-nowrap">
+                      {ajudante.hora_inicial}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="py-3">
+                    <Badge variant="outline" className="bg-green-500/20 text-green-300 border-green-300/30 text-xs whitespace-nowrap">
+                      {ajudante.hora_final}
+                    </Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+// Componente TabelaAusencias
+interface TabelaAusenciasProps {
+  ausencias: Ausencia[];
+}
+
+const TabelaAusencias: React.FC<TabelaAusenciasProps> = ({ ausencias }) => {
+  if (ausencias.length === 0) {
+    return (
+      <Card className="h-full bg-white/10 backdrop-blur-sm border-blue-200/30">
+        <CardHeader>
+          <CardTitle className="text-white">Ausências</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-blue-300">Nenhuma ausência registrada</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="h-full bg-white/10 backdrop-blur-sm border-blue-200/30 flex flex-col">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-white">Ausências ({ausencias.length})</CardTitle>
+      </CardHeader>
+      <CardContent className="flex-1 overflow-hidden min-h-0">
+        <div className="overflow-auto h-full border border-blue-200/20 rounded-lg">
+          <Table>
+            <TableHeader className="sticky top-0 bg-blue-600/20 backdrop-blur-sm z-10">
+              <TableRow>
+                <TableHead className="text-blue-200 text-xs py-3 w-2/3">Nome</TableHead>
+                <TableHead className="text-blue-200 text-xs py-3 w-1/6">Status</TableHead>
+                <TableHead className="text-blue-200 text-xs py-3 w-1/6">Obs.</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {ausencias.map((ausencia) => (
+                <TableRow key={ausencia.id} className="hover:bg-white/5 border-b border-blue-200/10">
+                  <TableCell className="py-3">
+                    <p className="text-sm text-white truncate">{ausencia.nome}</p>
+                  </TableCell>
+                  <TableCell className="py-3">
+                    <Badge variant={ausencia.justificado ? "default" : "destructive"} 
+                      className={ausencia.justificado 
+                        ? "bg-green-500/20 text-green-300 border-green-300/30 text-xs whitespace-nowrap" 
+                        : "bg-red-500/20 text-red-300 border-red-300/30 text-xs whitespace-nowrap"}>
+                      {ausencia.justificado ? 'Sim' : 'Não'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="py-3">
+                    <p className="text-xs text-blue-300 truncate">
+                      {ausencia.obs || '-'}
+                    </p>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+// Componente Principal (RelatorioTransporte)
+const RelatorioTransporte = () => {
+  const navigate = useNavigate();
+  const [menuAberto, setMenuAberto] = useState(true);
+  
+  const {
+    operacaoSelecionada,
+    setOperacaoSelecionada,
+    operacaoIdSelecionado,
+    setOperacaoIdSelecionado,
+    loading,
+    error,
+    operacoesFiltradas,
+    operacoesPorTipo,
+    formatarDataBR,
+    getOperacaoIcon,
+    dataFiltro,
+    filtroAplicado,
+    ...hookProps
+  } = useTransporteData();
+
+  // Encontra a operação selecionada
+  const operacaoAtual = useMemo(() => {
+    if (operacaoIdSelecionado) {
+      return operacoesFiltradas.find(op => op.id === operacaoIdSelecionado) || null;
+    }
+    return null;
+  }, [operacoesFiltradas, operacaoIdSelecionado]);
+
+  const formatarHoras = useCallback((totalHoras: number): string => {
+    if (totalHoras === 0) return '0h';
+    return `${totalHoras.toFixed(1)}h`;
+  }, []);
+
+  const renderConteudoPrincipal = () => {
+    if (loading && operacoesFiltradas.length === 0) {
+      return (
+        <div className="flex flex-col justify-center items-center h-full min-h-[400px] text-white">
+          <Loader2 className="h-8 w-8 animate-spin mb-4" />
+          <p>Carregando dados...</p>
+          <p className="text-sm text-blue-300 mt-2">Buscando operações para {formatarDataBR(dataFiltro)}</p>
+        </div>
+      );
+    }
+
+    if (error) {
+      return (
+        <div className="text-center py-12">
+          <div className="space-y-3">
+            <div className="h-12 w-12 text-red-400 mx-auto">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.998-.833-2.732 0L4.282 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
             </div>
-            <div className="flex items-center space-x-2">
-              <Button 
-                onClick={handleExecutarSQL}
-                disabled={atualizando}
-                className="flex items-center space-x-2 bg-white text-blue-900 hover:bg-blue-100 font-medium"
-              >
-                <Database className="h-4 w-4" />
-                <span>Atualizar Horários</span>
-              </Button>
-              <Button 
-                onClick={handleAtualizarDados}
-                disabled={atualizando}
-                className="flex items-center space-x-2 bg-white text-blue-900 hover:bg-blue-100 font-medium"
-              >
-                <RefreshCw className={`h-4 w-4 ${atualizando ? 'animate-spin' : ''}`} />
-                <span>Atualizar Dados</span>
-              </Button>
-              <Button 
-                variant="outline"
-                onClick={() => setMenuAberto(!menuAberto)}
-                className="md:hidden border-blue-300 text-white hover:bg-white/20"
-              >
-                <Menu className="h-4 w-4" />
-              </Button>
-              <Button 
-                onClick={() => navigate('/novo-lancamento')} 
-                className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-2.5 rounded-lg font-semibold transition-all shadow-sm hover:shadow-md"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Nova Operação
-              </Button>
-            </div>
+            <p className="text-lg font-medium text-white">Erro ao carregar dados</p>
+            <p className="text-red-400">{error}</p>
+            <Button 
+              onClick={hookProps.handleAtualizarDados}
+              className="mt-4"
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Tentar Novamente
+            </Button>
           </div>
         </div>
-      </div>
+      );
+    }
 
-      {/* Filtros */}
-      <div className="px-6 py-4 border-b border-blue-600/30 bg-blue-800/30 backdrop-blur-sm">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          <div className="space-y-2">
-            <Label className="text-sm font-medium text-white flex items-center space-x-2">
-              <Calendar className="h-4 w-4 text-blue-300" />
-              <span>Data da Operação</span>
-            </Label>
-            <div className="flex space-x-2">
-              <Input 
-                type="date" 
-                value={dataFiltro}
-                onChange={(e) => setDataFiltro(e.target.value)}
-                className="h-10 bg-white/5 border-blue-300/30 text-white focus:border-blue-300 transition-colors"
-              />
-              <Button 
-                onClick={aplicarFiltros}
-                className="h-10 bg-blue-500 hover:bg-blue-600 text-white"
-              >
-                <Search className="h-4 w-4" />
-              </Button>
-            </div>
-            <p className="text-xs text-blue-300">
-              {dataFiltro ? `Mostrando: ${formatarDataBR(dataFiltro)}` : 'Selecione uma data'}
+    if (operacoesFiltradas.length === 0) {
+      return (
+        <div className="text-center py-12">
+          <div className="space-y-3">
+            <Search className="h-12 w-12 text-blue-300/50 mx-auto" />
+            <p className="text-lg font-medium text-white">Nenhuma operação encontrada</p>
+            <p className="text-blue-300">
+              Não há dados para os filtros aplicados em {formatarDataBR(dataFiltro)}
             </p>
+            <Button 
+              variant="outline"
+              onClick={() => navigate('/novo-lancamento')}
+              className="mt-4 text-blue-300 border-blue-300 hover:bg-blue-500/20"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Criar Nova Operação
+            </Button>
           </div>
-          
-          <div className="space-y-2">
-            <Label className="text-sm font-medium text-white flex items-center space-x-2">
-              <Clock className="h-4 w-4 text-blue-300" />
-              <span>Turno</span>
-            </Label>
-            <Select value={horaInicialFiltro} onValueChange={setHoraInicialFiltro}>
-              <SelectTrigger className="h-10 bg-white/5 border-blue-300/30 text-white focus:border-blue-300">
-                <SelectValue placeholder="Todos os turnos" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Todos">Todos os Turnos</SelectItem>
-                <SelectItem value="07:00:00">Manhã (07:00)</SelectItem>
-                <SelectItem value="19:00:00">Noite (19:00)</SelectItem>
-              </SelectContent>
-            </Select>
+        </div>
+      );
+    }
+
+    if (!operacaoAtual && operacaoIdSelecionado) {
+      return (
+        <div className="text-center py-12">
+          <div className="space-y-3">
+            <UserX className="h-12 w-12 text-blue-300/50 mx-auto" />
+            <p className="text-lg font-medium text-white">Operação não encontrada</p>
+            <p className="text-blue-300">
+              A operação selecionada pode ter sido removida ou não existe mais.
+            </p>
+            <Button 
+              variant="outline"
+              onClick={() => setOperacaoIdSelecionado(null)}
+              className="mt-4 text-blue-300 border-blue-300 hover:bg-blue-500/20"
+            >
+              Voltar para lista
+            </Button>
           </div>
-          
-          <div className="space-y-2">
-            <Label className="text-sm font-medium text-white flex items-center space-x-2">
-              <Search className="h-4 w-4 text-blue-300" />
-              <span>Operador</span>
-            </Label>
-            <Input 
-              type="text"
-              value={operadorFiltro}
-              onChange={(e) => setOperadorFiltro(e.target.value)}
-              placeholder="Buscar por nome..."
-              className="h-10 bg-white/5 border-blue-300/30 text-white focus:border-blue-300 transition-colors"
+        </div>
+      );
+    }
+
+    // Layout com 2 colunas: Coluna 1 (operacao) e Coluna 2 (ajudantes + ausências)
+    return (
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Coluna 1: Tabela da Operação */}
+        <div className="lg:col-span-2">
+          <TabelaOperacao 
+            operacao={operacaoAtual}
+            formatarDataBR={formatarDataBR}
+            formatarHoras={formatarHoras}
+          />
+        </div>
+
+        {/* Coluna 2: Ajudantes e Ausências em coluna vertical */}
+        <div className="lg:col-span-1 flex flex-col gap-4">
+          {/* Ajudantes acima */}
+          <div className="flex-1">
+            <TabelaAjudantes 
+              ajudantes={operacaoAtual?.ajudantes || []}
             />
           </div>
           
-          <div className="space-y-2">
-            <Label className="text-sm font-medium text-white opacity-0">Ações</Label>
-            <Button 
-              onClick={aplicarFiltros}
-              className="w-full h-10 bg-green-600 hover:bg-green-700 text-white font-medium"
-            >
-              <Filter className="h-4 w-4 mr-2" />
-              Aplicar Filtros
-            </Button>
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-sm font-medium text-white opacity-0">Limpar</Label>
-            <Button 
-              onClick={limparFiltros}
-              className="w-full h-10 bg-gray-600 hover:bg-gray-700 text-white font-medium"
-            >
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Limpar Filtros
-            </Button>
+          {/* Ausências abaixo */}
+          <div className="flex-1">
+            <TabelaAusencias 
+              ausencias={operacaoAtual?.ausencias || []}
+            />
           </div>
         </div>
       </div>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-900 text-white overflow-auto">
+      {/* Header e Controles */}
+      <HeaderControles 
+        navigate={navigate}
+        menuAberto={menuAberto}
+        setMenuAberto={setMenuAberto}
+        {...hookProps}
+      />
+
+      {/* Filtros */}
+      <FiltrosArea 
+        dataFiltro={dataFiltro}
+        setDataFiltro={hookProps.setDataFiltro}
+        horaInicialFiltro={hookProps.horaInicialFiltro}
+        setHoraInicialFiltro={hookProps.setHoraInicialFiltro}
+        operadorFiltro={hookProps.operadorFiltro}
+        setOperadorFiltro={hookProps.setOperadorFiltro}
+        aplicarFiltros={hookProps.aplicarFiltros}
+        limparFiltros={hookProps.limparFiltros}
+        formatarDataBR={formatarDataBR}
+      />
 
       {/* Cards de Resumo */}
-      <div className="px-6 py-4">
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-          {['HYDRO', 'NAVIO', 'ALBRAS', 'SANTOS BRASIL', 'AJUDANTES', 'AUSENCIAS'].map((op) => {
-            const Icon = getOperacaoIcon(op);
-            let count = 0;
-            let label = '';
-            let totalHoras = 0;
-            let opsDoTipo: OperacaoCompleta[] = [];
-
-            if (['HYDRO', 'NAVIO', 'ALBRAS', 'SANTOS BRASIL'].includes(op)) {
-              opsDoTipo = operacoesFiltradas.filter(operacao => operacao.op === op);
-              count = opsDoTipo.length;
-              totalHoras = opsDoTipo.reduce((sum, operacao) => 
-                sum + operacao.equipamentos.reduce((eqSum, eq) => eqSum + (Number(eq.horas_trabalhadas) || 0), 0), 0
-              );
-              label = `${count} ops • ${formatarHoras(totalHoras)}`;
-            } else if (op === 'AJUDANTES') {
-              count = totaisAjudantesAusencias.totalAjudantes;
-              label = `${count} ajudantes`;
-            } else if (op === 'AUSENCIAS') {
-              count = totaisAjudantesAusencias.totalAusencias;
-              label = `${count} ausências`;
-            }
-            
-            return (
-              <Card 
-                key={op} 
-                className="bg-white/10 backdrop-blur-sm border-blue-200/30 hover:shadow-lg transition-all hover:scale-105 cursor-pointer"
-                onClick={() => {
-                  if (op === 'AJUDANTES') {
-                    setOperacaoSelecionada('AJUDANTES');
-                  } else if (op === 'AUSENCIAS') {
-                    setOperacaoSelecionada('AUSENCIAS');
-                  } else {
-                    setOperacaoSelecionada(op);
-                    // Se houver apenas uma operação do tipo, vai direto para visualização
-                    if (opsDoTipo.length === 1) {
-                      navigate(`/operacao/${opsDoTipo[0].id}/visualizar`);
-                    }
-                  }
-                }}
-              >
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-blue-200">{op}</p>
-                      <p className="text-2xl font-bold text-white">{count}</p>
-                      <p className="text-xs text-blue-300">{label}</p>
-                    </div>
-                    <div className="p-3 rounded-lg bg-blue-500/20">
-                      <Icon className="h-6 w-6 text-blue-300" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      </div>
+      <ResumoCards 
+        operacoesFiltradas={operacoesFiltradas}
+        setOperacaoSelecionada={setOperacaoSelecionada}
+        setOperacaoIdSelecionado={setOperacaoIdSelecionado}
+        loading={loading}
+      />
 
       {/* Conteúdo Principal */}
-      <div className="flex-1 flex px-6 pb-6" style={{ minHeight: 'calc(100vh - 300px)' }}>
+      <div className="flex px-6 pb-6 gap-6 min-h-[600px]">
         {/* Menu Lateral */}
         <div className={`${menuAberto ? 'w-80' : 'w-0'} transition-all duration-300 flex-shrink-0 ${!menuAberto && 'overflow-hidden'}`}>
           <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30 h-full">
@@ -684,12 +1242,15 @@ const RelatorioTransporte = () => {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="space-y-1 max-h-[calc(100vh-400px)] overflow-y-auto">
+              <div className="space-y-1 h-[calc(100vh-450px)] overflow-y-auto">
                 {/* Item Todos */}
                 <button
-                  onClick={() => setOperacaoSelecionada('TODOS')}
+                  onClick={() => {
+                    setOperacaoSelecionada('TODOS');
+                    setOperacaoIdSelecionado(null);
+                  }}
                   className={`w-full text-left p-4 hover:bg-white/10 transition-all border-l-4 ${
-                    operacaoSelecionada === 'TODOS' 
+                    operacaoSelecionada === 'TODOS' && !operacaoIdSelecionado
                       ? 'bg-blue-500/20 border-blue-300 text-white shadow-inner' 
                       : 'border-transparent text-blue-200 hover:border-blue-200/50'
                   }`}
@@ -697,7 +1258,7 @@ const RelatorioTransporte = () => {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">
                       <BarChart3 className="h-5 w-5" />
-                      <span className="font-medium">VISÃO GERAL</span>
+                      <span className="font-medium">TODAS OPERAÇÕES</span>
                     </div>
                     <Badge variant="secondary" className="bg-blue-500/20 text-blue-300">
                       {operacoesFiltradas.length}
@@ -705,19 +1266,23 @@ const RelatorioTransporte = () => {
                   </div>
                 </button>
 
-                {/* Operações por Tipo */}
+                {/* Operações por Tipo (visão agrupada) */}
                 {Object.entries(operacoesPorTipo).map(([tipo, ops]) => {
-                  const Icon = getOperacaoIcon(tipo);
+                  const Icon = getOperacaoIcon(tipo.startsWith('NAVIO') ? 'NAVIO' : tipo);
                   const totalHoras = ops.reduce((sum, op) => 
                     sum + op.equipamentos.reduce((eqSum, eq) => eqSum + (Number(eq.horas_trabalhadas) || 0), 0), 0
                   );
                   
                   return (
                     <div key={tipo}>
+                      {/* Cabeçalho do tipo */}
                       <button
-                        onClick={() => setOperacaoSelecionada(tipo)}
+                        onClick={() => {
+                          setOperacaoSelecionada(tipo);
+                          setOperacaoIdSelecionado(null);
+                        }}
                         className={`w-full text-left p-4 hover:bg-white/10 transition-all border-l-4 ${
-                          operacaoSelecionada === tipo 
+                          operacaoSelecionada === tipo && !operacaoIdSelecionado
                             ? 'bg-blue-500/20 border-blue-300 text-white shadow-inner' 
                             : 'border-transparent text-blue-200 hover:border-blue-200/50'
                         }`}
@@ -725,636 +1290,97 @@ const RelatorioTransporte = () => {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-3">
                             <Icon className="h-5 w-5" />
-                            <span className="font-medium">{tipo}</span>
+                            <span className="font-medium truncate">{tipo}</span>
                           </div>
                           <div className="text-right">
                             <Badge variant="secondary" className="bg-blue-500/20 text-blue-300 mb-1">
                               {ops.length}
                             </Badge>
-                            <div className="text-xs text-blue-300">
-                              {formatarHoras(totalHoras)}
-                            </div>
+                            <p className="text-xs text-blue-300">{formatarHoras(totalHoras)}</p>
                           </div>
                         </div>
                       </button>
-                      
-                      {/* IDs das operações - SEMPRE VISÍVEIS */}
-                      {ops.map((op) => {
-                        const opHoras = op.equipamentos.reduce((sum, eq) => 
-                          sum + (Number(eq.horas_trabalhadas) || 0), 0
-                        );
-                        
-                        return (
-                          <button
-                            key={op.id}
-                            onClick={() => setOperacaoSelecionada(op.id)}
-                            className={`w-full text-left p-4 pl-12 hover:bg-white/10 transition-all border-l-4 ${
-                              operacaoSelecionada === op.id 
-                                ? 'bg-blue-400/20 border-blue-200 text-white shadow-inner' 
-                                : 'border-transparent text-blue-200 hover:border-blue-200/30'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <div className="font-medium text-sm">ID: {op.id.slice(0, 8)}...</div>
-                                <div className="text-xs text-blue-300">
-                                  {formatarDataBR(op.data)} • {op.hora_inicial}
+
+                      {/* Lista de operações individuais */}
+                      {operacaoSelecionada === tipo && (
+                        <div className="ml-4 space-y-1 border-l border-blue-300/20">
+                          {ops.map((op) => {
+                            const opTotalHoras = op.equipamentos.reduce((sum, eq) => 
+                              sum + (Number(eq.horas_trabalhadas) || 0), 0
+                            );
+                            
+                            const displayName = op.op === 'NAVIO' && op.navios 
+                              ? `${formatarDataBR(op.data)} • ${op.hora_inicial}`
+                              : `${formatarDataBR(op.data)} • ${op.hora_inicial}`;
+                            
+                            return (
+                              <button
+                                key={op.id}
+                                onClick={() => {
+                                  setOperacaoIdSelecionado(op.id);
+                                }}
+                                className={`w-full text-left p-3 hover:bg-white/5 transition-all ${
+                                  operacaoIdSelecionado === op.id
+                                    ? 'bg-blue-400/20 text-white' 
+                                    : 'text-blue-200'
+                                }`}
+                              >
+                                <div className="flex justify-between items-center">
+                                  <div className="truncate max-w-[180px]">
+                                    <p className="text-sm font-medium truncate">
+                                      {displayName}
+                                    </p>
+                                    {op.op !== 'NAVIO' && op.equipamentos.length > 0 && (
+                                      <p className="text-xs text-blue-300 truncate">
+                                        {op.equipamentos[0]?.grupo_operacao || 'Sem grupo'}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <Badge className="bg-green-500/20 text-green-300 text-xs">
+                                    {formatarHoras(opTotalHoras)}
+                                  </Badge>
                                 </div>
-                              </div>
-                              <div className="text-right">
-                                <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-300 border-blue-300/30 mb-1">
-                                  {op.equipamentos.length} eqps
-                                </Badge>
-                                <div className="text-xs text-green-300">
-                                  {formatarHoras(opHoras)}
-                                </div>
-                              </div>
-                            </div>
-                          </button>
-                        );
-                      })}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
-
-                {/* Ajudantes */}
-                {totaisAjudantesAusencias.totalAjudantes > 0 && (
-                  <button
-                    onClick={() => setOperacaoSelecionada('AJUDANTES')}
-                    className={`w-full text-left p-4 hover:bg-white/10 transition-all border-l-4 ${
-                      operacaoSelecionada === 'AJUDANTES' 
-                        ? 'bg-blue-500/20 border-blue-300 text-white shadow-inner' 
-                        : 'border-transparent text-blue-200 hover:border-blue-200/50'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
-                        <Users className="h-5 w-5" />
-                        <span className="font-medium">AJUDANTES</span>
-                      </div>
-                      <Badge variant="secondary" className="bg-blue-500/20 text-blue-300">
-                        {totaisAjudantesAusencias.totalAjudantes}
-                      </Badge>
-                    </div>
-                  </button>
-                )}
-
-                {/* Ausências */}
-                {totaisAjudantesAusencias.totalAusencias > 0 && (
-                  <button
-                    onClick={() => setOperacaoSelecionada('AUSENCIAS')}
-                    className={`w-full text-left p-4 hover:bg-white/10 transition-all border-l-4 ${
-                      operacaoSelecionada === 'AUSENCIAS' 
-                        ? 'bg-blue-500/20 border-blue-300 text-white shadow-inner' 
-                        : 'border-transparent text-blue-200 hover:border-blue-200/50'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
-                        <UserX className="h-5 w-5" />
-                        <span className="font-medium">AUSÊNCIAS</span>
-                      </div>
-                      <Badge variant="secondary" className="bg-blue-500/20 text-blue-300">
-                        {totaisAjudantesAusencias.totalAusencias}
-                      </Badge>
-                    </div>
-                  </button>
-                )}
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Conteúdo */}
-        <div className="flex-1 ml-6 min-w-0">
+        {/* Área de Visualização Principal */}
+        <div className="flex-1 overflow-hidden">
           <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30 h-full">
-            <CardContent className="p-6 h-full overflow-auto">
-              {/* Visão Geral */}
-              {operacaoSelecionada === 'TODOS' && (
-                <div className="space-y-6">
-                  {Object.entries(operacoesPorTipo).map(([tipo, ops]) => {
-                    const Icon = getOperacaoIcon(tipo);
-                    const totalHoras = ops.reduce((sum, op) => 
-                      sum + op.equipamentos.reduce((eqSum, eq) => eqSum + (Number(eq.horas_trabalhadas) || 0), 0), 0
-                    );
-                    
-                    return (
-                      <div key={tipo} className="border border-blue-200/30 rounded-lg hover:border-blue-200/50 transition-all">
-                        <div className="bg-blue-500/10 px-4 py-3 border-b border-blue-200/30">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-3">
-                              <Icon className="h-5 w-5 text-blue-300" />
-                              <h3 className="text-lg font-semibold text-white">{tipo}</h3>
-                              <Badge variant="outline" className="bg-blue-500/10 text-blue-300 border-blue-300/30">
-                                {ops.length} operação(ões)
-                              </Badge>
-                            </div>
-                            {totalHoras > 0 && (
-                              <div className="text-sm text-blue-300">
-                                Total: <span className="font-semibold text-green-400">{formatarHoras(totalHoras)}</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <OperacoesTable 
-                          operacoes={ops}
-                          getOperacaoDisplayName={getOperacaoDisplayName}
-                          formatarDataBR={formatarDataBR}
-                        />
-                      </div>
-                    );
-                  })}
-                  
-                  {totaisAjudantesAusencias.totalAjudantes > 0 && (
-                    <div className="border border-blue-200/30 rounded-lg hover:border-blue-200/50 transition-all">
-                      <div className="bg-blue-500/10 px-4 py-3 border-b border-blue-200/30">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-3">
-                            <Users className="h-5 w-5 text-blue-300" />
-                            <h3 className="text-lg font-semibold text-white">AJUDANTES</h3>
-                            <Badge variant="outline" className="bg-blue-500/10 text-blue-300 border-blue-300/30">
-                              {totaisAjudantesAusencias.totalAjudantes} ajudante(s)
-                            </Badge>
-                          </div>
-                        </div>
-                      </div>
-                      <AjudantesTable operacoes={operacoesFiltradas} formatarDataBR={formatarDataBR} />
-                    </div>
-                  )}
-
-                  {totaisAjudantesAusencias.totalAusencias > 0 && (
-                    <div className="border border-blue-200/30 rounded-lg hover:border-blue-200/50 transition-all">
-                      <div className="bg-blue-500/10 px-4 py-3 border-b border-blue-200/30">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-3">
-                            <UserX className="h-5 w-5 text-blue-300" />
-                            <h3 className="text-lg font-semibold text-white">AUSÊNCIAS</h3>
-                            <Badge variant="outline" className="bg-blue-500/10 text-blue-300 border-blue-300/30">
-                              {totaisAjudantesAusencias.totalAusencias} ausência(s)
-                            </Badge>
-                          </div>
-                        </div>
-                      </div>
-                      <AusenciasTable operacoes={operacoesFiltradas} formatarDataBR={formatarDataBR} />
-                    </div>
-                  )}
-
-                  {operacoesFiltradas.length === 0 && (
-                    <div className="text-center py-12 border-2 border-dashed border-blue-300/30 rounded-lg hover:border-blue-300/50 transition-all">
-                      <Search className="h-12 w-12 text-blue-300/50 mx-auto mb-4" />
-                      <p className="text-lg font-medium text-white mb-2">Nenhuma operação encontrada</p>
-                      <p className="text-blue-300 mb-4">Ajuste os filtros ou crie uma nova operação</p>
-                      <Button 
-                        onClick={() => navigate('/novo-lancamento')}
-                        className="bg-orange-500 hover:bg-orange-600 text-white"
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Criar Primeira Operação
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Operação Específica por ID */}
-              {operacaoSelecionada && operacaoSelecionada !== 'TODOS' && operacaoSelecionada !== 'AJUDANTES' && operacaoSelecionada !== 'AUSENCIAS' && !['HYDRO', 'NAVIO', 'ALBRAS', 'SANTOS BRASIL'].includes(operacaoSelecionada) && (
-                <OperacaoDetalhada 
-                  operacao={operacoesFiltradas.find(op => op.id === operacaoSelecionada)}
-                  getOperacaoDisplayName={getOperacaoDisplayName}
-                  formatarDataBR={formatarDataBR}
-                />
-              )}
-
-              {/* Operação por Tipo */}
-              {['HYDRO', 'NAVIO', 'ALBRAS', 'SANTOS BRASIL'].includes(operacaoSelecionada) && (
-                <div>
-                  <div className="flex items-center justify-between mb-6 p-4 bg-blue-500/10 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <div className="p-3 rounded-lg bg-blue-500/20">
-                        {(() => {
-                          const Icon = getOperacaoIcon(operacaoSelecionada);
-                          return <Icon className="h-6 w-6 text-blue-300" />;
-                        })()}
-                      </div>
-                      <div>
-                        <h2 className="text-xl font-bold text-white">{operacaoSelecionada}</h2>
-                        <p className="text-blue-300">
-                          {operacoesPorTipo[operacaoSelecionada]?.length || 0} operação(ões) • Total: {formatarHoras(totaisPorOperacao[operacaoSelecionada] || 0)}
-                        </p>
-                      </div>
-                    </div>
-                    <Badge variant="secondary" className="text-sm bg-blue-500/20 text-blue-300">
-                      {operacoesPorTipo[operacaoSelecionada]?.length || 0} registros
-                    </Badge>
-                  </div>
-                  <OperacoesTable 
-                    operacoes={operacoesPorTipo[operacaoSelecionada] || []}
-                    getOperacaoDisplayName={getOperacaoDisplayName}
-                    formatarDataBR={formatarDataBR}
-                  />
-                </div>
-              )}
-
-              {/* Ajudantes */}
-              {operacaoSelecionada === 'AJUDANTES' && (
-                <div>
-                  <div className="flex items-center justify-between mb-6 p-4 bg-blue-500/10 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <div className="p-3 rounded-lg bg-blue-500/20">
-                        <Users className="h-6 w-6 text-blue-300" />
-                      </div>
-                      <div>
-                        <h2 className="text-xl font-bold text-white">AJUDANTES</h2>
-                        <p className="text-blue-300">
-                          {totaisAjudantesAusencias.totalAjudantes} ajudante(s) registrado(s)
-                        </p>
-                      </div>
-                    </div>
-                    <Badge variant="secondary" className="text-sm bg-blue-500/20 text-blue-300">
-                      {totaisAjudantesAusencias.totalAjudantes} registros
-                    </Badge>
-                  </div>
-                  <AjudantesTable operacoes={operacoesFiltradas} formatarDataBR={formatarDataBR} />
-                </div>
-              )}
-
-              {/* Ausências */}
-              {operacaoSelecionada === 'AUSENCIAS' && (
-                <div>
-                  <div className="flex items-center justify-between mb-6 p-4 bg-blue-500/10 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <div className="p-3 rounded-lg bg-blue-500/20">
-                        <UserX className="h-6 w-6 text-blue-300" />
-                      </div>
-                      <div>
-                        <h2 className="text-xl font-bold text-white">AUSÊNCIAS</h2>
-                        <p className="text-blue-300">
-                          {totaisAjudantesAusencias.totalAusencias} ausência(s) registrada(s)
-                        </p>
-                      </div>
-                    </div>
-                    <Badge variant="secondary" className="text-sm bg-blue-500/20 text-blue-300">
-                      {totaisAjudantesAusencias.totalAusencias} registros
-                    </Badge>
-                  </div>
-                  <AusenciasTable operacoes={operacoesFiltradas} formatarDataBR={formatarDataBR} />
-                </div>
-              )}
+            <CardHeader className="pb-3">
+              <CardTitle className="text-xl font-semibold text-white">
+                {operacaoIdSelecionado 
+                  ? `Operação ${operacaoAtual ? (operacaoAtual.op === 'NAVIO' && operacaoAtual.navios 
+                    ? `${operacaoAtual.navios.nome_navio} - ${operacaoAtual.navios.carga}`
+                    : operacaoAtual.op) : ''}`
+                  : operacaoSelecionada === 'TODOS' 
+                    ? 'Todas as Operações' 
+                    : `Operações - ${operacaoSelecionada}`}
+              </CardTitle>
+              <p className="text-sm text-blue-300">
+                {dataFiltro ? `Dados de ${formatarDataBR(dataFiltro)}` : 'Selecione uma data para filtrar'}
+                {operacaoIdSelecionado && operacaoAtual && (
+                  <span className="ml-2">
+                    • {formatarDataBR(operacaoAtual.data)} • {operacaoAtual.hora_inicial} - {operacaoAtual.hora_final}
+                  </span>
+                )}
+              </p>
+            </CardHeader>
+            <CardContent className="p-6 min-h-[500px]">
+              {renderConteudoPrincipal()}
             </CardContent>
           </Card>
         </div>
       </div>
-    </div>
-  );
-};
-
-// Componente para operação detalhada por ID
-interface OperacaoDetalhadaProps {
-  operacao: OperacaoCompleta | undefined;
-  getOperacaoDisplayName: (op: OperacaoCompleta) => string;
-  formatarDataBR: (data: string) => string;
-}
-
-const OperacaoDetalhada = ({ operacao, getOperacaoDisplayName, formatarDataBR }: OperacaoDetalhadaProps) => {
-  const navigate = useNavigate();
-  
-  if (!operacao) {
-    return (
-      <div className="text-center py-12">
-        <div className="space-y-3">
-          <Search className="h-12 w-12 text-blue-300/50 mx-auto" />
-          <p className="text-lg font-medium text-white">Operação não encontrada</p>
-          <p className="text-blue-300">A operação selecionada não existe ou foi removida</p>
-        </div>
-      </div>
-    );
-  }
-
-  const totalHoras = operacao.equipamentos.reduce((sum, eq) => 
-    sum + (Number(eq.horas_trabalhadas) || 0), 0
-  );
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between p-4 bg-blue-500/10 rounded-lg">
-        <div>
-          <h2 className="text-xl font-bold text-white">Operação #{operacao.id.slice(0, 8)}</h2>
-          <p className="text-blue-300">
-            {getOperacaoDisplayName(operacao)} • {formatarDataBR(operacao.data)}
-          </p>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Button 
-            variant="outline"
-            onClick={() => navigate(`/operacao/${operacao.id}/visualizar`)}
-            className="text-blue-300 hover:text-white hover:bg-blue-500/20 border-blue-300/30"
-          >
-            <EyeOff className="h-4 w-4 mr-2" />
-            Visualizar Completa
-          </Button>
-          <Badge className="bg-green-500/20 text-green-300 text-lg px-3 py-1">
-            Total: {totalHoras.toFixed(1)}h
-          </Badge>
-        </div>
-      </div>
-
-      <Card className="bg-white/5 border-blue-200/30">
-        <CardHeader>
-          <CardTitle className="text-white">Detalhes da Operação</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label className="text-sm font-medium text-blue-200">Data</Label>
-              <p className="text-white">{formatarDataBR(operacao.data)}</p>
-            </div>
-            <div>
-              <Label className="text-sm font-medium text-blue-200">Horário</Label>
-              <p className="text-white">{operacao.hora_inicial} - {operacao.hora_final}</p>
-            </div>
-            <div>
-              <Label className="text-sm font-medium text-blue-200">Tipo</Label>
-              <p className="text-white">{operacao.op}</p>
-            </div>
-            <div>
-              <Label className="text-sm font-medium text-blue-200">Observações</Label>
-              <p className="text-white">{operacao.observacao || 'Nenhuma'}</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <OperacoesTable 
-        operacoes={[operacao]}
-        getOperacaoDisplayName={getOperacaoDisplayName}
-        formatarDataBR={formatarDataBR}
-      />
-    </div>
-  );
-};
-
-// Componente de Tabela de Operações
-interface OperacoesTableProps {
-  operacoes: OperacaoCompleta[];
-  getOperacaoDisplayName: (op: OperacaoCompleta) => string;
-  formatarDataBR: (data: string) => string;
-}
-
-const OperacoesTable = ({ operacoes, getOperacaoDisplayName, formatarDataBR }: OperacoesTableProps) => {
-  const navigate = useNavigate();
-  
-  if (operacoes.length === 0) {
-    return (
-      <div className="text-center py-12">
-        <div className="space-y-3">
-          <Search className="h-12 w-12 text-blue-300/50 mx-auto" />
-          <p className="text-lg font-medium text-white">Nenhuma operação encontrada</p>
-          <p className="text-blue-300">Os filtros aplicados não retornaram resultados</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="overflow-x-auto">
-      <Table>
-        <TableHeader className="bg-blue-500/10">
-          <TableRow>
-            <TableHead className="font-semibold text-blue-200 py-3">Operação</TableHead>
-            <TableHead className="font-semibold text-blue-200 py-3">Data</TableHead>
-            <TableHead className="font-semibold text-blue-200 py-3">Horário</TableHead>
-            <TableHead className="font-semibold text-blue-200 py-3">Equipamento</TableHead>
-            <TableHead className="font-semibold text-blue-200 py-3">Motorista/Operador</TableHead>
-            <TableHead className="font-semibold text-blue-200 py-3">Horas Trabalhadas</TableHead>
-            <TableHead className="font-semibold text-blue-200 py-3 text-center">Ações</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {operacoes.flatMap((op) => 
-            op.equipamentos.map((eq) => {
-              const horasTrabalhadas = Number(eq.horas_trabalhadas) || 0;
-              
-              // VERIFICA SE É HYDRO E SUBSTITUI A OPERAÇÃO PELO grupo_operacao
-              const displayOperacao = op.op === 'HYDRO' 
-                ? eq.grupo_operacao 
-                : getOperacaoDisplayName(op);
-              
-              return (
-                <TableRow key={`${op.id}-${eq.id}`} className="hover:bg-white/5 transition-colors border-b border-blue-200/10">
-                  <TableCell className="py-4">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-3 h-3 rounded-full bg-blue-400"></div>
-                      <div>
-                        <div className="font-medium text-white">{displayOperacao}</div>
-                        {op.observacao && (
-                          <div className="text-sm text-blue-300 truncate max-w-xs">{op.observacao}</div>
-                        )}
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="py-4">
-                    <div className="text-sm font-medium text-white">
-                      {formatarDataBR(op.data)}
-                    </div>
-                  </TableCell>
-                  <TableCell className="py-4">
-                    <div className="flex items-center space-x-2">
-                      <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-300/30">
-                        {op.hora_inicial}
-                      </Badge>
-                      <span className="text-blue-400">→</span>
-                      <Badge variant="outline" className="bg-green-500/20 text-green-300 border-green-300/30">
-                        {op.hora_final}
-                      </Badge>
-                    </div>
-                  </TableCell>
-                  <TableCell className="py-4">
-                    <div className="font-medium text-white">{eq.tag}</div>
-                  </TableCell>
-                  <TableCell className="py-4">
-                    <div className="font-medium text-white">{eq.motorista_operador}</div>
-                  </TableCell>
-                  <TableCell className="py-4">
-                    <div className="text-center">
-                      <Badge className="bg-green-500/20 text-green-300 hover:bg-green-500/20 border-0 text-sm font-medium">
-                        {horasTrabalhadas.toFixed(1)}h
-                      </Badge>
-                    </div>
-                  </TableCell>
-                  <TableCell className="py-4">
-                    <div className="flex justify-center">
-                      <Button 
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => navigate(`/operacao/${op.id}/visualizar`)}
-                        className="text-blue-300 hover:text-white hover:bg-blue-500/20 transition-colors"
-                        title="Visualizar operação completa"
-                      >
-                        <EyeOff className="h-4 w-4 mr-1" />
-                        Visualizar
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              );
-            })
-          )}
-        </TableBody>
-      </Table>
-    </div>
-  );
-};
-
-// Componente de Tabela de Ajudantes
-interface AjudantesTableProps {
-  operacoes: OperacaoCompleta[];
-  formatarDataBR: (data: string) => string;
-}
-
-const AjudantesTable = ({ operacoes, formatarDataBR }: AjudantesTableProps) => {
-  const todosAjudantes = operacoes.flatMap(op => 
-    op.ajudantes?.map(ajudante => ({
-      ...ajudante,
-      operacao: op.op,
-      dataOperacao: op.data,
-      nomeOperacao: op.op === 'NAVIO' && op.navios ? `${op.navios.nome_navio} - ${op.navios.carga}` : op.op
-    })) || []
-  );
-
-  if (todosAjudantes.length === 0) {
-    return (
-      <div className="text-center py-12">
-        <div className="space-y-3">
-          <Users className="h-12 w-12 text-blue-300/50 mx-auto" />
-          <p className="text-lg font-medium text-white">Nenhum ajudante encontrado</p>
-          <p className="text-blue-300">Não há ajudantes registrados para os filtros aplicados</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="overflow-x-auto">
-      <Table>
-        <TableHeader className="bg-blue-500/10">
-          <TableRow>
-            <TableHead className="font-semibold text-blue-200 py-3">Nome</TableHead>
-            <TableHead className="font-semibold text-blue-200 py-3">Operação</TableHead>
-            <TableHead className="font-semibold text-blue-200 py-3">Data</TableHead>
-            <TableHead className="font-semibold text-blue-200 py-3">Horário</TableHead>
-            <TableHead className="font-semibold text-blue-200 py-3">Observações</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {todosAjudantes.map((ajudante, index) => (
-            <TableRow key={`${ajudante.id}-${index}`} className="hover:bg-white/5 transition-colors border-b border-blue-200/10">
-              <TableCell className="py-4">
-                <div className="font-medium text-white">{ajudante.nome}</div>
-              </TableCell>
-              <TableCell className="py-4">
-                <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-300/30">
-                  {ajudante.nomeOperacao}
-                </Badge>
-              </TableCell>
-              <TableCell className="py-4">
-                <div className="text-sm text-white">
-                  {formatarDataBR(ajudante.data)}
-                </div>
-              </TableCell>
-              <TableCell className="py-4">
-                <div className="flex items-center space-x-2">
-                  <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-300/30 text-xs">
-                    {ajudante.hora_inicial}
-                  </Badge>
-                  <span className="text-blue-400">→</span>
-                  <Badge variant="outline" className="bg-green-500/20 text-green-300 border-green-300/30 text-xs">
-                    {ajudante.hora_final}
-                  </Badge>
-                </div>
-              </TableCell>
-              <TableCell className="py-4">
-                <div className="text-sm text-blue-300 max-w-xs">
-                  {ajudante.observacao || 'Sem observações'}
-                </div>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
-  );
-};
-
-// Componente de Tabela de Ausências
-interface AusenciasTableProps {
-  operacoes: OperacaoCompleta[];
-  formatarDataBR: (data: string) => string;
-}
-
-const AusenciasTable = ({ operacoes, formatarDataBR }: AusenciasTableProps) => {
-  const todasAusencias = operacoes.flatMap(op => 
-    op.ausencias?.map(ausencia => ({
-      ...ausencia,
-      operacao: op.op,
-      dataOperacao: op.data,
-      nomeOperacao: op.op === 'NAVIO' && op.navios ? `${op.navios.nome_navio} - ${op.navios.carga}` : op.op
-    })) || []
-  );
-
-  if (todasAusencias.length === 0) {
-    return (
-      <div className="text-center py-12">
-        <div className="space-y-3">
-          <UserX className="h-12 w-12 text-blue-300/50 mx-auto" />
-          <p className="text-lg font-medium text-white">Nenhuma ausência encontrada</p>
-          <p className="text-blue-300">Não há ausências registradas para os filtros aplicados</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="overflow-x-auto">
-      <Table>
-        <TableHeader className="bg-blue-500/10">
-          <TableRow>
-            <TableHead className="font-semibold text-blue-200 py-3">Nome</TableHead>
-            <TableHead className="font-semibold text-blue-200 py-3">Operação</TableHead>
-            <TableHead className="font-semibold text-blue-200 py-3">Data</TableHead>
-            <TableHead className="font-semibold text-blue-200 py-3">Status</TableHead>
-            <TableHead className="font-semibold text-blue-200 py-3">Observações</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {todasAusencias.map((ausencia, index) => (
-            <TableRow key={`${ausencia.id}-${index}`} className="hover:bg-white/5 transition-colors border-b border-blue-200/10">
-              <TableCell className="py-4">
-                <div className="font-medium text-white">{ausencia.nome}</div>
-              </TableCell>
-              <TableCell className="py-4">
-                <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-300/30">
-                  {ausencia.nomeOperacao}
-                </Badge>
-              </TableCell>
-              <TableCell className="py-4">
-                <div className="text-sm text-white">
-                  {formatarDataBR(ausencia.data)}
-                </div>
-              </TableCell>
-              <TableCell className="py-4">
-                <Badge variant={ausencia.justificado ? "default" : "destructive"} className={ausencia.justificado ? "bg-green-500/20 text-green-300 hover:bg-green-500/20 border-green-300/30" : "bg-red-500/20 text-red-300 hover:bg-red-500/20 border-red-300/30"}>
-                  {ausencia.justificado ? 'Justificado' : 'Não Justificado'}
-                </Badge>
-              </TableCell>
-              <TableCell className="py-4">
-                <div className="text-sm text-blue-300 max-w-xs">
-                  {ausencia.obs || 'Sem observações'}
-                </div>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
     </div>
   );
 };

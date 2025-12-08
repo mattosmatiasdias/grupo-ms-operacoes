@@ -566,11 +566,11 @@ const EditarOperacao = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-blue-200 border-t-white rounded-full animate-spin mx-auto mb-4"></div>
           <h2 className="text-2xl font-bold text-white mb-2">Carregando Operação</h2>
-          <p className="text-blue-200">Preparando dados para edição...</p>
+          <p className="text-blue-300">Preparando dados para edição...</p>
         </div>
       </div>
     );
@@ -581,29 +581,28 @@ const EditarOperacao = () => {
     : operacaoGrupos.reduce((total, grupo) => total + grupo.equipamentos.length, 0);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900 pb-10">
+    <div className="min-h-screen bg-gray-900 text-white pb-10">
       {/* Header */}
-      <div className="bg-blue-800/50 backdrop-blur-sm border-b border-blue-600/30 shadow-sm">
-        <div className="px-6 py-4">
-          <div className="flex items-center justify-between">
+      <div className="bg-blue-900/80 backdrop-blur-md shadow-lg sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-4">
             <div className="flex items-center space-x-4">
               <Button 
                 variant="ghost" 
                 onClick={() => navigate('/relatorio-transporte')} 
-                className="text-white hover:bg-white/20 px-4 py-2 rounded-lg transition-all"
+                className="text-blue-300 hover:bg-blue-800/50"
+                title="Cancelar e voltar"
               >
-                <ArrowLeft className="h-5 w-5 mr-2" />
-                Cancelar Edição
+                <ArrowLeft className="h-5 w-5" />
+                <span className="ml-2">Cancelar</span>
               </Button>
-              <div>
-                <h1 className="text-2xl font-bold text-white">Editando Operação</h1>
-                <p className="text-blue-200 text-sm">
-                  {selectedOp} • {new Date(data).toLocaleDateString('pt-BR')} • {horaInicial} - {horaFinal}
-                  • {totalEquipamentos} equipamentos
-                </p>
-              </div>
+              <h1 className="text-2xl font-bold text-white">Editando Operação</h1>
             </div>
-            <div className="flex items-center space-x-2">
+            
+            <div className="flex items-center space-x-3">
+              <Badge className="bg-blue-500/20 text-blue-300 border-blue-300/30 text-sm">
+                {totalEquipamentos} equipamentos
+              </Badge>
               <div className="p-3 rounded-lg bg-blue-500/20">
                 <Icon className="h-5 w-5 text-blue-300" />
               </div>
@@ -612,187 +611,455 @@ const EditarOperacao = () => {
         </div>
       </div>
 
+      {/* Informação da operação */}
+      <div className="px-6 py-3 bg-blue-800/30 backdrop-blur-sm border-b border-blue-600/30">
+        <div className="max-w-7xl mx-auto">
+          <p className="text-sm text-blue-300">
+            {selectedOp} • {new Date(data).toLocaleDateString('pt-BR')} • {horaInicial} - {horaFinal}
+          </p>
+        </div>
+      </div>
+
       <form onSubmit={handleUpdate} className="px-6 space-y-4 mt-6">
-        {/* Dados da Operação */}
-        <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
-          <CardHeader className="border-b border-blue-200/30">
-            <CardTitle className="text-white flex items-center space-x-2">
-              <Calendar className="h-5 w-5 text-blue-300" />
-              <span>Dados da Operação</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6 space-y-4">
-            {selectedOp === 'NAVIO' && ( 
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-blue-200">Selecionar Navio</Label>
-                <Select value={selectedNavio} onValueChange={setSelectedNavio}>
-                  <SelectTrigger className="bg-white/5 border-blue-300/30 text-white">
-                    <SelectValue placeholder="Selecione um navio..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {navios.map((navio) => (
-                      <SelectItem key={navio.id} value={navio.id}>
-                        {navio.nome_navio} - {navio.carga}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div> 
-            )}
+        <div className="max-w-7xl mx-auto">
+          {/* Dados da Operação */}
+          <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
+            <CardHeader className="border-b border-blue-200/30">
+              <CardTitle className="text-white flex items-center space-x-2">
+                <Calendar className="h-5 w-5 text-blue-300" />
+                <span>Dados da Operação</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              {selectedOp === 'NAVIO' && ( 
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-blue-200">Selecionar Navio</Label>
+                  <Select value={selectedNavio} onValueChange={setSelectedNavio}>
+                    <SelectTrigger className="h-10 bg-white/5 border-blue-300/30 text-white focus:border-blue-300">
+                      <SelectValue placeholder="Selecione um navio..." />
+                    </SelectTrigger>
+                    <SelectContent className="bg-gray-900 border-blue-300/30">
+                      {navios.map((navio) => (
+                        <SelectItem key={navio.id} value={navio.id}>
+                          {navio.nome_navio} - {navio.carga}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div> 
+              )}
 
-            {selectedOp === 'ALBRAS' && (
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-blue-200">Tipo de Carga *</Label>
-                <Select value={carga} onValueChange={setCarga} required>
-                  <SelectTrigger className="bg-white/5 border-blue-300/30 text-white">
-                    <SelectValue placeholder="Selecione o tipo de carga" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {opcoesCarga.map((cargaItem) => (
-                      <SelectItem key={cargaItem} value={cargaItem}>
-                        {cargaItem}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-blue-300 mt-1">
-                  Selecione o tipo de carga para a operação ALBRAS
-                </p>
-              </div>
-            )}
+              {selectedOp === 'ALBRAS' && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-blue-200">Tipo de Carga *</Label>
+                  <Select value={carga} onValueChange={setCarga} required>
+                    <SelectTrigger className="h-10 bg-white/5 border-blue-300/30 text-white focus:border-blue-300">
+                      <SelectValue placeholder="Selecione o tipo de carga" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-gray-900 border-blue-300/30">
+                      {opcoesCarga.map((cargaItem) => (
+                        <SelectItem key={cargaItem} value={cargaItem}>
+                          {cargaItem}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-blue-300 mt-1">
+                    Selecione o tipo de carga para a operação ALBRAS
+                  </p>
+                </div>
+              )}
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-blue-200 flex items-center space-x-2">
-                  <Calendar className="h-4 w-4 text-blue-300" />
-                  <span>Data</span>
-                </Label>
-                <Input 
-                  type="date" 
-                  value={data} 
-                  onChange={(e) => setData(e.target.value)} 
-                  required 
-                  className="bg-white/5 border-blue-300/30 text-white"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-blue-200 flex items-center space-x-2">
+                    <Calendar className="h-4 w-4 text-blue-300" />
+                    <span>Data</span>
+                  </Label>
+                  <Input 
+                    type="date" 
+                    value={data} 
+                    onChange={(e) => setData(e.target.value)} 
+                    required 
+                    className="h-10 bg-white/5 border-blue-300/30 text-white focus:border-blue-300"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-blue-200 flex items-center space-x-2">
+                    <Clock className="h-4 w-4 text-blue-300" />
+                    <span>Hora Inicial</span>
+                  </Label>
+                  <Input 
+                    type="time" 
+                    value={horaInicial} 
+                    onChange={(e) => setHoraInicial(e.target.value)} 
+                    className="h-10 bg-white/5 border-blue-300/30 text-white focus:border-blue-300"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-blue-200 flex items-center space-x-2">
+                    <Clock className="h-4 w-4 text-blue-300" />
+                    <span>Hora Final</span>
+                  </Label>
+                  <Input 
+                    type="time" 
+                    value={horaFinal} 
+                    onChange={(e) => setHoraFinal(e.target.value)} 
+                    className="h-10 bg-white/5 border-blue-300/30 text-white focus:border-blue-300"
+                  />
+                </div>
               </div>
               
               <div className="space-y-2">
-                <Label className="text-sm font-medium text-blue-200 flex items-center space-x-2">
-                  <Clock className="h-4 w-4 text-blue-300" />
-                  <span>Hora Inicial</span>
-                </Label>
-                <Input 
-                  type="time" 
-                  value={horaInicial} 
-                  onChange={(e) => setHoraInicial(e.target.value)} 
-                  className="bg-white/5 border-blue-300/30 text-white"
+                <Label className="text-sm font-medium text-blue-200">Observação do Turno</Label>
+                <Textarea 
+                  value={observacao} 
+                  onChange={(e) => setObservacao(e.target.value.toUpperCase())} 
+                  placeholder="Digite as observações do turno..."
+                  className="bg-white/5 border-blue-300/30 text-white min-h-[100px] resize-none focus:border-blue-300"
                 />
               </div>
-              
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-blue-200 flex items-center space-x-2">
-                  <Clock className="h-4 w-4 text-blue-300" />
-                  <span>Hora Final</span>
-                </Label>
-                <Input 
-                  type="time" 
-                  value={horaFinal} 
-                  onChange={(e) => setHoraFinal(e.target.value)} 
-                  className="bg-white/5 border-blue-300/30 text-white"
-                />
-              </div>
-            </div>
-            
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-blue-200">Observação do Turno</Label>
-              <Textarea 
-                value={observacao} 
-                onChange={(e) => setObservacao(e.target.value.toUpperCase())} 
-                placeholder="Digite as observações do turno..."
-                className="bg-white/5 border-blue-300/30 text-white min-h-[100px] resize-none"
-              />
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        {selectedOp === 'NAVIO' && (
+          {selectedOp === 'NAVIO' && (
+            <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
+              <CardHeader className="border-b border-blue-200/30">
+                <CardTitle className="text-white flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Ship className="h-5 w-5 text-blue-300" />
+                    <span>Equipamentos do Navio</span>
+                  </div>
+                  <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-300/30">
+                    {equipamentosNavio.length} equipamentos
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                {equipamentosNavio.length === 0 ? (
+                  <div className="text-center py-12">
+                    <p className="text-blue-300">Nenhum equipamento registrado.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader className="bg-blue-600/20 backdrop-blur-sm">
+                        <TableRow>
+                          <TableHead className="text-blue-200 text-xs py-3">TAG</TableHead>
+                          <TableHead className="text-blue-200 text-xs py-3">Operador/Motorista</TableHead>
+                          <TableHead className="text-blue-200 text-xs py-3">Início</TableHead>
+                          <TableHead className="text-blue-200 text-xs py-3">Fim</TableHead>
+                          <TableHead className="text-blue-200 text-xs py-3">Horas</TableHead>
+                          <TableHead className="text-blue-200 text-xs py-3 text-center">Ações</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {equipamentosNavio.map(equipamento => (
+                          <TableRow key={equipamento.id} className="hover:bg-white/5 border-b border-blue-200/10">
+                            <TableCell className="py-3">
+                              <Input 
+                                placeholder="TAG" 
+                                value={equipamento.tag} 
+                                onChange={e => updateEquipamentoNavio(equipamento.id, 'tag', e.target.value)}
+                                className="bg-white/5 border-blue-300/30 text-white focus:border-blue-300 w-full"
+                              />
+                            </TableCell>
+                            <TableCell className="py-3">
+                              <Input 
+                                placeholder="OPERADOR/MOTORISTA" 
+                                value={equipamento.motorista_operador} 
+                                onChange={e => updateEquipamentoNavio(equipamento.id, 'motorista_operador', e.target.value)}
+                                className="bg-white/5 border-blue-300/30 text-white focus:border-blue-300 w-full"
+                              />
+                            </TableCell>
+                            <TableCell className="py-3">
+                              <Input 
+                                type="time" 
+                                value={equipamento.hora_inicial || ''}
+                                onChange={e => updateEquipamentoNavio(equipamento.id, 'hora_inicial', e.target.value)}
+                                className="bg-white/5 border-blue-300/30 text-white focus:border-blue-300 w-24"
+                              />
+                            </TableCell>
+                            <TableCell className="py-3">
+                              <Input 
+                                type="time" 
+                                value={equipamento.hora_final || ''}
+                                onChange={e => updateEquipamentoNavio(equipamento.id, 'hora_final', e.target.value)}
+                                className="bg-white/5 border-blue-300/30 text-white focus:border-blue-300 w-24"
+                              />
+                            </TableCell>
+                            <TableCell className="py-3">
+                              <Badge className="bg-green-500/20 text-green-300 border-green-400/30 text-xs">
+                                {equipamento.horas_trabalhadas?.toFixed(1) || '0.0'}h
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="py-3 text-center">
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                onClick={() => removeEquipamentoNavio(equipamento.id)}
+                                type="button"
+                                className="bg-red-500/20 text-red-300 border-red-300/30 hover:bg-red-500/30 hover:text-white"
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+                <div className="p-4 border-t border-blue-200/30">
+                  <div className="flex gap-2">
+                    <Button 
+                      type="button" 
+                      onClick={() => addEquipamentoNavio(1)} 
+                      variant="outline"
+                      className="bg-blue-500/20 text-blue-300 border-blue-300/30 hover:bg-blue-500/30 hover:text-white flex-1"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      +1 Equipamento
+                    </Button>
+                    <Button 
+                      type="button" 
+                      onClick={() => addEquipamentoNavio(10)} 
+                      variant="outline"
+                      className="bg-blue-500/20 text-blue-300 border-blue-300/30 hover:bg-blue-500/30 hover:text-white flex-1"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      +10 Equipamentos
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {['HYDRO', 'ALBRAS', 'SANTOS BRASIL'].includes(selectedOp) && (
+            <div className="space-y-4">
+              {operacaoGrupos.map(grupo => (
+                <Card key={grupo.id} className="bg-white/10 backdrop-blur-sm border-blue-200/30">
+                  <CardHeader className="border-b border-blue-200/30">
+                    <div className="flex items-center justify-between">
+                      <Input 
+                        className="text-lg font-bold bg-white/5 border-blue-300/30 text-white focus:border-blue-300 w-64" 
+                        value={grupo.nome} 
+                        onChange={e => updateOperacaoGrupo(grupo.id, e.target.value)}
+                      />
+                      <div className="flex items-center space-x-2">
+                        <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-300/30">
+                          {grupo.equipamentos.length} equipamentos
+                        </Badge>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => removeOperacaoGrupo(grupo.id)}
+                          type="button"
+                          className="bg-red-500/20 text-red-300 border-red-300/30 hover:bg-red-500/30 hover:text-white"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    {grupo.equipamentos.length === 0 ? (
+                      <div className="text-center py-8">
+                        <p className="text-blue-300">Nenhum equipamento neste grupo.</p>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader className="bg-blue-600/20 backdrop-blur-sm">
+                            <TableRow>
+                              <TableHead className="text-blue-200 text-xs py-3">TAG</TableHead>
+                              <TableHead className="text-blue-200 text-xs py-3">Operador</TableHead>
+                              <TableHead className="text-blue-200 text-xs py-3">Início</TableHead>
+                              <TableHead className="text-blue-200 text-xs py-3">Fim</TableHead>
+                              <TableHead className="text-blue-200 text-xs py-3">Horas</TableHead>
+                              <TableHead className="text-blue-200 text-xs py-3 text-center">Ações</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {grupo.equipamentos.map(equipamento => (
+                              <TableRow key={equipamento.id} className="hover:bg-white/5 border-b border-blue-200/10">
+                                <TableCell className="py-3">
+                                  <Input 
+                                    placeholder="TAG" 
+                                    value={equipamento.tag} 
+                                    onChange={e => updateEquipamentoGrupo(grupo.id, equipamento.id, 'tag', e.target.value)}
+                                    className="bg-white/5 border-blue-300/30 text-white focus:border-blue-300 w-full"
+                                  />
+                                </TableCell>
+                                <TableCell className="py-3">
+                                  <Input 
+                                    placeholder="OPERADOR" 
+                                    value={equipamento.motorista_operador} 
+                                    onChange={e => updateEquipamentoGrupo(grupo.id, equipamento.id, 'motorista_operador', e.target.value)}
+                                    className="bg-white/5 border-blue-300/30 text-white focus:border-blue-300 w-full"
+                                  />
+                                </TableCell>
+                                <TableCell className="py-3">
+                                  <Input 
+                                    type="time" 
+                                    value={equipamento.hora_inicial || ''}
+                                    onChange={e => updateEquipamentoGrupo(grupo.id, equipamento.id, 'hora_inicial', e.target.value)}
+                                    className="bg-white/5 border-blue-300/30 text-white focus:border-blue-300 w-24"
+                                  />
+                                </TableCell>
+                                <TableCell className="py-3">
+                                  <Input 
+                                    type="time" 
+                                    value={equipamento.hora_final || ''}
+                                    onChange={e => updateEquipamentoGrupo(grupo.id, equipamento.id, 'hora_final', e.target.value)}
+                                    className="bg-white/5 border-blue-300/30 text-white focus:border-blue-300 w-24"
+                                  />
+                                </TableCell>
+                                <TableCell className="py-3">
+                                  <Badge className="bg-green-500/20 text-green-300 border-green-400/30 text-xs">
+                                    {equipamento.horas_trabalhadas?.toFixed(1) || '0.0'}h
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="py-3 text-center">
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    onClick={() => removeEquipamentoGrupo(grupo.id, equipamento.id)}
+                                    type="button"
+                                    className="bg-red-500/20 text-red-300 border-red-300/30 hover:bg-red-500/30 hover:text-white"
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+                    <div className="p-4 border-t border-blue-200/30">
+                      <div className="flex gap-2">
+                        <Button 
+                          type="button" 
+                          onClick={() => addEquipamentoGrupo(grupo.id, 1)} 
+                          variant="outline"
+                          className="bg-blue-500/20 text-blue-300 border-blue-300/30 hover:bg-blue-500/30 hover:text-white flex-1"
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          +1 Equipamento
+                        </Button>
+                        <Button 
+                          type="button" 
+                          onClick={() => addEquipamentoGrupo(grupo.id, 10)} 
+                          variant="outline"
+                          className="bg-blue-500/20 text-blue-300 border-blue-300/30 hover:bg-blue-500/30 hover:text-white flex-1"
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          +10 Equipamentos
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+              <Button 
+                type="button" 
+                onClick={addOperacaoGrupo} 
+                variant="outline" 
+                className="w-full bg-blue-500/20 text-blue-300 border-blue-300/30 hover:bg-blue-500/30 hover:text-white"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Adicionar Operação (Frente de Serviço)
+              </Button>
+            </div>
+          )}
+
+          {/* Ajudantes */}
           <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
             <CardHeader className="border-b border-blue-200/30">
               <CardTitle className="text-white flex items-center justify-between">
                 <div className="flex items-center space-x-2">
-                  <Ship className="h-5 w-5 text-blue-300" />
-                  <span>Equipamentos do Navio</span>
+                  <Users className="h-5 w-5 text-blue-300" />
+                  <span>Ajudantes</span>
                 </div>
-                <Badge variant="secondary" className="bg-blue-500/20 text-blue-300">
-                  {equipamentosNavio.length} equipamentos
-                </Badge>
+                <div className="flex items-center space-x-2">
+                  <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-300/30">
+                    {ajudantes.length} ajudantes
+                  </Badge>
+                  <Button 
+                    type="button" 
+                    onClick={addAjudante} 
+                    variant="outline"
+                    size="sm"
+                    className="bg-blue-500/20 text-blue-300 border-blue-300/30 hover:bg-blue-500/30 hover:text-white"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Ajudante
+                  </Button>
+                </div>
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              {equipamentosNavio.length === 0 ? (
+              {ajudantes.length === 0 ? (
                 <div className="text-center py-12">
-                  <p className="text-blue-300">Nenhum equipamento registrado.</p>
+                  <p className="text-blue-300">Nenhum ajudante registrado.</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
-                    <TableHeader className="bg-blue-500/10">
+                    <TableHeader className="bg-blue-600/20 backdrop-blur-sm">
                       <TableRow>
-                        <TableHead className="font-semibold text-blue-200 py-3">TAG</TableHead>
-                        <TableHead className="font-semibold text-blue-200 py-3">Operador/Motorista</TableHead>
-                        <TableHead className="font-semibold text-blue-200 py-3">Início</TableHead>
-                        <TableHead className="font-semibold text-blue-200 py-3">Fim</TableHead>
-                        <TableHead className="font-semibold text-blue-200 py-3">Horas</TableHead>
-                        <TableHead className="font-semibold text-blue-200 py-3 text-center">Ações</TableHead>
+                        <TableHead className="text-blue-200 text-xs py-3">Nome</TableHead>
+                        <TableHead className="text-blue-200 text-xs py-3">Início</TableHead>
+                        <TableHead className="text-blue-200 text-xs py-3">Fim</TableHead>
+                        <TableHead className="text-blue-200 text-xs py-3">Observação</TableHead>
+                        <TableHead className="text-blue-200 text-xs py-3 text-center">Ações</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {equipamentosNavio.map(equipamento => (
-                        <TableRow key={equipamento.id} className="hover:bg-white/5 border-blue-200/10">
-                          <TableCell className="py-4">
+                      {ajudantes.map(ajudante => (
+                        <TableRow key={ajudante.id} className="hover:bg-white/5 border-b border-blue-200/10">
+                          <TableCell className="py-3">
                             <Input 
-                              placeholder="TAG" 
-                              value={equipamento.tag} 
-                              onChange={e => updateEquipamentoNavio(equipamento.id, 'tag', e.target.value)}
-                              className="bg-transparent border-0 text-white w-20"
+                              value={ajudante.nome} 
+                              onChange={(e) => updateAjudante(ajudante.id, 'nome', e.target.value)}
+                              className="bg-white/5 border-blue-300/30 text-white focus:border-blue-300 w-full"
                             />
                           </TableCell>
-                          <TableCell className="py-4">
-                            <Input 
-                              placeholder="OPERADOR/MOTORISTA" 
-                              value={equipamento.motorista_operador} 
-                              onChange={e => updateEquipamentoNavio(equipamento.id, 'motorista_operador', e.target.value)}
-                              className="bg-transparent border-0 text-white"
-                            />
-                          </TableCell>
-                          <TableCell className="py-4">
+                          <TableCell className="py-3">
                             <Input 
                               type="time" 
-                              value={equipamento.hora_inicial || ''}
-                              onChange={e => updateEquipamentoNavio(equipamento.id, 'hora_inicial', e.target.value)}
-                              className="bg-transparent border-0 text-white w-24"
+                              value={ajudante.hora_inicial} 
+                              onChange={(e) => updateAjudante(ajudante.id, 'hora_inicial', e.target.value)}
+                              className="bg-white/5 border-blue-300/30 text-white focus:border-blue-300 w-24"
                             />
                           </TableCell>
-                          <TableCell className="py-4">
+                          <TableCell className="py-3">
                             <Input 
                               type="time" 
-                              value={equipamento.hora_final || ''}
-                              onChange={e => updateEquipamentoNavio(equipamento.id, 'hora_final', e.target.value)}
-                              className="bg-transparent border-0 text-white w-24"
+                              value={ajudante.hora_final} 
+                              onChange={(e) => updateAjudante(ajudante.id, 'hora_final', e.target.value)}
+                              className="bg-white/5 border-blue-300/30 text-white focus:border-blue-300 w-24"
                             />
                           </TableCell>
-                          <TableCell className="py-4">
-                            <Badge className="bg-green-500/20 text-green-300">
-                              {equipamento.horas_trabalhadas?.toFixed(1) || '0.0'}h
-                            </Badge>
+                          <TableCell className="py-3">
+                            <Input 
+                              value={ajudante.observacao} 
+                              onChange={(e) => updateAjudante(ajudante.id, 'observacao', e.target.value)}
+                              placeholder="Observações sobre o ajudante..."
+                              className="bg-white/5 border-blue-300/30 text-white focus:border-blue-300 w-full"
+                            />
                           </TableCell>
-                          <TableCell className="py-4 text-center">
+                          <TableCell className="py-3 text-center">
                             <Button 
-                              variant="ghost" 
+                              type="button" 
+                              onClick={() => removeAjudante(ajudante.id)} 
                               size="icon" 
-                              onClick={() => removeEquipamentoNavio(equipamento.id)}
-                              type="button"
-                              className="text-red-400 hover:text-red-300 hover:bg-red-500/20"
+                              variant="ghost"
+                              className="bg-red-500/20 text-red-300 border-red-300/30 hover:bg-red-500/30 hover:text-white"
                             >
                               <X className="h-4 w-4" />
                             </Button>
@@ -803,385 +1070,128 @@ const EditarOperacao = () => {
                   </Table>
                 </div>
               )}
-              <div className="p-4 border-t border-blue-200/30">
-                <div className="flex gap-2">
-                  <Button 
-                    type="button" 
-                    onClick={() => addEquipamentoNavio(1)} 
-                    variant="outline"
-                    className="text-blue-300 hover:text-white hover:bg-blue-500/20 border-blue-300/30 flex-1"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    +1 Equipamento
-                  </Button>
-                  <Button 
-                    type="button" 
-                    onClick={() => addEquipamentoNavio(10)} 
-                    variant="outline"
-                    className="text-blue-300 hover:text-white hover:bg-blue-500/20 border-blue-300/30 flex-1"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    +10 Equipamentos
-                  </Button>
-                </div>
-              </div>
             </CardContent>
           </Card>
-        )}
 
-        {['HYDRO', 'ALBRAS', 'SANTOS BRASIL'].includes(selectedOp) && (
-          <div className="space-y-4">
-            {operacaoGrupos.map(grupo => (
-              <Card key={grupo.id} className="bg-white/10 backdrop-blur-sm border-blue-200/30">
-                <CardHeader className="border-b border-blue-200/30">
-                  <div className="flex items-center justify-between">
-                    <Input 
-                      className="text-lg font-bold bg-transparent border-blue-300/30 text-white w-64" 
-                      value={grupo.nome} 
-                      onChange={e => updateOperacaoGrupo(grupo.id, e.target.value)}
-                    />
-                    <div className="flex items-center space-x-2">
-                      <Badge variant="secondary" className="bg-blue-500/20 text-blue-300">
-                        {grupo.equipamentos.length} equipamentos
-                      </Badge>
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        onClick={() => removeOperacaoGrupo(grupo.id)}
-                        type="button"
-                        className="text-red-400 hover:text-red-300 hover:bg-red-500/20"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-0">
-                  {grupo.equipamentos.length === 0 ? (
-                    <div className="text-center py-8">
-                      <p className="text-blue-300">Nenhum equipamento neste grupo.</p>
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader className="bg-blue-500/10">
-                          <TableRow>
-                            <TableHead className="font-semibold text-blue-200 py-3">TAG</TableHead>
-                            <TableHead className="font-semibold text-blue-200 py-3">Operador</TableHead>
-                            <TableHead className="font-semibold text-blue-200 py-3">Início</TableHead>
-                            <TableHead className="font-semibold text-blue-200 py-3">Fim</TableHead>
-                            <TableHead className="font-semibold text-blue-200 py-3">Horas</TableHead>
-                            <TableHead className="font-semibold text-blue-200 py-3 text-center">Ações</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {grupo.equipamentos.map(equipamento => (
-                            <TableRow key={equipamento.id} className="hover:bg-white/5 border-blue-200/10">
-                              <TableCell className="py-4">
-                                <Input 
-                                  placeholder="TAG" 
-                                  value={equipamento.tag} 
-                                  onChange={e => updateEquipamentoGrupo(grupo.id, equipamento.id, 'tag', e.target.value)}
-                                  className="bg-transparent border-0 text-white w-20"
-                                />
-                              </TableCell>
-                              <TableCell className="py-4">
-                                <Input 
-                                  placeholder="OPERADOR" 
-                                  value={equipamento.motorista_operador} 
-                                  onChange={e => updateEquipamentoGrupo(grupo.id, equipamento.id, 'motorista_operador', e.target.value)}
-                                  className="bg-transparent border-0 text-white"
-                                />
-                              </TableCell>
-                              <TableCell className="py-4">
-                                <Input 
-                                  type="time" 
-                                  value={equipamento.hora_inicial || ''}
-                                  onChange={e => updateEquipamentoGrupo(grupo.id, equipamento.id, 'hora_inicial', e.target.value)}
-                                  className="bg-transparent border-0 text-white w-24"
-                                />
-                              </TableCell>
-                              <TableCell className="py-4">
-                                <Input 
-                                  type="time" 
-                                  value={equipamento.hora_final || ''}
-                                  onChange={e => updateEquipamentoGrupo(grupo.id, equipamento.id, 'hora_final', e.target.value)}
-                                  className="bg-transparent border-0 text-white w-24"
-                                />
-                              </TableCell>
-                              <TableCell className="py-4">
-                                <Badge className="bg-green-500/20 text-green-300">
-                                  {equipamento.horas_trabalhadas?.toFixed(1) || '0.0'}h
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="py-4 text-center">
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  onClick={() => removeEquipamentoGrupo(grupo.id, equipamento.id)}
-                                  type="button"
-                                  className="text-red-400 hover:text-red-300 hover:bg-red-500/20"
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  )}
-                  <div className="p-4 border-t border-blue-200/30">
-                    <div className="flex gap-2">
-                      <Button 
-                        type="button" 
-                        onClick={() => addEquipamentoGrupo(grupo.id, 1)} 
-                        variant="outline"
-                        className="text-blue-300 hover:text-white hover:bg-blue-500/20 border-blue-300/30 flex-1"
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        +1 Equipamento
-                      </Button>
-                      <Button 
-                        type="button" 
-                        onClick={() => addEquipamentoGrupo(grupo.id, 10)} 
-                        variant="outline"
-                        className="text-blue-300 hover:text-white hover:bg-blue-500/20 border-blue-300/30 flex-1"
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        +10 Equipamentos
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-            <Button 
-              type="button" 
-              onClick={addOperacaoGrupo} 
-              variant="outline" 
-              className="w-full text-blue-300 hover:text-white hover:bg-blue-500/20 border-blue-300/30"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Adicionar Operação (Frente de Serviço)
-            </Button>
-          </div>
-        )}
-
-        {/* Ajudantes */}
-        <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
-          <CardHeader className="border-b border-blue-200/30">
-            <CardTitle className="text-white flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Users className="h-5 w-5 text-blue-300" />
-                <span>Ajudantes</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Badge variant="secondary" className="bg-blue-500/20 text-blue-300">
-                  {ajudantes.length} ajudantes
-                </Badge>
-                <Button 
-                  type="button" 
-                  onClick={addAjudante} 
-                  variant="outline"
-                  size="sm"
-                  className="text-blue-300 hover:text-white hover:bg-blue-500/20 border-blue-300/30"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Ajudante
-                </Button>
-              </div>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {ajudantes.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-blue-300">Nenhum ajudante registrado.</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader className="bg-blue-500/10">
-                    <TableRow>
-                      <TableHead className="font-semibold text-blue-200 py-3">Nome</TableHead>
-                      <TableHead className="font-semibold text-blue-200 py-3">Início</TableHead>
-                      <TableHead className="font-semibold text-blue-200 py-3">Fim</TableHead>
-                      <TableHead className="font-semibold text-blue-200 py-3">Observação</TableHead>
-                      <TableHead className="font-semibold text-blue-200 py-3 text-center">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {ajudantes.map(ajudante => (
-                      <TableRow key={ajudante.id} className="hover:bg-white/5 border-blue-200/10">
-                        <TableCell className="py-4">
-                          <Input 
-                            value={ajudante.nome} 
-                            onChange={(e) => updateAjudante(ajudante.id, 'nome', e.target.value)}
-                            className="bg-transparent border-0 text-white"
-                          />
-                        </TableCell>
-                        <TableCell className="py-4">
-                          <Input 
-                            type="time" 
-                            value={ajudante.hora_inicial} 
-                            onChange={(e) => updateAjudante(ajudante.id, 'hora_inicial', e.target.value)}
-                            className="bg-transparent border-0 text-white w-24"
-                          />
-                        </TableCell>
-                        <TableCell className="py-4">
-                          <Input 
-                            type="time" 
-                            value={ajudante.hora_final} 
-                            onChange={(e) => updateAjudante(ajudante.id, 'hora_final', e.target.value)}
-                            className="bg-transparent border-0 text-white w-24"
-                          />
-                        </TableCell>
-                        <TableCell className="py-4">
-                          <Input 
-                            value={ajudante.observacao} 
-                            onChange={(e) => updateAjudante(ajudante.id, 'observacao', e.target.value)}
-                            placeholder="Observações sobre o ajudante..."
-                            className="bg-transparent border-0 text-white"
-                          />
-                        </TableCell>
-                        <TableCell className="py-4 text-center">
-                          <Button 
-                            type="button" 
-                            onClick={() => removeAjudante(ajudante.id)} 
-                            size="icon" 
-                            variant="ghost"
-                            className="text-red-400 hover:text-red-300 hover:bg-red-500/20"
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Ausências */}
-        <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
-          <CardHeader className="border-b border-blue-200/30">
-            <CardTitle className="text-white flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <UserX className="h-5 w-5 text-blue-300" />
-                <span>Ausências</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Badge variant="secondary" className="bg-blue-500/20 text-blue-300">
-                  {ausencias.length} ausências
-                </Badge>
-                <Button 
-                  type="button" 
-                  onClick={addAusencia} 
-                  variant="outline"
-                  size="sm"
-                  className="text-blue-300 hover:text-white hover:bg-blue-500/20 border-blue-300/30"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Ausência
-                </Button>
-              </div>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {ausencias.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-blue-300">Nenhuma ausência registrada.</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader className="bg-blue-500/10">
-                    <TableRow>
-                      <TableHead className="font-semibold text-blue-200 py-3">Nome</TableHead>
-                      <TableHead className="font-semibold text-blue-200 py-3">Observação</TableHead>
-                      <TableHead className="font-semibold text-blue-200 py-3">Status</TableHead>
-                      <TableHead className="font-semibold text-blue-200 py-3 text-center">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {ausencias.map(ausencia => (
-                      <TableRow key={ausencia.id} className="hover:bg-white/5 border-blue-200/10">
-                        <TableCell className="py-4">
-                          <Input 
-                            value={ausencia.nome} 
-                            onChange={(e) => updateAusencia(ausencia.id, 'nome', e.target.value)}
-                            className="bg-transparent border-0 text-white"
-                          />
-                        </TableCell>
-                        <TableCell className="py-4">
-                          <Input 
-                            value={ausencia.obs} 
-                            onChange={(e) => updateAusencia(ausencia.id, 'obs', e.target.value)}
-                            placeholder="Motivo da ausência..."
-                            className="bg-transparent border-0 text-white"
-                          />
-                        </TableCell>
-                        <TableCell className="py-4">
-                          <div className="flex items-center space-x-2">
-                            <Checkbox 
-                              checked={ausencia.justificado} 
-                              onCheckedChange={(checked) => updateAusencia(ausencia.id, 'justificado', !!checked)}
-                              className="data-[state=checked]:bg-green-500/20 data-[state=checked]:text-green-300"
-                            />
-                            <Label className="text-blue-200">
-                              {ausencia.justificado ? 'Justificado' : 'Não Justificado'}
-                            </Label>
-                          </div>
-                        </TableCell>
-                        <TableCell className="py-4 text-center">
-                          <Button 
-                            type="button" 
-                            onClick={() => removeAusencia(ausencia.id)} 
-                            size="icon" 
-                            variant="ghost"
-                            className="text-red-400 hover:text-red-300 hover:bg-red-500/20"
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Botão de Salvar */}
-        <div className="sticky bottom-0 bg-blue-900/80 backdrop-blur-sm py-4 border-t border-blue-200/30 -mx-6 px-6">
-          <div className="flex justify-end space-x-4">
-            <Button 
-              variant="outline"
-              onClick={() => navigate('/relatorio-transporte')}
-              className="text-blue-300 hover:text-white hover:bg-blue-500/20 border-blue-300/30"
-            >
-              Cancelar
-            </Button>
-            <Button 
-              type="submit" 
-              disabled={isSaving}
-              className="bg-green-600 hover:bg-green-700 text-white font-medium"
-            >
-              {isSaving ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                  Salvando...
-                </>
+          {/* Ausências */}
+          <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
+            <CardHeader className="border-b border-blue-200/30">
+              <CardTitle className="text-white flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <UserX className="h-5 w-5 text-blue-300" />
+                  <span>Ausências</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-300/30">
+                    {ausencias.length} ausências
+                  </Badge>
+                  <Button 
+                    type="button" 
+                    onClick={addAusencia} 
+                    variant="outline"
+                    size="sm"
+                    className="bg-blue-500/20 text-blue-300 border-blue-300/30 hover:bg-blue-500/30 hover:text-white"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Ausência
+                  </Button>
+                </div>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {ausencias.length === 0 ? (
+                <div className="text-center py-12">
+                  <p className="text-blue-300">Nenhuma ausência registrada.</p>
+                </div>
               ) : (
-                <>
-                  <Save className="h-4 w-4 mr-2" />
-                  Salvar Alterações
-                </>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader className="bg-blue-600/20 backdrop-blur-sm">
+                      <TableRow>
+                        <TableHead className="text-blue-200 text-xs py-3">Nome</TableHead>
+                        <TableHead className="text-blue-200 text-xs py-3">Observação</TableHead>
+                        <TableHead className="text-blue-200 text-xs py-3">Status</TableHead>
+                        <TableHead className="text-blue-200 text-xs py-3 text-center">Ações</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {ausencias.map(ausencia => (
+                        <TableRow key={ausencia.id} className="hover:bg-white/5 border-b border-blue-200/10">
+                          <TableCell className="py-3">
+                            <Input 
+                              value={ausencia.nome} 
+                              onChange={(e) => updateAusencia(ausencia.id, 'nome', e.target.value)}
+                              className="bg-white/5 border-blue-300/30 text-white focus:border-blue-300 w-full"
+                            />
+                          </TableCell>
+                          <TableCell className="py-3">
+                            <Input 
+                              value={ausencia.obs} 
+                              onChange={(e) => updateAusencia(ausencia.id, 'obs', e.target.value)}
+                              placeholder="Motivo da ausência..."
+                              className="bg-white/5 border-blue-300/30 text-white focus:border-blue-300 w-full"
+                            />
+                          </TableCell>
+                          <TableCell className="py-3">
+                            <div className="flex items-center space-x-2">
+                              <Checkbox 
+                                checked={ausencia.justificado} 
+                                onCheckedChange={(checked) => updateAusencia(ausencia.id, 'justificado', !!checked)}
+                                className="data-[state=checked]:bg-green-500/20 data-[state=checked]:text-green-300 border-blue-300/30"
+                              />
+                              <Label className="text-blue-200 text-sm">
+                                {ausencia.justificado ? 'Justificado' : 'Não Justificado'}
+                              </Label>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-3 text-center">
+                            <Button 
+                              type="button" 
+                              onClick={() => removeAusencia(ausencia.id)} 
+                              size="icon" 
+                              variant="ghost"
+                              className="bg-red-500/20 text-red-300 border-red-300/30 hover:bg-red-500/30 hover:text-white"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               )}
-            </Button>
+            </CardContent>
+          </Card>
+
+          {/* Botão de Salvar */}
+          <div className="sticky bottom-0 bg-blue-900/80 backdrop-blur-sm py-4 border-t border-blue-200/30 mt-6">
+            <div className="flex justify-end space-x-4">
+              <Button 
+                variant="outline"
+                onClick={() => navigate('/relatorio-transporte')}
+                className="bg-blue-500/20 text-blue-300 border-blue-300/30 hover:bg-blue-500/30 hover:text-white"
+              >
+                Cancelar
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={isSaving}
+                className="bg-green-600 hover:bg-green-700 text-white font-medium"
+              >
+                {isSaving ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                    Salvando...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4 mr-2" />
+                    Salvar Alterações
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </div>
       </form>

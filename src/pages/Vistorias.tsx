@@ -1,5 +1,8 @@
+// src/pages/Vistorias.tsx
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
+import { useNotifications } from '@/hooks/useNotifications';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -7,11 +10,13 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
 import { 
-  ArrowLeft, Plus, Filter, Download, Search, Calendar, CheckCircle, 
-  XCircle, Clock, Truck, Edit, Trash2, Check, X, 
-  Building2, Factory, Settings, Anchor, Waves, Hammer, AlertCircle, FileText, Gauge, Plane,
-  Eye, CalendarDays
+  Menu, X, LogOut, Bell, ArrowLeft, Plus, Filter, Download, Search, 
+  Calendar, CheckCircle, XCircle, Clock, Truck, Edit, Trash2, Check, 
+  Building2, Factory, Settings, Anchor, Waves, Hammer, AlertCircle, 
+  FileText, Gauge, Plane, Eye, CalendarDays, ChevronRight, 
+  ClipboardCheck, ShieldAlert
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -53,6 +58,10 @@ interface CDPRegistro {
 
 const Vistorias = () => {
   const navigate = useNavigate();
+  const { userProfile, signOut } = useAuth();
+  const { hasUnread } = useNotifications();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  
   const [activeSection, setActiveSection] = useState<'visao_geral' | 'equipamentos' | 'hydro' | 'albras' | 'cdp' | 'op_portuaria' | 'bacia' | 'pavimentacao' | 'controle_albras' | 'licenciamento' | 'tacografo' | 'aet'>('visao_geral');
   const [equipamentos, setEquipamentos] = useState<VistoriaEquipamento[]>([]);
   const [vistoriasHydro, setVistoriasHydro] = useState<VistoriaRegistro[]>([]);
@@ -63,14 +72,12 @@ const Vistorias = () => {
   const [searchEquipamentos, setSearchEquipamentos] = useState('');
   const [searchCDP, setSearchCDP] = useState('');
 
-  // Filtros
   const [filtros, setFiltros] = useState({
     status: 'todos',
     previsto: 'todos',
     mes: 'todos'
   });
 
-  // Formulário para nova vistoria
   const [novaVistoria, setNovaVistoria] = useState({
     tag: '',
     centro_custo: '',
@@ -83,10 +90,7 @@ const Vistorias = () => {
     cracha_hydro: ''
   });
 
-  // Formulário para edição de vistoria
   const [editandoVistoria, setEditandoVistoria] = useState<VistoriaRegistro | null>(null);
-
-  // Formulário para novo equipamento
   const [novoEquipamento, setNovoEquipamento] = useState({
     tag: '',
     local: '',
@@ -99,27 +103,18 @@ const Vistorias = () => {
     renavam: '',
     cracha_hydro: ''
   });
-
-  // Formulário para edição de equipamento
   const [editandoEquipamento, setEditandoEquipamento] = useState<VistoriaEquipamento | null>(null);
-
-  // Formulário para CDP
   const [novoCDP, setNovoCDP] = useState({
     tag: '',
     data_vencimento: ''
   });
-
   const [editandoCDP, setEditandoCDP] = useState<CDPRegistro | null>(null);
-
-  // Estado para agendamento de vistoria
   const [agendandoVistoria, setAgendandoVistoria] = useState<VistoriaEquipamento | null>(null);
   const [tipoVistoriaAgendamento, setTipoVistoriaAgendamento] = useState<'hydro' | 'albras'>('hydro');
-
   const [showFormVistoria, setShowFormVistoria] = useState(false);
   const [showFormEquipamento, setShowFormEquipamento] = useState(false);
   const [showFormCDP, setShowFormCDP] = useState(false);
 
-  // Tipos de equipamentos disponíveis
   const tiposEquipamentos = [
     'CAMINHÃO ABASTECIMENTO',
     'MINI PÁ CARREGADEIRA',
@@ -147,7 +142,6 @@ const Vistorias = () => {
     'OUTROS'
   ];
 
-  // Funções auxiliares para cálculo de dias e cores
   const calcularDiasAteVencimento = (dataVencimento: string) => {
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
@@ -170,7 +164,6 @@ const Vistorias = () => {
     return 'bg-red-500/20';
   };
 
-  // Carregar equipamentos
   const carregarEquipamentos = async () => {
     try {
       const { data, error } = await supabase
@@ -185,7 +178,6 @@ const Vistorias = () => {
     }
   };
 
-  // Carregar vistorias
   const carregarVistorias = async () => {
     setLoading(true);
     try {
@@ -213,7 +205,6 @@ const Vistorias = () => {
     }
   };
 
-  // Carregar registros CDP
   const carregarCDP = async () => {
     try {
       const { data, error } = await supabase
@@ -228,13 +219,11 @@ const Vistorias = () => {
     }
   };
 
-  // Carregar todos os dados iniciais
   const carregarTodosDados = async () => {
     await carregarEquipamentos();
-    await carregarCDP(); // Agora carrega CDP sempre que a página é carregada
+    await carregarCDP();
   };
 
-  // Aplicar filtros para vistorias
   const vistoriasFiltradas = (
     activeSection === 'hydro' || activeSection === 'op_portuaria' || activeSection === 'bacia' || activeSection === 'pavimentacao'
       ? vistoriasHydro 
@@ -246,7 +235,6 @@ const Vistorias = () => {
     const matchesStatus = filtros.status === 'todos' || vistoria.status === filtros.status;
     const matchesPrevisto = filtros.previsto === 'todos' || vistoria.previsto === filtros.previsto;
     
-    // Filtro por mês
     let matchesMes = true;
     if (filtros.mes !== 'todos' && vistoria.data_vencimento_vistoria) {
       const dataVencimento = new Date(vistoria.data_vencimento_vistoria);
@@ -257,7 +245,6 @@ const Vistorias = () => {
     return matchesSearch && matchesStatus && matchesPrevisto && matchesMes;
   });
 
-  // Aplicar filtro para equipamentos
   const equipamentosFiltrados = equipamentos.filter(equipamento => {
     return equipamento.tag.toLowerCase().includes(searchEquipamentos.toLowerCase()) ||
            equipamento.tag_generico.toLowerCase().includes(searchEquipamentos.toLowerCase()) ||
@@ -266,22 +253,18 @@ const Vistorias = () => {
            equipamento.placa_serie?.toLowerCase().includes(searchEquipamentos.toLowerCase());
   });
 
-  // Aplicar filtro para CDP
   const cdpFiltrados = cdpRegistros.filter(cdp => {
     return cdp.tag.toLowerCase().includes(searchCDP.toLowerCase());
   });
 
-  // Verificar se TAG existe na tabela de equipamentos
   const tagExiste = (tag: string) => {
     return equipamentos.some(equip => equip.tag === tag);
   };
 
-  // Obter informações do equipamento pela TAG
   const getEquipamentoInfo = (tag: string) => {
     return equipamentos.find(equip => equip.tag === tag);
   };
 
-  // Iniciar agendamento de vistoria
   const iniciarAgendamentoVistoria = (equipamento: VistoriaEquipamento) => {
     setAgendandoVistoria(equipamento);
     setNovaVistoria({
@@ -297,7 +280,6 @@ const Vistorias = () => {
     });
   };
 
-  // Salvar nova vistoria
   const salvarVistoria = async () => {
     try {
       if (!tagExiste(novaVistoria.tag)) {
@@ -337,7 +319,6 @@ const Vistorias = () => {
     }
   };
 
-  // Atualizar vistoria
   const atualizarVistoria = async () => {
     if (!editandoVistoria) return;
 
@@ -361,7 +342,6 @@ const Vistorias = () => {
     }
   };
 
-  // Salvar CDP
   const salvarCDP = async () => {
     try {
       if (!tagExiste(novoCDP.tag)) {
@@ -386,7 +366,6 @@ const Vistorias = () => {
     }
   };
 
-  // Atualizar CDP
   const atualizarCDP = async () => {
     if (!editandoCDP) return;
 
@@ -408,7 +387,6 @@ const Vistorias = () => {
     }
   };
 
-  // Excluir CDP
   const excluirCDP = async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir este registro CDP?')) return;
 
@@ -426,13 +404,11 @@ const Vistorias = () => {
     }
   };
 
-  // Extrair tag genérica
   const extrairTagGenerica = (tag: string) => {
     const match = tag.match(/^[A-Za-z]+/);
     return match ? match[0] : tag;
   };
 
-  // Salvar novo equipamento
   const salvarEquipamento = async () => {
     try {
       const tagGenerica = extrairTagGenerica(novoEquipamento.tag);
@@ -474,7 +450,6 @@ const Vistorias = () => {
     }
   };
 
-  // Atualizar equipamento
   const atualizarEquipamento = async () => {
     if (!editandoEquipamento) return;
 
@@ -507,7 +482,6 @@ const Vistorias = () => {
     }
   };
 
-  // Excluir equipamento
   const excluirEquipamento = async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir este equipamento?')) return;
 
@@ -525,7 +499,6 @@ const Vistorias = () => {
     }
   };
 
-  // Calcular estatísticas para visão geral
   const calcularEstatisticas = () => {
     const tagsUnicas = [...new Set(equipamentos.map(e => e.tag_generico))];
     const totalEquipamentos = equipamentos.length;
@@ -541,12 +514,10 @@ const Vistorias = () => {
   };
 
   useEffect(() => {
-    // Carrega todos os dados iniciais (equipamentos e CDP) quando o componente monta
     carregarTodosDados();
   }, []);
 
   useEffect(() => {
-    // Carrega vistorias apenas quando necessário
     if (activeSection !== 'equipamentos' && activeSection !== 'visao_geral' && activeSection !== 'cdp') {
       carregarVistorias();
     }
@@ -580,85 +551,85 @@ const Vistorias = () => {
       id: 'visao_geral',
       label: 'Visão Geral',
       icon: Eye,
-      color: 'from-blue-600 to-blue-700',
-      hoverColor: 'from-blue-700 to-blue-800'
+      color: 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800',
+      iconColor: 'text-blue-300'
     },
     {
       id: 'equipamentos',
       label: 'Equipamentos/Tags',
       icon: Truck,
-      color: 'from-purple-600 to-purple-700',
-      hoverColor: 'from-purple-700 to-purple-800'
+      color: 'bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800',
+      iconColor: 'text-purple-300'
     },
     {
       id: 'hydro',
       label: 'Vistorias HYDRO',
       icon: Building2,
-      color: 'from-cyan-600 to-cyan-700',
-      hoverColor: 'from-cyan-700 to-cyan-800'
+      color: 'bg-gradient-to-r from-cyan-600 to-cyan-700 hover:from-cyan-700 hover:to-cyan-800',
+      iconColor: 'text-cyan-300'
     },
     {
       id: 'albras',
       label: 'Vistorias ALBRAS',
       icon: Factory,
-      color: 'from-green-600 to-green-700',
-      hoverColor: 'from-green-700 to-green-800'
+      color: 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800',
+      iconColor: 'text-green-300'
     },
     {
       id: 'cdp',
       label: 'Validade CDP',
       icon: CalendarDays,
-      color: 'from-orange-600 to-orange-700',
-      hoverColor: 'from-orange-700 to-orange-800'
+      color: 'bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800',
+      iconColor: 'text-orange-300'
     },
     {
       id: 'op_portuaria',
       label: '(OP. PORTUARIA) HYDRO',
       icon: Anchor,
-      color: 'from-teal-600 to-teal-700',
-      hoverColor: 'from-teal-700 to-teal-800'
+      color: 'bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-700 hover:to-teal-800',
+      iconColor: 'text-teal-300'
     },
     {
       id: 'bacia',
       label: '(BACIA) HYDRO',
       icon: Waves,
-      color: 'from-emerald-600 to-emerald-700',
-      hoverColor: 'from-emerald-700 to-emerald-800'
+      color: 'bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800',
+      iconColor: 'text-emerald-300'
     },
     {
       id: 'pavimentacao',
       label: '(PAVIMENTAÇÃO) HYDRO',
       icon: Hammer,
-      color: 'from-amber-600 to-amber-700',
-      hoverColor: 'from-amber-700 to-amber-800'
+      color: 'bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800',
+      iconColor: 'text-amber-300'
     },
     {
       id: 'controle_albras',
       label: 'CONTROLE ALBRAS',
       icon: AlertCircle,
-      color: 'from-lime-600 to-lime-700',
-      hoverColor: 'from-lime-700 to-lime-800'
+      color: 'bg-gradient-to-r from-lime-600 to-lime-700 hover:from-lime-700 hover:to-lime-800',
+      iconColor: 'text-lime-300'
     },
     {
       id: 'licenciamento',
       label: 'LICENCIAMENTO (IPVA)',
       icon: FileText,
-      color: 'from-red-600 to-red-700',
-      hoverColor: 'from-red-700 to-red-800'
+      color: 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800',
+      iconColor: 'text-red-300'
     },
     {
       id: 'tacografo',
       label: 'TACÓGRAFO',
       icon: Gauge,
-      color: 'from-rose-600 to-rose-700',
-      hoverColor: 'from-rose-700 to-rose-800'
+      color: 'bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800',
+      iconColor: 'text-rose-300'
     },
     {
       id: 'aet',
       label: 'AET ESTADUAL - FEDERAL',
       icon: Plane,
-      color: 'from-indigo-600 to-indigo-700',
-      hoverColor: 'from-indigo-700 to-indigo-800'
+      color: 'bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800',
+      iconColor: 'text-indigo-300'
     }
   ];
 
@@ -669,70 +640,130 @@ const Vistorias = () => {
 
   const estatisticas = calcularEstatisticas();
 
+  const handleSignOut = async () => {
+    await signOut();
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900">
-      {/* Header */}
-      <div className="p-6 border-b border-blue-600/30">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <Button 
-              onClick={() => navigate('/')}
-              className="bg-white/10 hover:bg-white/20 text-white border border-white/30"
-              size="sm"
+    <div className="min-h-screen bg-gray-900 text-white">
+      {/* Header Mobile */}
+      <div className="lg:hidden bg-blue-900/80 backdrop-blur-md shadow-lg sticky top-0 z-10">
+        <div className="flex justify-between items-center px-4 py-4">
+          <div className="flex items-center space-x-4">
+            <Button
+              variant="ghost"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="text-blue-300 hover:bg-blue-800/50"
+              title="Abrir menu"
             >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Voltar
+              <Menu className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="text-3xl font-bold text-white mb-2">Sistema de Vistorias</h1>
-              <p className="text-blue-200">
-                {getSectionLabel()}
-              </p>
+              <h1 className="text-xl font-bold text-white">Vistorias</h1>
+              <p className="text-sm text-blue-300">{getSectionLabel()}</p>
             </div>
           </div>
-          <div className="flex gap-3">
-            <Button 
-              onClick={() => setShowFormEquipamento(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              <Truck className="h-4 w-4 mr-2" />
-              Novo Equipamento
-            </Button>
-            {activeSection !== 'equipamentos' && activeSection !== 'visao_geral' && activeSection !== 'cdp' && (
-              <Button 
-                onClick={() => setShowFormVistoria(true)}
-                className="bg-green-600 hover:bg-green-700 text-white"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Nova Vistoria
-              </Button>
-            )}
-            {activeSection === 'cdp' && (
-              <Button 
-                onClick={() => setShowFormCDP(true)}
-                className="bg-orange-600 hover:bg-orange-700 text-white"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Nova CDP
-              </Button>
-            )}
-            <Button className="bg-white/10 hover:bg-white/20 text-white border border-white/30">
-              <Download className="h-4 w-4 mr-2" />
-              Exportar
-            </Button>
-          </div>
+          <Button
+            variant="ghost"
+            onClick={handleSignOut}
+            className="text-blue-300 hover:bg-blue-800/50"
+            title="Sair do sistema"
+          >
+            <LogOut className="h-5 w-5" />
+          </Button>
         </div>
       </div>
 
-      <div className="flex flex-1">
-        {/* Menu Lateral */}
-        <div className="w-64 bg-blue-800/50 backdrop-blur-sm border-r border-blue-600/30 overflow-y-auto max-h-[calc(100vh-120px)]">
-          <div className="p-4 space-y-2">
+      {/* Sidebar Mobile */}
+      {sidebarOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 bg-blue-900/95 backdrop-blur-sm">
+          <div className="flex justify-between items-center p-4 border-b border-blue-600/30">
+            <h2 className="text-xl font-bold text-white">Menu Vistorias</h2>
+            <Button
+              variant="ghost"
+              onClick={() => setSidebarOpen(false)}
+              className="text-white hover:bg-white/20"
+            >
+              <X className="h-6 w-6" />
+            </Button>
+          </div>
+          <div className="p-4 space-y-3 overflow-y-auto h-[calc(100%-80px)]">
+            <Button
+              onClick={() => navigate('/')}
+              className="w-full h-14 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl mb-4"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Voltar para Dashboard
+            </Button>
+
+            <div className="space-y-2">
+              {menuItems.map((item) => (
+                <Button
+                  key={item.id}
+                  onClick={() => {
+                    setActiveSection(item.id as any);
+                    setSidebarOpen(false);
+                  }}
+                  className={`w-full h-16 ${item.color} text-white text-lg font-semibold rounded-xl transition-all duration-300 relative hover:shadow-lg hover:scale-[1.02]`}
+                >
+                  <div className="flex items-center justify-start space-x-4 w-full">
+                    <div className="bg-white/20 p-3 rounded-lg">
+                      <item.icon className="h-5 w-5" />
+                    </div>
+                    <span className="text-left">{item.label}</span>
+                  </div>
+                </Button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Desktop Layout */}
+      <div className="hidden lg:flex min-h-screen">
+        {/* Sidebar Desktop */}
+        <div className="w-80 bg-blue-900/30 backdrop-blur-sm border-r border-blue-600/30 flex flex-col">
+          {/* Sidebar Header */}
+          <div className="p-6 border-b border-blue-600/30">
+            <div className="flex items-center space-x-4">
+              <div className="bg-green-500/20 p-3 rounded-xl">
+                <ClipboardCheck className="h-8 w-8 text-green-300" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-white">Sistema de Vistorias</h1>
+                <p className="text-blue-300 text-sm">Gestão completa</p>
+              </div>
+            </div>
+          </div>
+
+          {/* User Info */}
+          <div className="p-6 border-b border-blue-600/30">
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-blue-200/30">
+              <p className="text-white font-semibold text-lg">{userProfile?.full_name || 'Usuário'}</p>
+              <p className="text-blue-300 text-sm mt-1">Status: <span className="text-green-400 font-medium">Ativo</span></p>
+              <p className="text-blue-300 text-sm mt-1">Último acesso: {new Date().toLocaleDateString('pt-BR')}</p>
+            </div>
+          </div>
+
+          {/* Back to Dashboard */}
+          <div className="p-6 border-b border-blue-600/30">
+            <Button
+              onClick={() => navigate('/')}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl py-3"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Voltar para Dashboard
+            </Button>
+          </div>
+
+          {/* Main Menu */}
+          <div className="flex-1 p-6 space-y-3 overflow-y-auto">
+            <h3 className="text-blue-200 font-semibold text-sm uppercase tracking-wider mb-4">Seções</h3>
             {menuItems.map((item) => (
               <Button
                 key={item.id}
                 onClick={() => setActiveSection(item.id as any)}
-                className={`w-full h-16 bg-gradient-to-r ${item.color} hover:${item.hoverColor} text-white text-lg font-semibold rounded-xl transition-all duration-300 relative group hover:scale-105 hover:shadow-xl ${
+                className={`w-full h-16 ${item.color} text-white text-lg font-semibold rounded-xl transition-all duration-300 relative group hover:scale-105 hover:shadow-xl ${
                   activeSection === item.id ? 'ring-2 ring-white ring-opacity-50' : ''
                 }`}
               >
@@ -742,611 +773,796 @@ const Vistorias = () => {
                   </div>
                   <span className="text-left text-sm">{item.label}</span>
                 </div>
+                {activeSection === item.id && (
+                  <ChevronRight className="absolute right-3 h-5 w-5 text-white" />
+                )}
               </Button>
             ))}
           </div>
+
+          {/* Quick Actions */}
+          <div className="p-6 border-t border-blue-600/30">
+            <h3 className="text-blue-200 font-semibold text-sm uppercase tracking-wider mb-4">Ações Rápidas</h3>
+            <Button
+              onClick={() => setShowFormEquipamento(true)}
+              className="w-full h-14 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl transition-all duration-300 hover:shadow-lg hover:scale-[1.02] mb-3"
+            >
+              <Truck className="h-4 w-4 mr-2" />
+              Novo Equipamento
+            </Button>
+            {activeSection !== 'equipamentos' && activeSection !== 'visao_geral' && activeSection !== 'cdp' && (
+              <Button
+                onClick={() => setShowFormVistoria(true)}
+                className="w-full h-14 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl transition-all duration-300 hover:shadow-lg hover:scale-[1.02]"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Nova Vistoria
+              </Button>
+            )}
+            {activeSection === 'cdp' && (
+              <Button
+                onClick={() => setShowFormCDP(true)}
+                className="w-full h-14 bg-orange-600 hover:bg-orange-700 text-white font-semibold rounded-xl transition-all duration-300 hover:shadow-lg hover:scale-[1.02]"
+              >
+                <CalendarDays className="h-4 w-4 mr-2" />
+                Nova CDP
+              </Button>
+            )}
+          </div>
+
+          {/* Logout */}
+          <div className="p-6 border-t border-blue-600/30">
+            <Button
+              variant="outline"
+              onClick={handleSignOut}
+              className="w-full text-blue-300 hover:text-white hover:bg-blue-500/20 border-blue-300/30 rounded-xl transition-all duration-300 py-3 hover:shadow"
+            >
+              <LogOut className="h-5 w-5 mr-2" />
+              Sair do Sistema
+            </Button>
+          </div>
         </div>
 
-        {/* Conteúdo Principal */}
-        <div className="flex-1 p-6">
-          {/* Visão Geral */}
-          {activeSection === 'visao_geral' && (
-            <div className="space-y-6">
-              <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
-                <CardHeader>
-                  <CardTitle className="text-white">Visão Geral do Sistema</CardTitle>
-                  <CardDescription className="text-blue-200">
-                    Resumo completo das vistorias e equipamentos
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <Card className="bg-blue-500/20 border-blue-400/30">
-                      <CardContent className="p-6">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-blue-200 text-sm">Tags Genéricas</p>
-                            <p className="text-3xl font-bold text-white">{estatisticas.tagsUnicas}</p>
-                          </div>
-                          <Truck className="h-8 w-8 text-blue-300" />
-                        </div>
-                      </CardContent>
-                    </Card>
+        {/* Main Content Desktop */}
+        <div className="flex-1 flex flex-col">
+          {/* Header */}
+          <div className="bg-blue-800/30 backdrop-blur-sm border-b border-blue-600/30 p-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-2xl font-bold text-white">{getSectionLabel()}</h2>
+                <p className="text-blue-200">Gestão completa de vistorias e equipamentos</p>
+              </div>
+              <div className="flex gap-3">
+                <Button 
+                  onClick={() => setShowFormEquipamento(true)}
+                  className="bg-purple-600 hover:bg-purple-700 text-white"
+                >
+                  <Truck className="h-4 w-4 mr-2" />
+                  Novo Equipamento
+                </Button>
+                {activeSection !== 'equipamentos' && activeSection !== 'visao_geral' && activeSection !== 'cdp' && (
+                  <Button 
+                    onClick={() => setShowFormVistoria(true)}
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Nova Vistoria
+                  </Button>
+                )}
+                {activeSection === 'cdp' && (
+                  <Button 
+                    onClick={() => setShowFormCDP(true)}
+                    className="bg-orange-600 hover:bg-orange-700 text-white"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Nova CDP
+                  </Button>
+                )}
+                <Button 
+                  variant="outline"
+                  className="border-blue-300 text-white hover:bg-white/20 bg-white/10"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Exportar
+                </Button>
+              </div>
+            </div>
+          </div>
 
-                    <Card className="bg-green-500/20 border-green-400/30">
-                      <CardContent className="p-6">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-green-200 text-sm">Total Equipamentos</p>
-                            <p className="text-3xl font-bold text-white">{estatisticas.totalEquipamentos}</p>
-                          </div>
-                          <Settings className="h-8 w-8 text-green-300" />
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card className="bg-yellow-500/20 border-yellow-400/30">
-                      <CardContent className="p-6">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-yellow-200 text-sm">Vistorias Pendentes</p>
-                            <p className="text-3xl font-bold text-white">{estatisticas.vistoriasPendentes}</p>
-                          </div>
-                          <Clock className="h-8 w-8 text-yellow-300" />
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card className="bg-red-500/20 border-red-400/30">
-                      <CardContent className="p-6">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-red-200 text-sm">CDP Vencidos</p>
-                            <p className="text-3xl font-bold text-white">{estatisticas.cdpVencidos}</p>
-                          </div>
-                          <CalendarDays className="h-8 w-8 text-red-300" />
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <Card className="bg-white/5 border-blue-200/30">
-                      <CardHeader>
-                        <CardTitle className="text-white">Tags Genéricas</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-2 max-h-80 overflow-y-auto">
-                          {[...new Set(equipamentos.map(e => e.tag_generico))].map(tag => (
-                            <div key={tag} className="flex justify-between items-center p-2 bg-white/5 rounded">
-                              <span className="text-white">{tag}</span>
-                              <span className="text-blue-200 bg-blue-500/20 px-2 py-1 rounded text-sm">
-                                {equipamentos.filter(e => e.tag_generico === tag).length} equipamentos
-                              </span>
+          {/* Content */}
+          <div className="p-6 flex-1 overflow-y-auto">
+            {/* Visão Geral */}
+            {activeSection === 'visao_geral' && (
+              <div className="space-y-6">
+                <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
+                  <CardHeader>
+                    <CardTitle className="text-white">Visão Geral do Sistema</CardTitle>
+                    <CardDescription className="text-blue-200">
+                      Resumo completo das vistorias e equipamentos
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                      <Card className="bg-blue-500/20 border-blue-400/30 hover:shadow-lg transition-all hover:scale-[1.02]">
+                        <CardContent className="p-6">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-blue-200 text-sm">Tags Genéricas</p>
+                              <p className="text-3xl font-bold text-white">{estatisticas.tagsUnicas}</p>
                             </div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
+                            <div className="p-3 rounded-lg bg-blue-500/20">
+                              <Truck className="h-6 w-6 text-blue-300" />
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
 
-                    <Card className="bg-white/5 border-blue-200/30">
-                      <CardHeader>
-                        <CardTitle className="text-white">Próximos Vencimentos CDP</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-2 max-h-80 overflow-y-auto">
-                          {cdpRegistros
-                            .filter(cdp => new Date(cdp.data_vencimento) >= new Date())
-                            .sort((a, b) => new Date(a.data_vencimento).getTime() - new Date(b.data_vencimento).getTime())
-                            .slice(0, 8)
-                            .map(cdp => {
-                              const diasAteVencimento = calcularDiasAteVencimento(cdp.data_vencimento);
-                              const corStatus = getCorStatusVencimento(diasAteVencimento);
-                              const bgStatus = getBgStatusVencimento(diasAteVencimento);
-                              
-                              return (
-                                <div 
-                                  key={cdp.id} 
-                                  className={`flex justify-between items-center p-3 rounded-lg ${bgStatus} border ${corStatus.replace('text', 'border')} border-opacity-30`}
-                                >
-                                  <div className="flex-1">
-                                    <div className="text-white font-medium">{cdp.tag}</div>
-                                    <div className="text-sm text-blue-200 opacity-80">
-                                      {formatarData(cdp.data_vencimento)}
+                      <Card className="bg-green-500/20 border-green-400/30 hover:shadow-lg transition-all hover:scale-[1.02]">
+                        <CardContent className="p-6">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-green-200 text-sm">Total Equipamentos</p>
+                              <p className="text-3xl font-bold text-white">{estatisticas.totalEquipamentos}</p>
+                            </div>
+                            <div className="p-3 rounded-lg bg-green-500/20">
+                              <Settings className="h-6 w-6 text-green-300" />
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      <Card className="bg-yellow-500/20 border-yellow-400/30 hover:shadow-lg transition-all hover:scale-[1.02]">
+                        <CardContent className="p-6">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-yellow-200 text-sm">Vistorias Pendentes</p>
+                              <p className="text-3xl font-bold text-white">{estatisticas.vistoriasPendentes}</p>
+                            </div>
+                            <div className="p-3 rounded-lg bg-yellow-500/20">
+                              <Clock className="h-6 w-6 text-yellow-300" />
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      <Card className="bg-red-500/20 border-red-400/30 hover:shadow-lg transition-all hover:scale-[1.02]">
+                        <CardContent className="p-6">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-red-200 text-sm">CDP Vencidos</p>
+                              <p className="text-3xl font-bold text-white">{estatisticas.cdpVencidos}</p>
+                            </div>
+                            <div className="p-3 rounded-lg bg-red-500/20">
+                              <CalendarDays className="h-6 w-6 text-red-300" />
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <Card className="bg-white/5 border-blue-200/30">
+                        <CardHeader>
+                          <CardTitle className="text-white">Tags Genéricas</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-2 max-h-80 overflow-y-auto">
+                            {[...new Set(equipamentos.map(e => e.tag_generico))].map(tag => (
+                              <div key={tag} className="flex justify-between items-center p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors">
+                                <span className="text-white font-medium">{tag}</span>
+                                <Badge variant="outline" className="bg-blue-500/10 text-blue-300 border-blue-300/30">
+                                  {equipamentos.filter(e => e.tag_generico === tag).length} equipamentos
+                                </Badge>
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      <Card className="bg-white/5 border-blue-200/30">
+                        <CardHeader>
+                          <CardTitle className="text-white">Próximos Vencimentos CDP</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-2 max-h-80 overflow-y-auto">
+                            {cdpRegistros
+                              .filter(cdp => new Date(cdp.data_vencimento) >= new Date())
+                              .sort((a, b) => new Date(a.data_vencimento).getTime() - new Date(b.data_vencimento).getTime())
+                              .slice(0, 8)
+                              .map(cdp => {
+                                const diasAteVencimento = calcularDiasAteVencimento(cdp.data_vencimento);
+                                const corStatus = getCorStatusVencimento(diasAteVencimento);
+                                const bgStatus = getBgStatusVencimento(diasAteVencimento);
+                                
+                                return (
+                                  <div 
+                                    key={cdp.id} 
+                                    className={`flex justify-between items-center p-3 rounded-lg ${bgStatus} border ${corStatus.replace('text', 'border')} border-opacity-30 hover:scale-[1.02] transition-all`}
+                                  >
+                                    <div className="flex-1">
+                                      <div className="text-white font-medium">{cdp.tag}</div>
+                                      <div className="text-sm text-blue-200 opacity-80">
+                                        {formatarData(cdp.data_vencimento)}
+                                      </div>
+                                    </div>
+                                    <div className={`px-3 py-1 rounded-full ${bgStatus} ${corStatus} font-semibold text-sm`}>
+                                      {diasAteVencimento > 0 ? `${diasAteVencimento} dias` : 'Vence hoje'}
                                     </div>
                                   </div>
-                                  <div className={`px-3 py-1 rounded-full ${bgStatus} ${corStatus} font-semibold text-sm`}>
-                                    {diasAteVencimento > 0 ? `${diasAteVencimento} dias` : 'Vence hoje'}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          {cdpRegistros.filter(cdp => new Date(cdp.data_vencimento) >= new Date()).length === 0 && (
-                            <div className="text-center py-4 text-blue-200">
-                              Nenhum vencimento CDP próximo
-                            </div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
+                                );
+                              })}
+                            {cdpRegistros.filter(cdp => new Date(cdp.data_vencimento) >= new Date()).length === 0 && (
+                              <div className="text-center py-4 text-blue-200">
+                                Nenhum vencimento CDP próximo
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {/* Filtros e Busca (apenas para vistorias) */}
+            {activeSection !== 'equipamentos' && activeSection !== 'visao_geral' && activeSection !== 'cdp' && (
+              <Card className="mb-6 bg-white/10 backdrop-blur-sm border-blue-200/30">
+                <CardHeader>
+                  <CardTitle className="text-white flex items-center gap-2">
+                    <Filter className="h-5 w-5" />
+                    Filtros e Busca - {getSectionLabel()}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                    <div className="md:col-span-2">
+                      <Label htmlFor="search" className="text-white">Buscar</Label>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-3 h-4 w-4 text-blue-200" />
+                        <Input
+                          id="search"
+                          placeholder="Buscar por TAG ou Centro de Custo..."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="bg-white/5 border-blue-300/30 text-white pl-10"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="status" className="text-white">Status</Label>
+                      <Select value={filtros.status} onValueChange={(value) => setFiltros({ ...filtros, status: value })}>
+                        <SelectTrigger className="bg-white/5 border-blue-300/30 text-white">
+                          <SelectValue placeholder="Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="todos">Todos</SelectItem>
+                          <SelectItem value="Aprovado">Aprovado</SelectItem>
+                          <SelectItem value="Reprovado">Reprovado</SelectItem>
+                          <SelectItem value="Pendente">Pendente</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="previsto" className="text-white">Previsto</Label>
+                      <Select value={filtros.previsto} onValueChange={(value) => setFiltros({ ...filtros, previsto: value })}>
+                        <SelectTrigger className="bg-white/5 border-blue-300/30 text-white">
+                          <SelectValue placeholder="Previsto" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="todos">Todos</SelectItem>
+                          <SelectItem value="Previsto">Previsto</SelectItem>
+                          <SelectItem value="Não previsto">Não Previsto</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="mes" className="text-white">Mês de Vencimento</Label>
+                      <Select value={filtros.mes} onValueChange={(value) => setFiltros({ ...filtros, mes: value })}>
+                        <SelectTrigger className="bg-white/5 border-blue-300/30 text-white">
+                          <SelectValue placeholder="Mês" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {meses.map(mes => (
+                            <SelectItem key={mes} value={mes}>
+                              {mes === 'todos' ? 'Todos os meses' : mes.charAt(0).toUpperCase() + mes.slice(1)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
-            </div>
-          )}
+            )}
 
-          {/* Filtros e Busca (apenas para vistorias) */}
-          {activeSection !== 'equipamentos' && activeSection !== 'visao_geral' && activeSection !== 'cdp' && (
-            <Card className="mb-6 bg-white/10 backdrop-blur-sm border-blue-200/30">
-              <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
-                  <Filter className="h-5 w-5" />
-                  Filtros e Busca - {getSectionLabel()}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                  <div className="md:col-span-2">
-                    <Label htmlFor="search" className="text-white">Buscar</Label>
-                    <div className="relative">
-                      <Search className="absolute left-3 top-3 h-4 w-4 text-blue-200" />
-                      <Input
-                        id="search"
-                        placeholder="Buscar por TAG ou Centro de Custo..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="bg-white/5 border-blue-300/30 text-white pl-10"
-                      />
+            {/* Busca para Equipamentos */}
+            {activeSection === 'equipamentos' && (
+              <Card className="mb-6 bg-white/10 backdrop-blur-sm border-blue-200/30">
+                <CardHeader>
+                  <CardTitle className="text-white flex items-center gap-2">
+                    <Search className="h-5 w-5" />
+                    Buscar Equipamentos
+                  </CardTitle>
+                  <CardDescription className="text-blue-200">
+                    Pesquise por TAG, tipo, modelo, placa ou número de série
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="md:col-span-3">
+                      <Label htmlFor="search_equipamentos" className="text-white">Buscar</Label>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-3 h-4 w-4 text-blue-200" />
+                        <Input
+                          id="search_equipamentos"
+                          placeholder="Buscar por TAG, tipo, modelo, placa, série..."
+                          value={searchEquipamentos}
+                          onChange={(e) => setSearchEquipamentos(e.target.value)}
+                          className="bg-white/5 border-blue-300/30 text-white pl-10"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-end">
+                      <Button 
+                        variant="outline" 
+                        onClick={() => setSearchEquipamentos('')}
+                        className="border-blue-300/30 text-white hover:bg-white/10 w-full"
+                      >
+                        Limpar Busca
+                      </Button>
                     </div>
                   </div>
-                  
-                  <div>
-                    <Label htmlFor="status" className="text-white">Status</Label>
-                    <Select value={filtros.status} onValueChange={(value) => setFiltros({ ...filtros, status: value })}>
-                      <SelectTrigger className="bg-white/5 border-blue-300/30 text-white">
-                        <SelectValue placeholder="Status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="todos">Todos</SelectItem>
-                        <SelectItem value="Aprovado">Aprovado</SelectItem>
-                        <SelectItem value="Reprovado">Reprovado</SelectItem>
-                        <SelectItem value="Pendente">Pendente</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                </CardContent>
+              </Card>
+            )}
 
-                  <div>
-                    <Label htmlFor="previsto" className="text-white">Previsto</Label>
-                    <Select value={filtros.previsto} onValueChange={(value) => setFiltros({ ...filtros, previsto: value })}>
-                      <SelectTrigger className="bg-white/5 border-blue-300/30 text-white">
-                        <SelectValue placeholder="Previsto" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="todos">Todos</SelectItem>
-                        <SelectItem value="Previsto">Previsto</SelectItem>
-                        <SelectItem value="Não previsto">Não Previsto</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="mes" className="text-white">Mês de Vencimento</Label>
-                    <Select value={filtros.mes} onValueChange={(value) => setFiltros({ ...filtros, mes: value })}>
-                      <SelectTrigger className="bg-white/5 border-blue-300/30 text-white">
-                        <SelectValue placeholder="Mês" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {meses.map(mes => (
-                          <SelectItem key={mes} value={mes}>
-                            {mes === 'todos' ? 'Todos os meses' : mes.charAt(0).toUpperCase() + mes.slice(1)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Busca para Equipamentos */}
-          {activeSection === 'equipamentos' && (
-            <Card className="mb-6 bg-white/10 backdrop-blur-sm border-blue-200/30">
-              <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
-                  <Search className="h-5 w-5" />
-                  Buscar Equipamentos
-                </CardTitle>
-                <CardDescription className="text-blue-200">
-                  Pesquise por TAG, tipo, modelo, placa ou número de série
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="md:col-span-3">
-                    <Label htmlFor="search_equipamentos" className="text-white">Buscar</Label>
-                    <div className="relative">
-                      <Search className="absolute left-3 top-3 h-4 w-4 text-blue-200" />
-                      <Input
-                        id="search_equipamentos"
-                        placeholder="Buscar por TAG, tipo, modelo, placa, série..."
-                        value={searchEquipamentos}
-                        onChange={(e) => setSearchEquipamentos(e.target.value)}
-                        className="bg-white/5 border-blue-300/30 text-white pl-10"
-                      />
+            {/* Busca para CDP */}
+            {activeSection === 'cdp' && (
+              <Card className="mb-6 bg-white/10 backdrop-blur-sm border-blue-200/30">
+                <CardHeader>
+                  <CardTitle className="text-white flex items-center gap-2">
+                    <Search className="h-5 w-5" />
+                    Buscar CDP
+                  </CardTitle>
+                  <CardDescription className="text-blue-200">
+                    Pesquise por TAG para encontrar registros CDP
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="md:col-span-3">
+                      <Label htmlFor="search_cdp" className="text-white">Buscar</Label>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-3 h-4 w-4 text-blue-200" />
+                        <Input
+                          id="search_cdp"
+                          placeholder="Buscar por TAG..."
+                          value={searchCDP}
+                          onChange={(e) => setSearchCDP(e.target.value)}
+                          className="bg-white/5 border-blue-300/30 text-white pl-10"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-end">
+                      <Button 
+                        variant="outline" 
+                        onClick={() => setSearchCDP('')}
+                        className="border-blue-300/30 text-white hover:bg-white/10 w-full"
+                      >
+                        Limpar Busca
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex items-end">
-                    <Button 
-                      variant="outline" 
-                      onClick={() => setSearchEquipamentos('')}
-                      className="border-blue-300/30 text-white hover:bg-white/10 w-full"
-                    >
-                      Limpar Busca
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                </CardContent>
+              </Card>
+            )}
 
-          {/* Busca para CDP */}
-          {activeSection === 'cdp' && (
-            <Card className="mb-6 bg-white/10 backdrop-blur-sm border-blue-200/30">
-              <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
-                  <Search className="h-5 w-5" />
-                  Buscar CDP
-                </CardTitle>
-                <CardDescription className="text-blue-200">
-                  Pesquise por TAG para encontrar registros CDP
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="md:col-span-3">
-                    <Label htmlFor="search_cdp" className="text-white">Buscar</Label>
-                    <div className="relative">
-                      <Search className="absolute left-3 top-3 h-4 w-4 text-blue-200" />
-                      <Input
-                        id="search_cdp"
-                        placeholder="Buscar por TAG..."
-                        value={searchCDP}
-                        onChange={(e) => setSearchCDP(e.target.value)}
-                        className="bg-white/5 border-blue-300/30 text-white pl-10"
-                      />
+            {/* Conteúdo das Seções */}
+            {activeSection === 'equipamentos' ? (
+              /* Seção Equipamentos */
+              <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
+                <CardHeader>
+                  <CardTitle className="text-white">
+                    Cadastro de Equipamentos
+                    <Badge variant="outline" className="ml-2 bg-blue-500/10 text-blue-300 border-blue-300/30">
+                      {equipamentosFiltrados.length} de {equipamentos.length} equipamentos
+                    </Badge>
+                  </CardTitle>
+                  <CardDescription className="text-blue-200">
+                    Gerencie todos os equipamentos disponíveis para vistoria
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {loading ? (
+                    <div className="flex justify-center items-center h-32">
+                      <div className="text-center">
+                        <div className="w-8 h-8 border-4 border-blue-200 border-t-white rounded-full animate-spin mx-auto"></div>
+                        <p className="text-blue-200 mt-2">Carregando equipamentos...</p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-end">
-                    <Button 
-                      variant="outline" 
-                      onClick={() => setSearchCDP('')}
-                      className="border-blue-300/30 text-white hover:bg-white/10 w-full"
-                    >
-                      Limpar Busca
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Conteúdo das Seções */}
-          {activeSection === 'equipamentos' ? (
-            /* Seção Equipamentos */
-            <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
-              <CardHeader>
-                <CardTitle className="text-white">
-                  Cadastro de Equipamentos
-                  <span className="text-blue-200 text-sm font-normal ml-2">
-                    ({equipamentosFiltrados.length} de {equipamentos.length} equipamentos)
-                    {searchEquipamentos && (
-                      <span className="text-orange-300"> • Filtrado por: "{searchEquipamentos}"</span>
-                    )}
-                  </span>
-                </CardTitle>
-                <CardDescription className="text-blue-200">
-                  Gerencie todos os equipamentos disponíveis para vistoria
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {equipamentosFiltrados.length === 0 ? (
-                  <div className="flex justify-center items-center h-32">
-                    <div className="text-white text-center">
-                      <p>
-                        {searchEquipamentos 
-                          ? 'Nenhum equipamento encontrado para a busca' 
-                          : 'Nenhum equipamento cadastrado'
-                        }
-                      </p>
-                      <p className="text-sm text-blue-200 mt-2">
-                        {searchEquipamentos 
-                          ? 'Tente ajustar os termos da busca' 
-                          : 'Clique em "Novo Equipamento" para adicionar o primeiro'
-                        }
-                      </p>
+                  ) : equipamentosFiltrados.length === 0 ? (
+                    <div className="flex justify-center items-center h-32">
+                      <div className="text-white text-center">
+                        <p>
+                          {searchEquipamentos 
+                            ? 'Nenhum equipamento encontrado para a busca' 
+                            : 'Nenhum equipamento cadastrado'
+                          }
+                        </p>
+                        <p className="text-sm text-blue-200 mt-2">
+                          {searchEquipamentos 
+                            ? 'Tente ajustar os termos da busca' 
+                            : 'Clique em "Novo Equipamento" para adicionar o primeiro'
+                          }
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="rounded-md border border-blue-200/30 overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-purple-500/20 hover:bg-purple-500/20">
-                          <TableHead className="text-white">Equipamento</TableHead>
-                          <TableHead className="text-white">TAG</TableHead>
-                          <TableHead className="text-white">Tipo</TableHead>
-                          <TableHead className="text-white">Modelo</TableHead>
-                          <TableHead className="text-white">Ano</TableHead>
-                          <TableHead className="text-white">Placa/Série</TableHead>
-                          <TableHead className="text-white">Cracha HYDRO</TableHead>
-                          <TableHead className="text-white">Ações</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {equipamentosFiltrados.map((equipamentoFiltrado) => {
-                          const equipamentoCompleto = equipamentos.find(e => e.id === equipamentoFiltrado.id);
-                          
-                          return (
-                            <TableRow key={equipamentoFiltrado.id} className="border-blue-200/30 hover:bg-white/5">
-                              <TableCell className="text-white font-medium">
-                                <div>
-                                  <div>{equipamentoFiltrado.tag_generico}</div>
-                                  <div className="text-sm text-blue-200">{equipamentoFiltrado.local || 'Sem local'}</div>
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-white">{equipamentoFiltrado.tag}</TableCell>
-                              <TableCell className="text-white">{equipamentoFiltrado.tipo || '-'}</TableCell>
-                              <TableCell className="text-white">{equipamentoFiltrado.modelo || '-'}</TableCell>
-                              <TableCell className="text-white">{equipamentoFiltrado.ano || '-'}</TableCell>
-                              <TableCell className="text-white">{equipamentoFiltrado.placa_serie || '-'}</TableCell>
-                              <TableCell className="text-white">{equipamentoFiltrado.cracha_hydro || '-'}</TableCell>
-                              <TableCell>
-                                <div className="flex gap-2">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => {
-                                      if (equipamentoCompleto) {
-                                        setEditandoEquipamento(equipamentoCompleto);
-                                      }
-                                    }}
-                                    className="text-blue-600 border-blue-600 hover:bg-blue-600 hover:text-white"
-                                  >
-                                    <Edit className="h-3 w-3 mr-1" />
-                                    Editar
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => excluirEquipamento(equipamentoFiltrado.id)}
-                                    className="text-red-600 border-red-600 hover:bg-red-600 hover:text-white"
-                                  >
-                                    <Trash2 className="h-3 w-3 mr-1" />
-                                    Excluir
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => iniciarAgendamentoVistoria(equipamentoCompleto!)}
-                                    className="text-green-600 border-green-600 hover:bg-green-600 hover:text-white"
-                                  >
-                                    <Calendar className="h-3 w-3 mr-1" />
-                                    Agendar Vistoria
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ) : activeSection === 'cdp' ? (
-            /* Seção CDP */
-            <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
-              <CardHeader>
-                <CardTitle className="text-white">
-                  Validade CDP
-                  <span className="text-blue-200 text-sm font-normal ml-2">
-                    ({cdpFiltrados.length} registros)
-                    {searchCDP && (
-                      <span className="text-orange-300"> • Filtrado por: "{searchCDP}"</span>
-                    )}
-                  </span>
-                </CardTitle>
-                <CardDescription className="text-blue-200">
-                  Controle de validade do CDP dos equipamentos
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {cdpFiltrados.length === 0 ? (
-                  <div className="flex justify-center items-center h-32">
-                    <div className="text-white text-center">
-                      <p>
-                        {searchCDP 
-                          ? 'Nenhum registro CDP encontrado para a busca' 
-                          : 'Nenhum registro CDP cadastrado'
-                        }
-                      </p>
-                      <p className="text-sm text-blue-200 mt-2">
-                        {searchCDP 
-                          ? 'Tente ajustar os termos da busca' 
-                          : 'Clique em "Nova CDP" para adicionar o primeiro registro'
-                        }
-                      </p>
+                  ) : (
+                    <div className="rounded-md border border-blue-200/30 overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-purple-500/20 hover:bg-purple-500/20">
+                            <TableHead className="text-white">Equipamento</TableHead>
+                            <TableHead className="text-white">TAG</TableHead>
+                            <TableHead className="text-white">Tipo</TableHead>
+                            <TableHead className="text-white">Modelo</TableHead>
+                            <TableHead className="text-white">Ano</TableHead>
+                            <TableHead className="text-white">Placa/Série</TableHead>
+                            <TableHead className="text-white">Cracha HYDRO</TableHead>
+                            <TableHead className="text-white">Ações</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {equipamentosFiltrados.map((equipamentoFiltrado) => {
+                            const equipamentoCompleto = equipamentos.find(e => e.id === equipamentoFiltrado.id);
+                            
+                            return (
+                              <TableRow key={equipamentoFiltrado.id} className="border-blue-200/30 hover:bg-white/5 transition-colors">
+                                <TableCell className="text-white font-medium">
+                                  <div>
+                                    <div>{equipamentoFiltrado.tag_generico}</div>
+                                    <div className="text-sm text-blue-200">{equipamentoFiltrado.local || 'Sem local'}</div>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-white">{equipamentoFiltrado.tag}</TableCell>
+                                <TableCell className="text-white">{equipamentoFiltrado.tipo || '-'}</TableCell>
+                                <TableCell className="text-white">{equipamentoFiltrado.modelo || '-'}</TableCell>
+                                <TableCell className="text-white">{equipamentoFiltrado.ano || '-'}</TableCell>
+                                <TableCell className="text-white">{equipamentoFiltrado.placa_serie || '-'}</TableCell>
+                                <TableCell className="text-white">{equipamentoFiltrado.cracha_hydro || '-'}</TableCell>
+                                <TableCell>
+                                  <div className="flex gap-2">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => {
+                                        if (equipamentoCompleto) {
+                                          setEditandoEquipamento(equipamentoCompleto);
+                                        }
+                                      }}
+                                      className="border-blue-300 text-white hover:bg-white/20 bg-white/10"
+                                    >
+                                      <Edit className="h-3 w-3 mr-1" />
+                                      Editar
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => excluirEquipamento(equipamentoFiltrado.id)}
+                                      className="border-red-300 text-white hover:bg-red-500/20 bg-red-500/10"
+                                    >
+                                      <Trash2 className="h-3 w-3 mr-1" />
+                                      Excluir
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => iniciarAgendamentoVistoria(equipamentoCompleto!)}
+                                      className="border-green-300 text-white hover:bg-green-500/20 bg-green-500/10"
+                                    >
+                                      <Calendar className="h-3 w-3 mr-1" />
+                                      Agendar
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
                     </div>
-                  </div>
-                ) : (
-                  <div className="rounded-md border border-blue-200/30 overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-orange-500/20 hover:bg-orange-500/20">
-                          <TableHead className="text-white">TAG</TableHead>
-                          <TableHead className="text-white">Data de Vencimento</TableHead>
-                          <TableHead className="text-white">Dias até Vencimento</TableHead>
-                          <TableHead className="text-white">Status</TableHead>
-                          <TableHead className="text-white">Ações</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {cdpFiltrados.map((cdp) => {
-                          const diasAteVencimento = calcularDiasAteVencimento(cdp.data_vencimento);
-                          const corStatus = getCorStatusVencimento(diasAteVencimento);
-                          const bgStatus = getBgStatusVencimento(diasAteVencimento);
-                          const equipamento = getEquipamentoInfo(cdp.tag);
-                          
-                          return (
-                            <TableRow key={cdp.id} className="border-blue-200/30 hover:bg-white/5">
-                              <TableCell className="text-white font-medium">
-                                <div>
-                                  <div>{cdp.tag}</div>
-                                  {equipamento && (
-                                    <div className="text-sm text-blue-200">
-                                      {equipamento.tag_generico} - {equipamento.tipo || 'Sem tipo'}
-                                    </div>
-                                  )}
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-white">{formatarData(cdp.data_vencimento)}</TableCell>
-                              <TableCell>
-                                <div className={`px-3 py-1 rounded-full ${bgStatus} ${corStatus} font-semibold text-sm text-center`}>
-                                  {diasAteVencimento > 0 ? `${diasAteVencimento} dias` : 'Vence hoje'}
-                                </div>
-                              </TableCell>
+                  )}
+                </CardContent>
+              </Card>
+            ) : activeSection === 'cdp' ? (
+              /* Seção CDP */
+              <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
+                <CardHeader>
+                  <CardTitle className="text-white">
+                    Validade CDP
+                    <Badge variant="outline" className="ml-2 bg-orange-500/10 text-orange-300 border-orange-300/30">
+                      {cdpFiltrados.length} registros
+                    </Badge>
+                  </CardTitle>
+                  <CardDescription className="text-blue-200">
+                    Controle de validade do CDP dos equipamentos
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {loading ? (
+                    <div className="flex justify-center items-center h-32">
+                      <div className="text-center">
+                        <div className="w-8 h-8 border-4 border-blue-200 border-t-white rounded-full animate-spin mx-auto"></div>
+                        <p className="text-blue-200 mt-2">Carregando CDP...</p>
+                      </div>
+                    </div>
+                  ) : cdpFiltrados.length === 0 ? (
+                    <div className="flex justify-center items-center h-32">
+                      <div className="text-white text-center">
+                        <p>
+                          {searchCDP 
+                            ? 'Nenhum registro CDP encontrado para a busca' 
+                            : 'Nenhum registro CDP cadastrado'
+                          }
+                        </p>
+                        <p className="text-sm text-blue-200 mt-2">
+                          {searchCDP 
+                            ? 'Tente ajustar os termos da busca' 
+                            : 'Clique em "Nova CDP" para adicionar o primeiro registro'
+                          }
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-md border border-blue-200/30 overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-orange-500/20 hover:bg-orange-500/20">
+                            <TableHead className="text-white">TAG</TableHead>
+                            <TableHead className="text-white">Data de Vencimento</TableHead>
+                            <TableHead className="text-white">Dias até Vencimento</TableHead>
+                            <TableHead className="text-white">Status</TableHead>
+                            <TableHead className="text-white">Ações</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {cdpFiltrados.map((cdp) => {
+                            const diasAteVencimento = calcularDiasAteVencimento(cdp.data_vencimento);
+                            const corStatus = getCorStatusVencimento(diasAteVencimento);
+                            const bgStatus = getBgStatusVencimento(diasAteVencimento);
+                            const equipamento = getEquipamentoInfo(cdp.tag);
+                            
+                            return (
+                              <TableRow key={cdp.id} className="border-blue-200/30 hover:bg-white/5 transition-colors">
+                                <TableCell className="text-white font-medium">
+                                  <div>
+                                    <div>{cdp.tag}</div>
+                                    {equipamento && (
+                                      <div className="text-sm text-blue-200">
+                                        {equipamento.tag_generico} - {equipamento.tipo || 'Sem tipo'}
+                                      </div>
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-white">{formatarData(cdp.data_vencimento)}</TableCell>
+                                <TableCell>
+                                  <Badge className={`${bgStatus} ${corStatus} border-none`}>
+                                    {diasAteVencimento > 0 ? `${diasAteVencimento} dias` : 'Vence hoje'}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    {diasAteVencimento <= 3 ? (
+                                      <XCircle className="h-4 w-4 text-red-500" />
+                                    ) : diasAteVencimento <= 15 ? (
+                                      <Clock className="h-4 w-4 text-yellow-500" />
+                                    ) : (
+                                      <CheckCircle className="h-4 w-4 text-green-500" />
+                                    )}
+                                    <span className={`font-medium ${corStatus}`}>
+                                      {diasAteVencimento > 15 ? 'Válido' : diasAteVencimento >= 4 ? 'Atenção' : 'Urgente'}
+                                    </span>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex gap-2">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => setEditandoCDP(cdp)}
+                                      className="border-blue-300 text-white hover:bg-white/20 bg-white/10"
+                                    >
+                                      <Edit className="h-3 w-3 mr-1" />
+                                      Editar
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => excluirCDP(cdp.id)}
+                                      className="border-red-300 text-white hover:bg-red-500/20 bg-red-500/10"
+                                    >
+                                      <Trash2 className="h-3 w-3 mr-1" />
+                                      Excluir
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ) : activeSection !== 'visao_geral' ? (
+              /* Seção Vistorias */
+              <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
+                <CardHeader>
+                  <CardTitle className="text-white">
+                    Vistorias - {getSectionLabel()}
+                    <Badge variant="outline" className="ml-2 bg-blue-500/10 text-blue-300 border-blue-300/30">
+                      {vistoriasFiltradas.length} vistorias
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {loading ? (
+                    <div className="flex justify-center items-center h-32">
+                      <div className="text-center">
+                        <div className="w-8 h-8 border-4 border-blue-200 border-t-white rounded-full animate-spin mx-auto"></div>
+                        <p className="text-blue-200 mt-2">Carregando vistorias...</p>
+                      </div>
+                    </div>
+                  ) : vistoriasFiltradas.length === 0 ? (
+                    <div className="flex justify-center items-center h-32">
+                      <div className="text-white text-center">
+                        <p>Nenhuma vistoria encontrada</p>
+                        <p className="text-sm text-blue-200 mt-2">
+                          Clique em "Nova Vistoria" para adicionar a primeira
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-md border border-blue-200/30 overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-blue-500/20 hover:bg-blue-500/20">
+                            <TableHead className="text-white">TAG</TableHead>
+                            <TableHead className="text-white">Centro de Custo</TableHead>
+                            <TableHead className="text-white">Status</TableHead>
+                            <TableHead className="text-white">Previsto</TableHead>
+                            <TableHead className="text-white">Vencimento</TableHead>
+                            <TableHead className="text-white">Realização</TableHead>
+                            <TableHead className="text-white">Cracha HYDRO</TableHead>
+                            <TableHead className="text-white">Motivo</TableHead>
+                            <TableHead className="text-white">Observações</TableHead>
+                            <TableHead className="text-white">Ações</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {vistoriasFiltradas.map((vistoria) => (
+                            <TableRow key={vistoria.id} className="border-blue-200/30 hover:bg-white/5 transition-colors">
+                              <TableCell className="text-white font-medium">{vistoria.tag}</TableCell>
+                              <TableCell className="text-white">{vistoria.centro_custo}</TableCell>
                               <TableCell>
                                 <div className="flex items-center gap-2">
-                                  {diasAteVencimento <= 3 ? (
-                                    <XCircle className="h-4 w-4 text-red-500" />
-                                  ) : diasAteVencimento <= 15 ? (
-                                    <Clock className="h-4 w-4 text-yellow-500" />
-                                  ) : (
-                                    <CheckCircle className="h-4 w-4 text-green-500" />
-                                  )}
-                                  <span className={`font-medium ${corStatus}`}>
-                                    {diasAteVencimento > 15 ? 'Válido' : diasAteVencimento >= 4 ? 'Atenção' : 'Urgente'}
+                                  {getStatusIcon(vistoria.status)}
+                                  <span className={`text-sm font-medium ${
+                                    vistoria.status === 'Aprovado' ? 'text-green-400' :
+                                    vistoria.status === 'Reprovado' ? 'text-red-400' : 'text-yellow-400'
+                                  }`}>
+                                    {vistoria.status}
                                   </span>
                                 </div>
                               </TableCell>
+                              <TableCell className="text-white">{vistoria.previsto}</TableCell>
+                              <TableCell className="text-white">{formatarData(vistoria.data_vencimento_vistoria)}</TableCell>
+                              <TableCell className="text-white">{formatarData(vistoria.data_realizacao_vistoria)}</TableCell>
+                              <TableCell className="text-white">{vistoria.cracha_hydro || '-'}</TableCell>
+                              <TableCell className="text-white max-w-xs truncate">
+                                {vistoria.motivo_reprovacao || '-'}
+                              </TableCell>
+                              <TableCell className="text-white max-w-xs truncate">
+                                {vistoria.observacoes || '-'}
+                              </TableCell>
                               <TableCell>
-                                <div className="flex gap-2">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => setEditandoCDP(cdp)}
-                                    className="text-blue-600 border-blue-600 hover:bg-blue-600 hover:text-white"
-                                  >
-                                    <Edit className="h-3 w-3 mr-1" />
-                                    Editar
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => excluirCDP(cdp.id)}
-                                    className="text-red-600 border-red-600 hover:bg-red-600 hover:text-white"
-                                  >
-                                    <Trash2 className="h-3 w-3 mr-1" />
-                                    Excluir
-                                  </Button>
-                                </div>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setEditandoVistoria(vistoria)}
+                                  className="border-blue-300 text-white hover:bg-white/20 bg-white/10"
+                                >
+                                  <Edit className="h-3 w-3 mr-1" />
+                                  Editar
+                                </Button>
                               </TableCell>
                             </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ) : activeSection !== 'visao_geral' ? (
-            /* Seção Vistorias */
-            <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
-              <CardHeader>
-                <CardTitle className="text-white">
-                  Vistorias - {getSectionLabel()}
-                  <span className="text-blue-200 text-sm font-normal ml-2">
-                    ({vistoriasFiltradas.length} vistorias)
-                  </span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {vistoriasFiltradas.length === 0 ? (
-                  <div className="flex justify-center items-center h-32">
-                    <div className="text-white text-center">
-                      <p>Nenhuma vistoria encontrada</p>
-                      <p className="text-sm text-blue-200 mt-2">
-                        Clique em "Nova Vistoria" para adicionar a primeira
-                      </p>
+                          ))}
+                        </TableBody>
+                      </Table>
                     </div>
-                  </div>
-                ) : (
-                  <div className="rounded-md border border-blue-200/30 overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-blue-500/20 hover:bg-blue-500/20">
-                          <TableHead className="text-white">TAG</TableHead>
-                          <TableHead className="text-white">Centro de Custo</TableHead>
-                          <TableHead className="text-white">Status</TableHead>
-                          <TableHead className="text-white">Previsto</TableHead>
-                          <TableHead className="text-white">Vencimento</TableHead>
-                          <TableHead className="text-white">Realização</TableHead>
-                          <TableHead className="text-white">Cracha HYDRO</TableHead>
-                          <TableHead className="text-white">Motivo</TableHead>
-                          <TableHead className="text-white">Observações</TableHead>
-                          <TableHead className="text-white">Ações</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {vistoriasFiltradas.map((vistoria) => (
-                          <TableRow key={vistoria.id} className="border-blue-200/30 hover:bg-white/5">
-                            <TableCell className="text-white font-medium">{vistoria.tag}</TableCell>
-                            <TableCell className="text-white">{vistoria.centro_custo}</TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                {getStatusIcon(vistoria.status)}
-                                <span className={`text-sm font-medium ${
-                                  vistoria.status === 'Aprovado' ? 'text-green-400' :
-                                  vistoria.status === 'Reprovado' ? 'text-red-400' : 'text-yellow-400'
-                                }`}>
-                                  {vistoria.status}
-                                </span>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-white">{vistoria.previsto}</TableCell>
-                            <TableCell className="text-white">{formatarData(vistoria.data_vencimento_vistoria)}</TableCell>
-                            <TableCell className="text-white">{formatarData(vistoria.data_realizacao_vistoria)}</TableCell>
-                            <TableCell className="text-white">{vistoria.cracha_hydro || '-'}</TableCell>
-                            <TableCell className="text-white max-w-xs truncate">
-                              {vistoria.motivo_reprovacao || '-'}
-                            </TableCell>
-                            <TableCell className="text-white max-w-xs truncate">
-                              {vistoria.observacoes || '-'}
-                            </TableCell>
-                            <TableCell>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => setEditandoVistoria(vistoria)}
-                                className="text-blue-600 border-blue-600 hover:bg-blue-600 hover:text-white"
-                              >
-                                <Edit className="h-3 w-3 mr-1" />
-                                Editar
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ) : null}
+                  )}
+                </CardContent>
+              </Card>
+            ) : null}
+          </div>
         </div>
       </div>
+
+      {/* Mobile Content (quando sidebar fechada) */}
+      {!sidebarOpen && (
+        <div className="lg:hidden p-4">
+          <Button
+            onClick={() => navigate('/')}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl mb-4 py-3"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Voltar para Dashboard
+          </Button>
+
+          {/* Ações Rápidas Mobile */}
+          <div className="grid grid-cols-1 gap-3 mb-6">
+            <Button
+              onClick={() => setShowFormEquipamento(true)}
+              className="w-full h-14 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl"
+            >
+              <Truck className="h-4 w-4 mr-2" />
+              Novo Equipamento
+            </Button>
+            {activeSection !== 'equipamentos' && activeSection !== 'visao_geral' && activeSection !== 'cdp' && (
+              <Button
+                onClick={() => setShowFormVistoria(true)}
+                className="w-full h-14 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Nova Vistoria
+              </Button>
+            )}
+            {activeSection === 'cdp' && (
+              <Button
+                onClick={() => setShowFormCDP(true)}
+                className="w-full h-14 bg-orange-600 hover:bg-orange-700 text-white font-semibold rounded-xl"
+              >
+                <CalendarDays className="h-4 w-4 mr-2" />
+                Nova CDP
+              </Button>
+            )}
+          </div>
+
+          {/* Conteúdo mobile simplificado */}
+          <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30 mb-4">
+            <CardHeader>
+              <CardTitle className="text-white text-lg">{getSectionLabel()}</CardTitle>
+              <CardDescription className="text-blue-200">
+                Toque em um item do menu para ver mais detalhes
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {menuItems.map((item) => (
+                  <Button
+                    key={item.id}
+                    onClick={() => setActiveSection(item.id as any)}
+                    className={`w-full h-16 ${item.color} text-white text-lg font-semibold rounded-xl`}
+                  >
+                    <div className="flex items-center justify-start space-x-3 w-full px-4">
+                      <div className="bg-white/20 p-2 rounded-lg">
+                        <item.icon className="h-5 w-5" />
+                      </div>
+                      <span className="text-left text-sm">{item.label}</span>
+                    </div>
+                  </Button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Modal Agendamento de Vistoria */}
       {agendandoVistoria && (
@@ -1502,7 +1718,7 @@ const Vistorias = () => {
                     !novaVistoria.data_vencimento_vistoria ||
                     (novaVistoria.status === 'Reprovado' && !novaVistoria.motivo_reprovacao)
                   }
-                  className="bg-green-600 hover:bg-green-700"
+                  className="bg-green-600 hover:bg-green-700 text-white"
                 >
                   Agendar Vistoria
                 </Button>
@@ -1680,6 +1896,7 @@ const Vistorias = () => {
                     !tagExiste(novaVistoria.tag) ||
                     (novaVistoria.status === 'Reprovado' && !novaVistoria.motivo_reprovacao)
                   }
+                  className="bg-green-600 hover:bg-green-700 text-white"
                 >
                   Salvar Vistoria
                 </Button>
@@ -1827,6 +2044,7 @@ const Vistorias = () => {
                     !editandoVistoria.data_vencimento_vistoria ||
                     (editandoVistoria.status === 'Reprovado' && !editandoVistoria.motivo_reprovacao)
                   }
+                  className="bg-green-600 hover:bg-green-700 text-white"
                 >
                   Atualizar Vistoria
                 </Button>
@@ -1907,7 +2125,7 @@ const Vistorias = () => {
                 <Button 
                   onClick={salvarCDP}
                   disabled={!novoCDP.tag || !novoCDP.data_vencimento || !tagExiste(novoCDP.tag)}
-                  className="bg-orange-600 hover:bg-orange-700"
+                  className="bg-orange-600 hover:bg-orange-700 text-white"
                 >
                   Salvar CDP
                 </Button>
@@ -1961,7 +2179,7 @@ const Vistorias = () => {
                 <Button 
                   onClick={atualizarCDP}
                   disabled={!editandoCDP.data_vencimento}
-                  className="bg-orange-600 hover:bg-orange-700"
+                  className="bg-orange-600 hover:bg-orange-700 text-white"
                 >
                   Atualizar CDP
                 </Button>
@@ -2101,6 +2319,7 @@ const Vistorias = () => {
                 <Button 
                   onClick={salvarEquipamento}
                   disabled={!novoEquipamento.tag || !novoEquipamento.tipo}
+                  className="bg-purple-600 hover:bg-purple-700 text-white"
                 >
                   Salvar Equipamento
                 </Button>
@@ -2240,6 +2459,7 @@ const Vistorias = () => {
                 <Button 
                   onClick={atualizarEquipamento}
                   disabled={!editandoEquipamento.tag || !editandoEquipamento.tipo}
+                  className="bg-purple-600 hover:bg-purple-700 text-white"
                 >
                   Atualizar Equipamento
                 </Button>

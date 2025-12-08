@@ -4,11 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, EyeOff, ChevronLeft, ChevronRight, Pencil, FileDown, Ship, Factory, Warehouse, Building, Users, UserX, Calendar, Clock, Search } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Pencil, FileDown, Ship, Factory, Warehouse, Building, Users, UserX, Calendar, Clock, Search } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -70,7 +69,7 @@ interface OperacaoCompleta {
 const VisualizarOperacao = () => {
   const { id: operacaoId } = useParams();
   const navigate = useNavigate();
-  const { user, userProfile } = useAuth();
+  const { userProfile } = useAuth();
   const { toast } = useToast();
 
   // Estados do formulário
@@ -461,11 +460,11 @@ const VisualizarOperacao = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-blue-200 border-t-white rounded-full animate-spin mx-auto mb-4"></div>
           <h2 className="text-2xl font-bold text-white mb-2">Carregando Operação</h2>
-          <p className="text-blue-200">Buscando dados do sistema...</p>
+          <p className="text-blue-300">Buscando dados do sistema...</p>
         </div>
       </div>
     );
@@ -475,30 +474,26 @@ const VisualizarOperacao = () => {
   const totalHoras = calcularTotalHoras();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900 pb-10">
+    <div className="min-h-screen bg-gray-900 text-white pb-10">
       {/* Header */}
-      <div className="bg-blue-800/50 backdrop-blur-sm border-b border-blue-600/30 shadow-sm">
-        <div className="px-6 py-4">
-          <div className="flex items-center justify-between">
+      <div className="bg-blue-900/80 backdrop-blur-md shadow-lg sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-4">
             <div className="flex items-center space-x-4">
               <Button 
                 variant="ghost" 
                 onClick={() => navigate('/relatorio-transporte')} 
-                className="text-white hover:bg-white/20 px-4 py-2 rounded-lg transition-all"
+                className="text-blue-300 hover:bg-blue-800/50"
+                title="Voltar para Relatório"
               >
-                <ArrowLeft className="h-5 w-5 mr-2" />
-                Voltar ao Relatório
+                <ArrowLeft className="h-5 w-5" />
+                <span className="ml-2">Relatório</span>
               </Button>
-              <div>
-                <h1 className="text-2xl font-bold text-white">Visualizando Operação</h1>
-                <p className="text-blue-200 text-sm">
-                  {selectedOp} • {formatarDataBR(data)} • {horaInicial} - {horaFinal}
-                  {navioInfo && ` • ${navioInfo.nome_navio} - ${navioInfo.carga}`}
-                </p>
-              </div>
+              <h1 className="text-2xl font-bold text-white">Visualizando Operação</h1>
             </div>
-            <div className="flex items-center space-x-2">
-              <Badge className="bg-green-500/20 text-green-300 text-lg px-3 py-1">
+            
+            <div className="flex items-center space-x-3">
+              <Badge className="bg-green-500/20 text-green-300 border-green-300/30 text-lg px-3 py-1">
                 Total: {totalHoras.toFixed(1)}h
               </Badge>
               <div className="p-3 rounded-lg bg-blue-500/20">
@@ -509,200 +504,352 @@ const VisualizarOperacao = () => {
         </div>
       </div>
 
+      {/* Informação da operação atual */}
+      <div className="px-6 py-3 bg-blue-800/30 backdrop-blur-sm border-b border-blue-600/30">
+        <div className="max-w-7xl mx-auto">
+          <p className="text-sm text-blue-300">
+            {selectedOp} • {formatarDataBR(data)} • {horaInicial} - {horaFinal}
+            {navioInfo && ` • ${navioInfo.nome_navio} - ${navioInfo.carga}`}
+          </p>
+        </div>
+      </div>
+
       {/* Botões de Navegação e Ações */}
       <div className="px-6 py-4">
-        <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
-          <CardContent className="p-4 flex flex-col sm:flex-row justify-between items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Button 
-                variant="outline"
-                onClick={() => navigateToOperation('prev')}
-                disabled={operacoesList.length <= 1}
-                className="text-blue-300 hover:text-white hover:bg-blue-500/20 border-blue-300/30"
-              >
-                <ChevronLeft className="h-4 w-4 mr-1" />
-                Anterior
-              </Button>
-              <span className="text-sm text-blue-300 px-3 py-1 bg-blue-500/10 rounded-md">
-                {currentIndex + 1} de {operacoesList.length}
-              </span>
-              <Button 
-                variant="outline"
-                onClick={() => navigateToOperation('next')}
-                disabled={operacoesList.length <= 1}
-                className="text-blue-300 hover:text-white hover:bg-blue-500/20 border-blue-300/30"
-              >
-                Próximo
-                <ChevronRight className="h-4 w-4 ml-1" />
-              </Button>
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <Button 
-                variant="outline"
-                onClick={handleExportPDF}
-                className="text-blue-300 hover:text-white hover:bg-blue-500/20 border-blue-300/30"
-              >
-                <FileDown className="h-4 w-4 mr-1" />
-                Exportar PDF
-              </Button>
-              <Button 
-                variant="default"
-                onClick={() => navigate(`/operacao/${operacaoId}/editar`)}
-                disabled={!isEditable()}
-                title={isEditable() ? 'Editar operação' : 'Edição bloqueada (24h)'}
-                className="bg-orange-500 hover:bg-orange-600 text-white"
-              >
-                <Pencil className="h-4 w-4 mr-1" />
-                Editar Operação
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="max-w-7xl mx-auto">
+          <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
+            <CardContent className="p-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="outline"
+                  onClick={() => navigateToOperation('prev')}
+                  disabled={operacoesList.length <= 1}
+                  className="text-blue-300 hover:text-white hover:bg-blue-500/20 border-blue-300/30"
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  Anterior
+                </Button>
+                <span className="text-sm text-blue-300 px-3 py-1 bg-blue-500/10 rounded-md border border-blue-300/30">
+                  {currentIndex + 1} de {operacoesList.length}
+                </span>
+                <Button 
+                  variant="outline"
+                  onClick={() => navigateToOperation('next')}
+                  disabled={operacoesList.length <= 1}
+                  className="text-blue-300 hover:text-white hover:bg-blue-500/20 border-blue-300/30"
+                >
+                  Próximo
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="outline"
+                  onClick={handleExportPDF}
+                  className="text-blue-300 hover:text-white hover:bg-blue-500/20 border-blue-300/30"
+                >
+                  <FileDown className="h-4 w-4 mr-1" />
+                  Exportar PDF
+                </Button>
+                <Button 
+                  variant="default"
+                  onClick={() => navigate(`/operacao/${operacaoId}/editar`)}
+                  disabled={!isEditable()}
+                  title={isEditable() ? 'Editar operação' : 'Edição bloqueada (24h)'}
+                  className="bg-orange-500 hover:bg-orange-600 text-white"
+                >
+                  <Pencil className="h-4 w-4 mr-1" />
+                  Editar Operação
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
       
       {/* Conteúdo Principal */}
       <div className="px-6 space-y-4">
-        {/* Dados da Operação */}
-        <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
-          <CardHeader className="border-b border-blue-200/30">
-            <CardTitle className="text-white flex items-center space-x-2">
-              <Calendar className="h-5 w-5 text-blue-300" />
-              <span>Dados da Operação</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6 space-y-4">
-            {selectedOp === 'NAVIO' && navioInfo && (
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-blue-200">Navio</Label>
-                <Input 
-                  value={`${navioInfo.nome_navio} - ${navioInfo.carga}`} 
-                  readOnly 
-                  className="bg-white/5 border-blue-300/30 text-white"
-                />
-              </div>
-            )}
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-blue-200 flex items-center space-x-2">
-                  <Search className="h-4 w-4 text-blue-300" />
-                  <span>Operação</span>
-                </Label>
-                <Input 
-                  value={selectedOp} 
-                  readOnly 
-                  className="bg-white/5 border-blue-300/30 text-white"
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-blue-200 flex items-center space-x-2">
-                  <Calendar className="h-4 w-4 text-blue-300" />
-                  <span>Data</span>
-                </Label>
-                <Input 
-                  type="date" 
-                  value={data} 
-                  readOnly 
-                  className="bg-white/5 border-blue-300/30 text-white"
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-blue-200 flex items-center space-x-2">
-                  <Clock className="h-4 w-4 text-blue-300" />
-                  <span>Horário</span>
-                </Label>
-                <div className="flex items-center space-x-2">
+        <div className="max-w-7xl mx-auto">
+          {/* Dados da Operação */}
+          <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
+            <CardHeader className="border-b border-blue-200/30">
+              <CardTitle className="text-white flex items-center space-x-2">
+                <Calendar className="h-5 w-5 text-blue-300" />
+                <span>Dados da Operação</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              {selectedOp === 'NAVIO' && navioInfo && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-blue-200">Navio</Label>
                   <Input 
-                    type="time" 
-                    value={horaInicial} 
+                    value={`${navioInfo.nome_navio} - ${navioInfo.carga}`} 
                     readOnly 
-                    className="bg-white/5 border-blue-300/30 text-white"
-                  />
-                  <span className="text-blue-400">→</span>
-                  <Input 
-                    type="time" 
-                    value={horaFinal} 
-                    readOnly 
-                    className="bg-white/5 border-blue-300/30 text-white"
+                    className="h-10 bg-white/5 border-blue-300/30 text-white focus:border-blue-300"
                   />
                 </div>
+              )}
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-blue-200 flex items-center space-x-2">
+                    <Search className="h-4 w-4 text-blue-300" />
+                    <span>Operação</span>
+                  </Label>
+                  <Input 
+                    value={selectedOp} 
+                    readOnly 
+                    className="h-10 bg-white/5 border-blue-300/30 text-white focus:border-blue-300"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-blue-200 flex items-center space-x-2">
+                    <Calendar className="h-4 w-4 text-blue-300" />
+                    <span>Data</span>
+                  </Label>
+                  <Input 
+                    type="date" 
+                    value={data} 
+                    readOnly 
+                    className="h-10 bg-white/5 border-blue-300/30 text-white focus:border-blue-300"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-blue-200 flex items-center space-x-2">
+                    <Clock className="h-4 w-4 text-blue-300" />
+                    <span>Horário</span>
+                  </Label>
+                  <div className="flex items-center space-x-2">
+                    <Input 
+                      type="time" 
+                      value={horaInicial} 
+                      readOnly 
+                      className="h-10 bg-white/5 border-blue-300/30 text-white focus:border-blue-300"
+                    />
+                    <span className="text-blue-400">→</span>
+                    <Input 
+                      type="time" 
+                      value={horaFinal} 
+                      readOnly 
+                      className="h-10 bg-white/5 border-blue-300/30 text-white focus:border-blue-300"
+                    />
+                  </div>
+                </div>
               </div>
-            </div>
-            
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-blue-200">Observação do Turno</Label>
-              <Textarea 
-                value={observacao || "Nenhuma observação registrada"} 
-                readOnly 
-                className="bg-white/5 border-blue-300/30 text-white min-h-[100px] resize-none"
-              />
-            </div>
-          </CardContent>
-        </Card>
+              
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-blue-200">Observação do Turno</Label>
+                <Textarea 
+                  value={observacao || "Nenhuma observação registrada"} 
+                  readOnly 
+                  className="bg-white/5 border-blue-300/30 text-white min-h-[100px] resize-none focus:border-blue-300"
+                />
+              </div>
+            </CardContent>
+          </Card>
 
-        {/* Equipamentos */}
-        {selectedOp === 'NAVIO' ? (
+          {/* Equipamentos */}
+          {selectedOp === 'NAVIO' ? (
+            <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
+              <CardHeader className="border-b border-blue-200/30">
+                <CardTitle className="text-white flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Ship className="h-5 w-5 text-blue-300" />
+                    <span>Equipamentos do Navio</span>
+                  </div>
+                  <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-300/30">
+                    {equipamentosNavio.length} equipamentos
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                {equipamentosNavio.length === 0 ? (
+                  <div className="text-center py-12">
+                    <p className="text-blue-300">Nenhum equipamento registrado.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader className="bg-blue-600/20 backdrop-blur-sm">
+                        <TableRow>
+                          <TableHead className="text-blue-200 text-xs py-3">TAG</TableHead>
+                          <TableHead className="text-blue-200 text-xs py-3">Operador/Motorista</TableHead>
+                          <TableHead className="text-blue-200 text-xs py-3">Grupo</TableHead>
+                          <TableHead className="text-blue-200 text-xs py-3">Início</TableHead>
+                          <TableHead className="text-blue-200 text-xs py-3">Fim</TableHead>
+                          <TableHead className="text-blue-200 text-xs py-3 text-right">Horas</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {equipamentosNavio.map(eq => (
+                          <TableRow key={eq.id} className="hover:bg-white/5 border-b border-blue-200/10">
+                            <TableCell className="py-3">
+                              <div className="font-medium text-white">{eq.tag}</div>
+                            </TableCell>
+                            <TableCell className="py-3">
+                              <div className="font-medium text-white">{eq.motorista_operador}</div>
+                            </TableCell>
+                            <TableCell className="py-3">
+                              <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-300/30 text-xs">
+                                {eq.grupo_operacao || 'Navio'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="py-3">
+                              <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-300/30 text-xs whitespace-nowrap">
+                                {eq.hora_inicial || 'N/A'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="py-3">
+                              <Badge variant="outline" className="bg-green-500/20 text-green-300 border-green-300/30 text-xs whitespace-nowrap">
+                                {eq.hora_final || 'N/A'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="py-3 text-right">
+                              <Badge className="bg-green-500/20 text-green-300 border-green-400/30 text-xs">
+                                {eq.horas_trabalhadas?.toFixed(1) || '0.0'}h
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            ['HYDRO', 'ALBRAS', 'SANTOS BRASIL'].includes(selectedOp) && (
+              <div className="space-y-4">
+                {operacaoGrupos.length === 0 ? (
+                  <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
+                    <CardContent className="pt-6">
+                      <p className="text-center text-blue-300 py-4">Nenhuma operação registrada.</p>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  operacaoGrupos.map(grupo => (
+                    <Card key={grupo.id} className="bg-white/10 backdrop-blur-sm border-blue-200/30">
+                      <CardHeader className="border-b border-blue-200/30">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-lg font-semibold text-white">{grupo.nome}</h3>
+                          <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-300/30">
+                            {grupo.equipamentos.length} equipamentos
+                          </Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="p-0">
+                        {grupo.equipamentos.length === 0 ? (
+                          <div className="text-center py-8">
+                            <p className="text-blue-300">Nenhum equipamento neste grupo.</p>
+                          </div>
+                        ) : (
+                          <div className="overflow-x-auto">
+                            <Table>
+                              <TableHeader className="bg-blue-600/20 backdrop-blur-sm">
+                                <TableRow>
+                                  <TableHead className="text-blue-200 text-xs py-3">TAG</TableHead>
+                                  <TableHead className="text-blue-200 text-xs py-3">Operador</TableHead>
+                                  <TableHead className="text-blue-200 text-xs py-3">Início</TableHead>
+                                  <TableHead className="text-blue-200 text-xs py-3">Fim</TableHead>
+                                  <TableHead className="text-blue-200 text-xs py-3 text-right">Horas</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {grupo.equipamentos.map(eq => (
+                                  <TableRow key={eq.id} className="hover:bg-white/5 border-b border-blue-200/10">
+                                    <TableCell className="py-3">
+                                      <div className="font-medium text-white">{eq.tag}</div>
+                                    </TableCell>
+                                    <TableCell className="py-3">
+                                      <div className="font-medium text-white">{eq.motorista_operador}</div>
+                                    </TableCell>
+                                    <TableCell className="py-3">
+                                      <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-300/30 text-xs whitespace-nowrap">
+                                        {eq.hora_inicial || 'N/A'}
+                                      </Badge>
+                                    </TableCell>
+                                    <TableCell className="py-3">
+                                      <Badge variant="outline" className="bg-green-500/20 text-green-300 border-green-300/30 text-xs whitespace-nowrap">
+                                        {eq.hora_final || 'N/A'}
+                                      </Badge>
+                                    </TableCell>
+                                    <TableCell className="py-3 text-right">
+                                      <Badge className="bg-green-500/20 text-green-300 border-green-400/30 text-xs">
+                                        {eq.horas_trabalhadas?.toFixed(1) || '0.0'}h
+                                      </Badge>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
+              </div>
+            )
+          )}
+
+          {/* Ajudantes */}
           <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
             <CardHeader className="border-b border-blue-200/30">
               <CardTitle className="text-white flex items-center justify-between">
                 <div className="flex items-center space-x-2">
-                  <Ship className="h-5 w-5 text-blue-300" />
-                  <span>Equipamentos do Navio</span>
+                  <Users className="h-5 w-5 text-blue-300" />
+                  <span>Ajudantes</span>
                 </div>
-                <Badge variant="secondary" className="bg-blue-500/20 text-blue-300">
-                  {equipamentosNavio.length} equipamentos
+                <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-300/30">
+                  {ajudantes.length} ajudantes
                 </Badge>
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              {equipamentosNavio.length === 0 ? (
+              {ajudantes.length === 0 ? (
                 <div className="text-center py-12">
-                  <p className="text-blue-300">Nenhum equipamento registrado.</p>
+                  <p className="text-blue-300">Nenhum ajudante registrado.</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
-                    <TableHeader className="bg-blue-500/10">
+                    <TableHeader className="bg-blue-600/20 backdrop-blur-sm">
                       <TableRow>
-                        <TableHead className="font-semibold text-blue-200 py-3">TAG</TableHead>
-                        <TableHead className="font-semibold text-blue-200 py-3">Operador/Motorista</TableHead>
-                        <TableHead className="font-semibold text-blue-200 py-3">Grupo</TableHead>
-                        <TableHead className="font-semibold text-blue-200 py-3">Início</TableHead>
-                        <TableHead className="font-semibold text-blue-200 py-3">Fim</TableHead>
-                        <TableHead className="font-semibold text-blue-200 py-3 text-right">Horas</TableHead>
+                        <TableHead className="text-blue-200 text-xs py-3">Nome</TableHead>
+                        <TableHead className="text-blue-200 text-xs py-3">Data</TableHead>
+                        <TableHead className="text-blue-200 text-xs py-3">Horário</TableHead>
+                        <TableHead className="text-blue-200 text-xs py-3">Observação</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {equipamentosNavio.map(eq => (
-                        <TableRow key={eq.id} className="hover:bg-white/5 border-blue-200/10">
-                          <TableCell className="py-4">
-                            <div className="font-medium text-white">{eq.tag}</div>
+                      {ajudantes.map(ajudante => (
+                        <TableRow key={ajudante.id} className="hover:bg-white/5 border-b border-blue-200/10">
+                          <TableCell className="py-3">
+                            <div className="font-medium text-white">{ajudante.nome}</div>
                           </TableCell>
-                          <TableCell className="py-4">
-                            <div className="font-medium text-white">{eq.motorista_operador}</div>
+                          <TableCell className="py-3">
+                            <div className="text-sm text-white">
+                              {formatarDataBR(ajudante.data)}
+                            </div>
                           </TableCell>
-                          <TableCell className="py-4">
-                            <Badge variant="outline" className="bg-blue-500/10 text-blue-300 border-blue-300/30">
-                              {eq.grupo_operacao || 'Navio'}
-                            </Badge>
+                          <TableCell className="py-3">
+                            <div className="flex items-center space-x-2">
+                              <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-300/30 text-xs whitespace-nowrap">
+                                {ajudante.hora_inicial}
+                              </Badge>
+                              <span className="text-blue-400">→</span>
+                              <Badge variant="outline" className="bg-green-500/20 text-green-300 border-green-300/30 text-xs whitespace-nowrap">
+                                {ajudante.hora_final}
+                              </Badge>
+                            </div>
                           </TableCell>
-                          <TableCell className="py-4">
-                            <Badge variant="outline" className="bg-blue-500/10 text-blue-300 border-blue-300/30">
-                              {eq.hora_inicial || 'N/A'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="py-4">
-                            <Badge variant="outline" className="bg-green-500/10 text-green-300 border-green-300/30">
-                              {eq.hora_final || 'N/A'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="py-4 text-right">
-                            <Badge className="bg-green-500/20 text-green-300">
-                              {eq.horas_trabalhadas?.toFixed(1) || '0.0'}h
-                            </Badge>
+                          <TableCell className="py-3">
+                            <div className="text-sm text-blue-300 max-w-xs truncate">
+                              {ajudante.observacao || 'Sem observações'}
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -712,211 +859,73 @@ const VisualizarOperacao = () => {
               )}
             </CardContent>
           </Card>
-        ) : (
-          ['HYDRO', 'ALBRAS', 'SANTOS BRASIL'].includes(selectedOp) && (
-            <div className="space-y-4">
-              {operacaoGrupos.length === 0 ? (
-                <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
-                  <CardContent className="pt-6">
-                    <p className="text-center text-blue-300 py-4">Nenhuma operação registrada.</p>
-                  </CardContent>
-                </Card>
+
+          {/* Ausências */}
+          <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
+            <CardHeader className="border-b border-blue-200/30">
+              <CardTitle className="text-white flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <UserX className="h-5 w-5 text-blue-300" />
+                  <span>Ausências</span>
+                </div>
+                <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-300/30">
+                  {ausencias.length} ausências
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {ausencias.length === 0 ? (
+                <div className="text-center py-12">
+                  <p className="text-blue-300">Nenhuma ausência registrada.</p>
+                </div>
               ) : (
-                operacaoGrupos.map(grupo => (
-                  <Card key={grupo.id} className="bg-white/10 backdrop-blur-sm border-blue-200/30">
-                    <CardHeader className="border-b border-blue-200/30">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-semibold text-white">{grupo.nome}</h3>
-                        <Badge variant="secondary" className="bg-blue-500/20 text-blue-300">
-                          {grupo.equipamentos.length} equipamentos
-                        </Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="p-0">
-                      {grupo.equipamentos.length === 0 ? (
-                        <div className="text-center py-8">
-                          <p className="text-blue-300">Nenhum equipamento neste grupo.</p>
-                        </div>
-                      ) : (
-                        <div className="overflow-x-auto">
-                          <Table>
-                            <TableHeader className="bg-blue-500/10">
-                              <TableRow>
-                                <TableHead className="font-semibold text-blue-200 py-3">TAG</TableHead>
-                                <TableHead className="font-semibold text-blue-200 py-3">Operador</TableHead>
-                                <TableHead className="font-semibold text-blue-200 py-3">Início</TableHead>
-                                <TableHead className="font-semibold text-blue-200 py-3">Fim</TableHead>
-                                <TableHead className="font-semibold text-blue-200 py-3 text-right">Horas</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {grupo.equipamentos.map(eq => (
-                                <TableRow key={eq.id} className="hover:bg-white/5 border-blue-200/10">
-                                  <TableCell className="py-4">
-                                    <div className="font-medium text-white">{eq.tag}</div>
-                                  </TableCell>
-                                  <TableCell className="py-4">
-                                    <div className="font-medium text-white">{eq.motorista_operador}</div>
-                                  </TableCell>
-                                  <TableCell className="py-4">
-                                    <Badge variant="outline" className="bg-blue-500/10 text-blue-300 border-blue-300/30">
-                                      {eq.hora_inicial || 'N/A'}
-                                    </Badge>
-                                  </TableCell>
-                                  <TableCell className="py-4">
-                                    <Badge variant="outline" className="bg-green-500/10 text-green-300 border-green-300/30">
-                                      {eq.hora_final || 'N/A'}
-                                    </Badge>
-                                  </TableCell>
-                                  <TableCell className="py-4 text-right">
-                                    <Badge className="bg-green-500/20 text-green-300">
-                                      {eq.horas_trabalhadas?.toFixed(1) || '0.0'}h
-                                    </Badge>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader className="bg-blue-600/20 backdrop-blur-sm">
+                      <TableRow>
+                        <TableHead className="text-blue-200 text-xs py-3">Nome</TableHead>
+                        <TableHead className="text-blue-200 text-xs py-3">Data</TableHead>
+                        <TableHead className="text-blue-200 text-xs py-3">Status</TableHead>
+                        <TableHead className="text-blue-200 text-xs py-3">Observação</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {ausencias.map(ausencia => (
+                        <TableRow key={ausencia.id} className="hover:bg-white/5 border-b border-blue-200/10">
+                          <TableCell className="py-3">
+                            <div className="font-medium text-white">{ausencia.nome}</div>
+                          </TableCell>
+                          <TableCell className="py-3">
+                            <div className="text-sm text-white">
+                              {formatarDataBR(ausencia.data)}
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-3">
+                            <Badge 
+                              variant={ausencia.justificado ? "default" : "destructive"} 
+                              className={
+                                ausencia.justificado 
+                                  ? "bg-green-500/20 text-green-300 border-green-300/30 text-xs" 
+                                  : "bg-red-500/20 text-red-300 border-red-300/30 text-xs"
+                              }
+                            >
+                              {ausencia.justificado ? 'Justificado' : 'Não Justificado'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="py-3">
+                            <div className="text-sm text-blue-300 max-w-xs truncate">
+                              {ausencia.obs || 'Sem observações'}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               )}
-            </div>
-          )
-        )}
-
-        {/* Ajudantes */}
-        <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
-          <CardHeader className="border-b border-blue-200/30">
-            <CardTitle className="text-white flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Users className="h-5 w-5 text-blue-300" />
-                <span>Ajudantes</span>
-              </div>
-              <Badge variant="secondary" className="bg-blue-500/20 text-blue-300">
-                {ajudantes.length} ajudantes
-              </Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {ajudantes.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-blue-300">Nenhum ajudante registrado.</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader className="bg-blue-500/10">
-                    <TableRow>
-                      <TableHead className="font-semibold text-blue-200 py-3">Nome</TableHead>
-                      <TableHead className="font-semibold text-blue-200 py-3">Data</TableHead>
-                      <TableHead className="font-semibold text-blue-200 py-3">Horário</TableHead>
-                      <TableHead className="font-semibold text-blue-200 py-3">Observação</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {ajudantes.map(ajudante => (
-                      <TableRow key={ajudante.id} className="hover:bg-white/5 border-blue-200/10">
-                        <TableCell className="py-4">
-                          <div className="font-medium text-white">{ajudante.nome}</div>
-                        </TableCell>
-                        <TableCell className="py-4">
-                          <div className="text-sm text-white">
-                            {formatarDataBR(ajudante.data)}
-                          </div>
-                        </TableCell>
-                        <TableCell className="py-4">
-                          <div className="flex items-center space-x-2">
-                            <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-300/30 text-xs">
-                              {ajudante.hora_inicial}
-                            </Badge>
-                            <span className="text-blue-400">→</span>
-                            <Badge variant="outline" className="bg-green-500/20 text-green-300 border-green-300/30 text-xs">
-                              {ajudante.hora_final}
-                            </Badge>
-                          </div>
-                        </TableCell>
-                        <TableCell className="py-4">
-                          <div className="text-sm text-blue-300 max-w-xs">
-                            {ajudante.observacao || 'Sem observações'}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Ausências */}
-        <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
-          <CardHeader className="border-b border-blue-200/30">
-            <CardTitle className="text-white flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <UserX className="h-5 w-5 text-blue-300" />
-                <span>Ausências</span>
-              </div>
-              <Badge variant="secondary" className="bg-blue-500/20 text-blue-300">
-                {ausencias.length} ausências
-              </Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {ausencias.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-blue-300">Nenhuma ausência registrada.</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader className="bg-blue-500/10">
-                    <TableRow>
-                      <TableHead className="font-semibold text-blue-200 py-3">Nome</TableHead>
-                      <TableHead className="font-semibold text-blue-200 py-3">Data</TableHead>
-                      <TableHead className="font-semibold text-blue-200 py-3">Status</TableHead>
-                      <TableHead className="font-semibold text-blue-200 py-3">Observação</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {ausencias.map(ausencia => (
-                      <TableRow key={ausencia.id} className="hover:bg-white/5 border-blue-200/10">
-                        <TableCell className="py-4">
-                          <div className="font-medium text-white">{ausencia.nome}</div>
-                        </TableCell>
-                        <TableCell className="py-4">
-                          <div className="text-sm text-white">
-                            {formatarDataBR(ausencia.data)}
-                          </div>
-                        </TableCell>
-                        <TableCell className="py-4">
-                          <Badge 
-                            variant={ausencia.justificado ? "default" : "destructive"} 
-                            className={
-                              ausencia.justificado 
-                                ? "bg-green-500/20 text-green-300 hover:bg-green-500/20 border-green-300/30" 
-                                : "bg-red-500/20 text-red-300 hover:bg-red-500/20 border-red-300/30"
-                            }
-                          >
-                            {ausencia.justificado ? 'Justificado' : 'Não Justificado'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="py-4">
-                          <div className="text-sm text-blue-300 max-w-xs">
-                            {ausencia.obs || 'Sem observações'}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
