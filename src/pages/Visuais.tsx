@@ -1,23 +1,46 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { BarChart3, TrendingUp, Download, Filter, Calendar, PieChart, ArrowLeft, Clock, Users } from 'lucide-react';
+import { BarChart3, Filter, PieChart, ArrowLeft, Menu, X, Ship, Building2, Warehouse, Globe, Factory, Clock, Package } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 
-// Interface para os dados do gráfico
-interface ChartData {
+// Interfaces para os dados
+interface LocalData {
   local: string;
   horas: number;
   quantidade: number;
   porcentagem: number;
 }
 
+interface TagGenericoData {
+  tag_generico: string;
+  horas: number;
+  quantidade: number;
+  porcentagem?: number;
+}
+
+interface NavioCargaData {
+  id: string;
+  nome_navio: string;
+  carga: string;
+  navio_carga: string;
+  horas: number;
+  quantidade: number;
+  quantidade_total: number; // Alterado de quantidade_prevista para quantidade_total
+  navio_id?: string;
+}
+
+type VistaAtiva = 'GERAL' | 'NAVIO' | 'ALBRAS' | 'SANTOS_BRASIL' | 'HYDRO';
+
 const Visuais = () => {
   const navigate = useNavigate();
+  const { userProfile } = useAuth();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [vistaAtiva, setVistaAtiva] = useState<VistaAtiva>('GERAL');
   
   // Função para formatar data no formato brasileiro
   const formatarDataBR = (dataString: string) => {
@@ -30,19 +53,17 @@ const Visuais = () => {
     }
   };
 
-  // Função para obter o período de 16 a 15 do mês seguinte com base na data atual
+  // Função para obter o período de 16 a 15 do mês seguinte
   const getPeriodoPadrao = () => {
     const hoje = new Date();
     const anoAtual = hoje.getFullYear();
-    const mesAtual = hoje.getMonth() + 1; // getMonth() retorna 0-11
+    const mesAtual = hoje.getMonth() + 1;
     
     let dataInicial, dataFinal;
     
-    // Se o dia atual é 16 ou maior, o período atual é 16 do mês atual a 15 do próximo mês
     if (hoje.getDate() >= 16) {
       dataInicial = `${anoAtual}-${String(mesAtual).padStart(2, '0')}-16`;
       
-      // Calcular próxima data: 15 do próximo mês
       let proximoMes = mesAtual + 1;
       let proximoAno = anoAtual;
       if (proximoMes > 12) {
@@ -50,9 +71,7 @@ const Visuais = () => {
         proximoAno = anoAtual + 1;
       }
       dataFinal = `${proximoAno}-${String(proximoMes).padStart(2, '0')}-15`;
-    } 
-    // Se o dia atual é 15 ou menor, o período atual é 16 do mês anterior a 15 do mês atual
-    else {
+    } else {
       let mesAnterior = mesAtual - 1;
       let anoAnterior = anoAtual;
       if (mesAnterior < 1) {
@@ -66,14 +85,13 @@ const Visuais = () => {
     return { dataInicial, dataFinal };
   };
 
-  // Função para obter períodos disponíveis para seleção (últimos 6 períodos)
+  // Função para obter períodos disponíveis
   const getPeriodosDisponiveis = () => {
     const periodos = [];
     const hoje = new Date();
     const anoAtual = hoje.getFullYear();
     const mesAtual = hoje.getMonth() + 1;
     
-    // Gerar últimos 6 períodos (incluindo o atual)
     for (let i = 0; i < 6; i++) {
       let mes = mesAtual - i;
       let ano = anoAtual;
@@ -85,7 +103,6 @@ const Visuais = () => {
       
       const dataInicial = `${ano}-${String(mes).padStart(2, '0')}-16`;
       
-      // Calcular data final (15 do próximo mês)
       let proximoMes = mes + 1;
       let proximoAno = ano;
       if (proximoMes > 12) {
@@ -103,15 +120,30 @@ const Visuais = () => {
     return periodos;
   };
 
+  // Estados
   const [filtros, setFiltros] = useState({
-    periodo: '', // Formato: "YYYY-MM-DD_YYYY-MM-DD"
+    periodo: '',
     local: 'todos'
   });
 
-  const [dadosGrafico, setDadosGrafico] = useState<ChartData[]>([]);
+  const [dadosGeral, setDadosGeral] = useState<{
+    locais: LocalData[];
+    tags: TagGenericoData[];
+  }>({ locais: [], tags: [] });
+
+  const [dadosNavio, setDadosNavio] = useState<{
+    navios: NavioCargaData[];
+    detalhesNavios: Record<string, TagGenericoData[]>;
+  }>({ navios: [], detalhesNavios: {} });
+
+  const [dadosAlbras, setDadosAlbras] = useState<TagGenericoData[]>([]);
+  const [dadosSantosBrasil, setDadosSantosBrasil] = useState<TagGenericoData[]>([]);
+  const [dadosHydro, setDadosHydro] = useState<TagGenericoData[]>([]);
+  
   const [carregando, setCarregando] = useState(false);
   const [inicializando, setInicializando] = useState(true);
   const [periodos, setPeriodos] = useState<{value: string, label: string}[]>([]);
+  const [totais, setTotais] = useState({ horas: 0, quantidade: 0 });
 
   // Locais disponíveis para filtro
   const locais = [
@@ -119,19 +151,68 @@ const Visuais = () => {
     { value: 'HYDRO', label: 'HYDRO' },
     { value: 'ALBRAS', label: 'ALBRAS' },
     { value: 'SANTOS BRASIL', label: 'SANTOS BRASIL' },
+    { value: 'NAVIO', label: 'NAVIOS' },
     { value: 'NÃO INFORMADO', label: 'Não Informado' }
   ];
 
-  // Inicializar períodos quando o componente montar
+  // Botões do menu lateral
+  const botoesMenu = [
+    {
+      id: 'GERAL' as VistaAtiva,
+      icon: Globe,
+      label: 'VISÃO GERAL',
+      color: 'bg-blue-600 hover:bg-blue-700',
+      iconBg: 'bg-blue-500/20',
+      iconColor: 'text-blue-300'
+    },
+    {
+      id: 'HYDRO' as VistaAtiva,
+      icon: Factory,
+      label: 'HYDRO',
+      color: 'bg-cyan-600 hover:bg-cyan-700',
+      iconBg: 'bg-cyan-500/20',
+      iconColor: 'text-cyan-300'
+    },
+    {
+      id: 'NAVIO' as VistaAtiva,
+      icon: Ship,
+      label: 'NAVIOS',
+      color: 'bg-purple-600 hover:bg-purple-700',
+      iconBg: 'bg-purple-500/20',
+      iconColor: 'text-purple-300'
+    },
+    {
+      id: 'ALBRAS' as VistaAtiva,
+      icon: Warehouse,
+      label: 'ALBRAS',
+      color: 'bg-amber-600 hover:bg-amber-700',
+      iconBg: 'bg-amber-500/20',
+      iconColor: 'text-amber-300'
+    },
+    {
+      id: 'SANTOS_BRASIL' as VistaAtiva,
+      icon: Building2,
+      label: 'SANTOS BRASIL',
+      color: 'bg-red-600 hover:bg-red-700',
+      iconBg: 'bg-red-500/20',
+      iconColor: 'text-red-300'
+    }
+  ];
+
+  // Cores para gráficos
+  const cores = [
+    '#3B82F6', '#10B981', '#8B5CF6', '#F59E0B', '#EF4444', '#06B6D4',
+    '#8B5CF6', '#EC4899', '#84CC16', '#F97316', '#6366F1', '#14B8A6'
+  ];
+
+  // Inicializar períodos
   useEffect(() => {
     const inicializar = async () => {
       setInicializando(true);
       try {
-        // Obter períodos disponíveis
         const periodosDisponiveis = getPeriodosDisponiveis();
         setPeriodos(periodosDisponiveis);
         
-        // Definir período atual como padrão
         const periodoPadrao = getPeriodoPadrao();
         const periodoAtual = `${periodoPadrao.dataInicial}_${periodoPadrao.dataFinal}`;
         
@@ -151,18 +232,17 @@ const Visuais = () => {
     inicializar();
   }, []);
 
-  // Função para buscar dados reais com JOIN entre as tabelas
+  // Função para buscar dados com paginação
   const buscarDadosEquipamentos = async () => {
     setCarregando(true);
     
     try {
       if (!filtros.periodo) {
         console.log('❌ Período não selecionado');
-        setDadosGrafico([]);
+        limparDados();
         return;
       }
 
-      // Extrair datas do período selecionado
       const [dataInicial, dataFinal] = filtros.periodo.split('_');
       
       console.log('🔍 Buscando dados para período:', {
@@ -171,102 +251,345 @@ const Visuais = () => {
         local: filtros.local
       });
 
-      // Primeiro, buscar as operações que correspondem ao filtro de data
-      let queryOperacoes = supabase
-        .from('registro_operacoes')
-        .select('id, op, data')
-        .gte('data', dataInicial)
-        .lte('data', dataFinal)
-        .order('data', { ascending: false });
-
-      const { data: operacoes, error: errorOperacoes } = await queryOperacoes;
-
-      if (errorOperacoes) {
-        console.error('❌ Erro ao buscar operações:', errorOperacoes);
-        throw new Error(`Erro ao buscar operações: ${errorOperacoes.message}`);
+      // 1. Primeiro buscar todos os navios para ter a informação de carga e quantidade total
+      const { data: todosNavios, error: errorNavios } = await supabase
+        .from('navios')
+        .select('id, nome_navio, carga, quantidade_prevista');
+      
+      if (errorNavios) {
+        console.error('❌ Erro ao buscar navios:', errorNavios);
+        throw new Error(`Erro ao buscar navios: ${errorNavios.message}`);
       }
 
-      console.log('✅ Operações encontradas:', operacoes?.length || 0);
+      // Criar mapa de navios para acesso rápido
+      const naviosMap = new Map();
+      todosNavios?.forEach(navio => {
+        naviosMap.set(navio.id, {
+          nome_navio: navio.nome_navio,
+          carga: navio.carga || 'NÃO INFORMADO',
+          quantidade_total: navio.quantidade_prevista || 0 // Renomeado para quantidade_total
+        });
+      });
 
-      if (!operacoes || operacoes.length === 0) {
-        console.log('📭 Nenhuma operação encontrada para o período selecionado');
-        setDadosGrafico([]);
+      console.log('✅ Navios carregados:', todosNavios?.length);
+
+      // 2. Buscar operações com paginação
+      const allOperacoes = await buscarComPaginacao(
+        supabase.from('registro_operacoes')
+          .select('id, op, data, navio_id, carga')
+          .gte('data', dataInicial)
+          .lte('data', dataFinal)
+          .order('data', { ascending: false })
+      );
+
+      console.log('✅ Total de operações encontradas:', allOperacoes.length);
+
+      if (allOperacoes.length === 0) {
+        console.log('📭 Nenhuma operação encontrada');
+        limparDados();
         return;
       }
 
-      // Extrair os IDs das operações encontradas
-      const operacaoIds = operacoes.map(op => op.id);
-
-      // Agora buscar os equipamentos relacionados a essas operações
+      // 3. Buscar equipamentos com paginação
       let queryEquipamentos = supabase
         .from('equipamentos')
-        .select('local, horas_trabalhadas, registro_operacoes_id')
-        .in('registro_operacoes_id', operacaoIds);
+        .select('local, horas_trabalhadas, registro_operacoes_id, tag_generico, tag')
+        .in('registro_operacoes_id', allOperacoes.map(op => op.id));
 
-      // Aplicar filtro de local se necessário
       if (filtros.local !== 'todos') {
         queryEquipamentos = queryEquipamentos.eq('local', filtros.local);
       }
 
-      const { data: equipamentos, error: errorEquipamentos } = await queryEquipamentos;
+      const allEquipamentos = await buscarComPaginacao(queryEquipamentos);
+      console.log('✅ Total de equipamentos encontrados:', allEquipamentos.length);
 
-      if (errorEquipamentos) {
-        console.error('❌ Erro ao buscar equipamentos:', errorEquipamentos);
-        throw new Error(`Erro ao buscar equipamentos: ${errorEquipamentos.message}`);
-      }
-
-      console.log('✅ Equipamentos encontrados:', equipamentos?.length || 0);
-
-      if (!equipamentos || equipamentos.length === 0) {
-        console.log('📭 Nenhum equipamento encontrado para as operações filtradas');
-        setDadosGrafico([]);
+      if (allEquipamentos.length === 0) {
+        console.log('📭 Nenhum equipamento encontrado');
+        limparDados();
         return;
       }
 
-      // Agrupar por local e calcular totais
-      const agrupadoPorLocal = equipamentos.reduce((acc, equipamento) => {
-        const local = equipamento.local || 'NÃO INFORMADO';
-        
-        if (!acc[local]) {
-          acc[local] = {
-            horas: 0,
-            quantidade: 0
-          };
-        }
-        
-        acc[local].horas += Number(equipamento.horas_trabalhadas) || 0;
-        acc[local].quantidade += 1;
-        
-        return acc;
-      }, {} as Record<string, { horas: number; quantidade: number }>);
-
-      // Converter para array e calcular porcentagens
-      const dadosArray = Object.entries(agrupadoPorLocal).map(([local, dados]) => ({
-        local,
-        horas: parseFloat(dados.horas.toFixed(1)),
-        quantidade: dados.quantidade
-      }));
-
-      // Calcular total de horas para as porcentagens
-      const totalHoras = dadosArray.reduce((sum, item) => sum + item.horas, 0);
-
-      // Adicionar porcentagens
-      const dadosComPorcentagem = dadosArray.map(item => ({
-        ...item,
-        porcentagem: totalHoras > 0 ? Math.round((item.horas / totalHoras) * 100) : 0
-      }));
-
-      const dadosOrdenados = dadosComPorcentagem.sort((a, b) => b.horas - a.horas);
-      
-      console.log('📊 Dados processados:', dadosOrdenados);
-      setDadosGrafico(dadosOrdenados);
+      // Processar dados para todas as vistas
+      processarDadosParaVistas(allEquipamentos, allOperacoes, naviosMap);
 
     } catch (error: any) {
       console.error('❌ Erro ao processar dados:', error);
-      setDadosGrafico([]);
+      limparDados();
     } finally {
       setCarregando(false);
     }
+  };
+
+  // Função auxiliar para busca com paginação
+  const buscarComPaginacao = async (query: any) => {
+    let allData: any[] = [];
+    let page = 0;
+    const pageSize = 1000;
+    let hasMore = true;
+
+    while (hasMore) {
+      const from = page * pageSize;
+      const to = from + pageSize - 1;
+
+      const { data, error } = await query.range(from, to);
+
+      if (error) throw error;
+
+      if (data) {
+        allData = [...allData, ...data];
+      }
+
+      hasMore = data && data.length === pageSize;
+      page++;
+    }
+
+    return allData;
+  };
+
+  // Limpar dados
+  const limparDados = () => {
+    setDadosGeral({ locais: [], tags: [] });
+    setDadosNavio({ navios: [], detalhesNavios: {} });
+    setDadosAlbras([]);
+    setDadosSantosBrasil([]);
+    setDadosHydro([]);
+    setTotais({ horas: 0, quantidade: 0 });
+  };
+
+  // Processar dados para todas as vistas
+  const processarDadosParaVistas = (
+    equipamentos: any[], 
+    operacoes: any[],
+    naviosMap: Map<any, any>
+  ) => {
+    // Mapear operações para acesso rápido
+    const operacoesMap = new Map();
+    operacoes.forEach(op => {
+      let nome_navio = 'NÃO INFORMADO';
+      let carga = op.carga || 'NÃO INFORMADO';
+      let quantidade_total = 0;
+      
+      if (op.navio_id) {
+        const navioInfo = naviosMap.get(op.navio_id);
+        if (navioInfo) {
+          nome_navio = navioInfo.nome_navio;
+          // Usar a carga do navio se não tiver na operação
+          if (carga === 'NÃO INFORMADO' && navioInfo.carga) {
+            carga = navioInfo.carga;
+          }
+          quantidade_total = navioInfo.quantidade_total || 0;
+        }
+      }
+      
+      operacoesMap.set(op.id, {
+        navio_id: op.navio_id,
+        carga: carga,
+        nome_navio: nome_navio,
+        quantidade_total: quantidade_total
+      });
+    });
+
+    // Calcular totais gerais
+    const horasTotais = equipamentos.reduce((sum, equip) => sum + (Number(equip.horas_trabalhadas) || 0), 0);
+    const quantidadeTotal = equipamentos.length;
+    
+    setTotais({
+      horas: parseFloat(horasTotais.toFixed(1)),
+      quantidade: quantidadeTotal
+    });
+
+    // 1. Dados para VISÃO GERAL
+    processarDadosGeral(equipamentos);
+    
+    // 2. Dados para NAVIOS
+    processarDadosNavios(equipamentos, operacoesMap);
+    
+    // 3. Dados para HYDRO
+    processarDadosPorLocal(equipamentos, 'HYDRO', setDadosHydro);
+    
+    // 4. Dados para ALBRAS
+    processarDadosPorLocal(equipamentos, 'ALBRAS', setDadosAlbras);
+    
+    // 5. Dados para SANTOS BRASIL
+    processarDadosPorLocal(equipamentos, 'SANTOS BRASIL', setDadosSantosBrasil);
+  };
+
+  // Processar dados para visão geral
+  const processarDadosGeral = (equipamentos: any[]) => {
+    // Agrupar por local (HYDRO, NAVIO, SANTOS BRASIL, ALBRAS)
+    const agrupadoPorLocal = equipamentos.reduce((acc, equipamento) => {
+      const local = equipamento.local || 'NÃO INFORMADO';
+      const localNormalizado = local.includes('NAVIO') ? 'NAVIO' : local;
+      
+      if (!acc[localNormalizado]) {
+        acc[localNormalizado] = { horas: 0, quantidade: 0 };
+      }
+      
+      acc[localNormalizado].horas += Number(equipamento.horas_trabalhadas) || 0;
+      acc[localNormalizado].quantidade += 1;
+      
+      return acc;
+    }, {} as Record<string, { horas: number; quantidade: number }>);
+
+    // Filtrar locais principais
+    const locaisPrincipais = ['HYDRO', 'NAVIO', 'SANTOS BRASIL', 'ALBRAS'];
+    const dadosLocalFiltrado = Object.entries(agrupadoPorLocal)
+      .filter(([local]) => locaisPrincipais.includes(local))
+      .map(([local, dados]) => ({
+        local,
+        horas: parseFloat(dados.horas.toFixed(1)),
+        quantidade: dados.quantidade,
+        porcentagem: 0 // Será calculado depois
+      }))
+      .sort((a, b) => b.horas - a.horas);
+
+    const totalHorasLocais = dadosLocalFiltrado.reduce((sum, item) => sum + item.horas, 0);
+    const dadosLocaisComPorcentagem = dadosLocalFiltrado.map(item => ({
+      ...item,
+      porcentagem: totalHorasLocais > 0 ? Math.round((item.horas / totalHorasLocais) * 100) : 0
+    }));
+
+    // Agrupar por tag genérico
+    const agrupadoPorTag = equipamentos.reduce((acc, equipamento) => {
+      const tagGenerico = equipamento.tag_generico || 'SEM TAG';
+      
+      if (!acc[tagGenerico]) {
+        acc[tagGenerico] = { horas: 0, quantidade: 0 };
+      }
+      
+      acc[tagGenerico].horas += Number(equipamento.horas_trabalhadas) || 0;
+      acc[tagGenerico].quantidade += 1;
+      
+      return acc;
+    }, {} as Record<string, { horas: number; quantidade: number }>);
+
+    const dadosTags = Object.entries(agrupadoPorTag)
+      .map(([tag_generico, dados]) => ({
+        tag_generico,
+        horas: parseFloat(dados.horas.toFixed(1)),
+        quantidade: dados.quantidade
+      }))
+      .sort((a, b) => b.horas - a.horas)
+      .slice(0, 15); // Top 15 tags
+
+    setDadosGeral({
+      locais: dadosLocaisComPorcentagem,
+      tags: dadosTags
+    });
+  };
+
+  // Processar dados para navios
+  const processarDadosNavios = (equipamentos: any[], operacoesMap: Map<any, any>) => {
+    // Agrupar por navio+carga
+    const agrupadoPorNavioCarga: Record<string, NavioCargaData> = {};
+    const detalhesPorNavioCarga: Record<string, Record<string, { horas: number; quantidade: number }>> = {};
+
+    equipamentos.forEach(equipamento => {
+      const operacao = operacoesMap.get(equipamento.registro_operacoes_id);
+      if (operacao && operacao.navio_id && operacao.nome_navio !== 'NÃO INFORMADO') {
+        const nomeNavio = operacao.nome_navio;
+        const carga = operacao.carga;
+        const quantidadeTotal = operacao.quantidade_total || 0;
+        const tagGenerico = equipamento.tag_generico || 'SEM TAG';
+        
+        // Criar chave única para navio+carga
+        const chaveNavioCarga = `${nomeNavio} - ${carga}`;
+        const idUnico = `${nomeNavio}_${carga}_${operacao.navio_id}`;
+
+        // Dados gerais do navio+carga
+        if (!agrupadoPorNavioCarga[idUnico]) {
+          agrupadoPorNavioCarga[idUnico] = {
+            id: idUnico,
+            nome_navio: nomeNavio,
+            carga: carga,
+            navio_carga: chaveNavioCarga,
+            horas: 0,
+            quantidade: 0,
+            quantidade_total: quantidadeTotal,
+            navio_id: operacao.navio_id
+          };
+        }
+        agrupadoPorNavioCarga[idUnico].horas += Number(equipamento.horas_trabalhadas) || 0;
+        agrupadoPorNavioCarga[idUnico].quantidade += 1;
+
+        // Detalhes por tag genérico para este navio+carga
+        if (!detalhesPorNavioCarga[chaveNavioCarga]) {
+          detalhesPorNavioCarga[chaveNavioCarga] = {};
+        }
+        if (!detalhesPorNavioCarga[chaveNavioCarga][tagGenerico]) {
+          detalhesPorNavioCarga[chaveNavioCarga][tagGenerico] = { horas: 0, quantidade: 0 };
+        }
+        detalhesPorNavioCarga[chaveNavioCarga][tagGenerico].horas += Number(equipamento.horas_trabalhadas) || 0;
+        detalhesPorNavioCarga[chaveNavioCarga][tagGenerico].quantidade += 1;
+      }
+    });
+
+    // Converter para arrays
+    const naviosArray = Object.values(agrupadoPorNavioCarga)
+      .sort((a, b) => b.horas - a.horas)
+      .slice(0, 15); // Top 15 navios+cargas
+
+    const detalhesArray: Record<string, TagGenericoData[]> = {};
+    Object.entries(detalhesPorNavioCarga).forEach(([navioCarga, tags]) => {
+      detalhesArray[navioCarga] = Object.entries(tags)
+        .map(([tag_generico, dados]) => ({
+          tag_generico,
+          horas: parseFloat(dados.horas.toFixed(1)),
+          quantidade: dados.quantidade
+        }))
+        .sort((a, b) => b.horas - a.horas)
+        .slice(0, 10); // Top 10 tags por navio+carga
+    });
+
+    setDadosNavio({
+      navios: naviosArray,
+      detalhesNavios: detalhesArray
+    });
+
+    console.log('📊 Dados navio processados:', {
+      totalNavios: naviosArray.length,
+      naviosExemplo: naviosArray.slice(0, 3).map(n => ({ 
+        navio_carga: n.navio_carga, 
+        horas: n.horas,
+        quantidade: n.quantidade,
+        quantidade_total: n.quantidade_total
+      }))
+    });
+  };
+
+  // Processar dados por local específico
+  const processarDadosPorLocal = (
+    equipamentos: any[], 
+    localFiltro: string,
+    setState: React.Dispatch<React.SetStateAction<TagGenericoData[]>>
+  ) => {
+    const equipamentosFiltrados = equipamentos.filter(
+      equip => equip.local === localFiltro
+    );
+
+    const agrupadoPorTag = equipamentosFiltrados.reduce((acc, equipamento) => {
+      const tagGenerico = equipamento.tag_generico || 'SEM TAG';
+      
+      if (!acc[tagGenerico]) {
+        acc[tagGenerico] = { horas: 0, quantidade: 0 };
+      }
+      
+      acc[tagGenerico].horas += Number(equipamento.horas_trabalhadas) || 0;
+      acc[tagGenerico].quantidade += 1;
+      
+      return acc;
+    }, {} as Record<string, { horas: number; quantidade: number }>);
+
+    const dadosTags = Object.entries(agrupadoPorTag)
+      .map(([tag_generico, dados]) => ({
+        tag_generico,
+        horas: parseFloat(dados.horas.toFixed(1)),
+        quantidade: dados.quantidade
+      }))
+      .sort((a, b) => b.horas - a.horas)
+      .slice(0, 15); // Top 15 tags
+
+    setState(dadosTags);
   };
 
   // Buscar dados quando filtros mudarem
@@ -276,12 +599,11 @@ const Visuais = () => {
     }
   }, [filtros, inicializando]);
 
-  // Função para aplicar filtros
+  // Funções auxiliares
   const aplicarFiltros = () => {
     buscarDadosEquipamentos();
   };
 
-  // Função para limpar filtros
   const limparFiltros = () => {
     const periodoPadrao = getPeriodoPadrao();
     const periodoAtual = `${periodoPadrao.dataInicial}_${periodoPadrao.dataFinal}`;
@@ -292,32 +614,442 @@ const Visuais = () => {
     });
   };
 
-  // Função para retornar ao menu principal
-  const retornarAoMenu = () => {
-    navigate('/');
+  // Renderizar gráfico de pizza
+  const renderizarGraficoPizza = (dados: LocalData[]) => {
+    if (dados.length === 0) return null;
+
+    return (
+      <div className="relative w-64 h-64">
+        <div className="absolute inset-0 rounded-full border-4 border-white/20">
+          {dados.map((item, index) => {
+            const porcentagemAcumulada = dados
+              .slice(0, index)
+              .reduce((acc, curr) => acc + curr.porcentagem, 0);
+            
+            return (
+              <div
+                key={item.local}
+                className="absolute inset-0 rounded-full opacity-80"
+                style={{
+                  backgroundColor: cores[index % cores.length],
+                  clipPath: `conic-gradient(from ${porcentagemAcumulada * 3.6}deg, transparent 0, transparent ${item.porcentagem * 3.6}deg, #0000 0)`
+                }}
+              />
+            );
+          })}
+        </div>
+        
+        <div className="absolute inset-8 bg-blue-900/80 rounded-full backdrop-blur-sm flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-white text-2xl font-bold">
+              {dados.reduce((sum, item) => sum + item.horas, 0).toFixed(1)}h
+            </div>
+            <div className="text-blue-200 text-sm">Total</div>
+          </div>
+        </div>
+      </div>
+    );
   };
 
-  // Cores para o gráfico
-  const cores = [
-    'bg-blue-500',
-    'bg-green-500',
-    'bg-purple-500',
-    'bg-orange-500',
-    'bg-cyan-500',
-    'bg-pink-500',
-    'bg-indigo-500',
-    'bg-teal-500'
-  ];
+  // Renderizar visual de métricas para navios (substitui o gráfico de colunas)
+  const renderizarMetricasNavios = (navios: NavioCargaData[], titulo: string) => {
+    if (navios.length === 0) return null;
 
-  // Calcular totais
-  const totais = dadosGrafico.reduce((acc, item) => ({
-    horas: acc.horas + item.horas,
-    quantidade: acc.quantidade + item.quantidade
-  }), { horas: 0, quantidade: 0 });
+    // Calcular totais para os cards principais
+    const totalHoras = navios.reduce((sum, navio) => sum + navio.horas, 0);
+    const totalEquipamentos = navios.reduce((sum, navio) => sum + navio.quantidade, 0);
+    
+    return (
+      <div className="space-y-6">
+        <h3 className="text-white font-semibold text-xl">{titulo}</h3>
+        
+        {/* Cards de Métricas Principais - APENAS 2 CARDS AGORA */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30 text-white hover:shadow-lg transition-all hover:scale-[1.02]">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-blue-200 text-sm">Total Horas Trabalhadas</p>
+                  <p className="text-3xl font-bold">{totalHoras.toFixed(1)}h</p>
+                  <p className="text-blue-200 text-xs">Soma de horas dos navios</p>
+                </div>
+                <div className="bg-blue-500/20 p-3 rounded-xl">
+                  <Clock className="h-6 w-6 text-blue-300" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white/10 backdrop-blur-sm border-green-200/30 text-white hover:shadow-lg transition-all hover:scale-[1.02]">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-blue-200 text-sm">Equipamentos Utilizados</p>
+                  <p className="text-3xl font-bold">{totalEquipamentos}</p>
+                  <p className="text-blue-200 text-xs">Quantidade total</p>
+                </div>
+                <div className="bg-green-500/20 p-3 rounded-xl">
+                  <Package className="h-6 w-6 text-green-300" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Tabela de Detalhes por Navio */}
+        <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
+          <CardContent className="p-6">
+            <h4 className="text-white font-semibold text-lg mb-4">Detalhes por Navio + Carga</h4>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-white/20">
+                    <th className="text-left py-3 px-4 text-white font-medium">Navio + Carga</th>
+                    <th className="text-left py-3 px-4 text-white font-medium">Horas</th>
+                    <th className="text-left py-3 px-4 text-white font-medium">Equipamentos</th>
+                    <th className="text-left py-3 px-4 text-white font-medium">Quantidade Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {navios.slice(0, 10).map((navio, index) => (
+                    <tr key={navio.id} className="border-b border-white/10 hover:bg-white/5">
+                      <td className="py-3 px-4 text-white">
+                        <div className="flex items-center">
+                          <div 
+                            className="w-3 h-3 rounded-full mr-3"
+                            style={{ backgroundColor: cores[index % cores.length] }}
+                          />
+                          {navio.navio_carga}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-white font-medium">{navio.horas.toFixed(1)}h</td>
+                      <td className="py-3 px-4 text-blue-300">{navio.quantidade}</td>
+                      <td className="py-3 px-4 text-amber-300">{navio.quantidade_total}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {navios.length === 0 && (
+              <div className="text-center py-8 text-blue-200">
+                Nenhum dado de navio disponível
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  };
+
+  // Renderizar gráfico de barras vertical para tags
+  const renderizarGraficoBarrasVertical = (dados: any[], campoLabel: string, campoValor: string, titulo: string) => {
+    if (dados.length === 0) return null;
+
+    const maxValor = Math.max(...dados.map(item => item[campoValor]));
+    const alturaMaxima = 200;
+
+    return (
+      <div className="space-y-4">
+        <h3 className="text-white font-semibold text-lg">{titulo}</h3>
+        <div className="flex items-end space-x-2 h-64">
+          {dados.slice(0, 12).map((item, index) => {
+            const altura = (item[campoValor] / maxValor) * alturaMaxima;
+            return (
+              <div key={index} className="flex-1 flex flex-col items-center">
+                <div className="text-xs text-blue-200 mb-1 h-12 overflow-hidden text-center">
+                  {item[campoLabel]}
+                </div>
+                <div
+                  className="w-full rounded-t-lg transition-all duration-500 hover:opacity-90"
+                  style={{
+                    height: `${altura}px`,
+                    backgroundColor: cores[index % cores.length],
+                    minHeight: '4px'
+                  }}
+                  title={`${item[campoLabel]}: ${item[campoValor].toFixed(1)}h`}
+                />
+                <div className="text-xs text-white mt-1 font-medium">
+                  {item[campoValor].toFixed(0)}h
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  // Renderizar gráfico de barras horizontal
+  const renderizarGraficoBarrasHorizontal = (dados: any[], campoLabel: string, campoValor: string, titulo: string) => {
+    if (dados.length === 0) return null;
+
+    const maxValor = Math.max(...dados.map(item => item[campoValor]));
+    
+    return (
+      <div className="space-y-3">
+        <h3 className="text-white font-semibold text-lg mb-4">{titulo}</h3>
+        <div className="space-y-4">
+          {dados.map((item, index) => (
+            <div key={index} className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-white font-medium">{item[campoLabel]}</span>
+                <span className="text-blue-300 font-bold">{item[campoValor].toFixed(1)}h</span>
+              </div>
+              <div className="w-full bg-white/10 rounded-full h-4">
+                <div 
+                  className="h-4 rounded-full transition-all duration-500"
+                  style={{
+                    width: `${(item[campoValor] / maxValor) * 100}%`,
+                    backgroundColor: cores[index % cores.length]
+                  }}
+                />
+              </div>
+              <div className="text-xs text-blue-200">
+                {item.quantidade} equipamento{item.quantidade !== 1 ? 's' : ''}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  // Renderizar vista ativa
+  const renderizarVistaAtiva = () => {
+    switch (vistaAtiva) {
+      case 'GERAL':
+        return (
+          <>
+            {/* Gráfico de Pizza por Local */}
+            <Card className="mb-8 bg-white/10 backdrop-blur-sm border-blue-200/30">
+              <CardHeader>
+                <CardTitle className="text-white">Distribuição de Horas por Local</CardTitle>
+                <CardDescription className="text-blue-200">
+                  {filtros.periodo && `Período: ${formatarDataBR(filtros.periodo.split('_')[0])} a ${formatarDataBR(filtros.periodo.split('_')[1])}`}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {carregando ? (
+                  <div className="flex justify-center items-center h-64">
+                    <div className="text-center">
+                      <div className="w-12 h-12 border-4 border-blue-200 border-t-white rounded-full animate-spin mx-auto mb-4"></div>
+                      <p className="text-white">Carregando dados...</p>
+                    </div>
+                  </div>
+                ) : dadosGeral.locais.length === 0 ? (
+                  <div className="flex justify-center items-center h-64">
+                    <p className="text-blue-200">Nenhum dado disponível</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div className="flex justify-center items-center">
+                      {renderizarGraficoPizza(dadosGeral.locais)}
+                    </div>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 gap-3">
+                        {dadosGeral.locais.map((item, index) => (
+                          <div key={item.local} className="flex items-center justify-between p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors">
+                            <div className="flex items-center gap-3">
+                              <div 
+                                className="w-4 h-4 rounded" 
+                                style={{ backgroundColor: cores[index % cores.length] }}
+                              />
+                              <div>
+                                <span className="text-white font-medium">{item.local}</span>
+                                <div className="text-blue-200 text-xs">
+                                  {item.quantidade} equipamento{item.quantidade !== 1 ? 's' : ''}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-white font-bold">{item.horas.toFixed(1)}h</div>
+                              <div className="text-blue-200 text-sm">
+                                {item.porcentagem}% do total
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Gráfico de Coluna por Tag Genérico */}
+            <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
+              <CardHeader>
+                <CardTitle className="text-white">Horas por Tag Genérico (Top 15)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {dadosGeral.tags.length > 0 ? (
+                  <div className="p-4">
+                    {renderizarGraficoBarrasVertical(dadosGeral.tags, 'tag_generico', 'horas', 'Tag Genérico')}
+                  </div>
+                ) : (
+                  <div className="flex justify-center items-center h-64">
+                    <p className="text-blue-200">Nenhum dado de tag genérico disponível</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        );
+
+      case 'HYDRO':
+        return (
+          <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
+            <CardHeader>
+              <CardTitle className="text-white">HYDRO - Horas por Tag Genérico</CardTitle>
+              <CardDescription className="text-blue-200">
+                Distribuição de horas trabalhadas no local HYDRO
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {carregando ? (
+                <div className="flex justify-center items-center h-64">
+                  <div className="text-center">
+                    <div className="w-12 h-12 border-4 border-blue-200 border-t-white rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-white">Carregando dados...</p>
+                  </div>
+                </div>
+              ) : dadosHydro.length === 0 ? (
+                <div className="flex justify-center items-center h-64">
+                  <p className="text-blue-200">Nenhum dado disponível para HYDRO</p>
+                </div>
+              ) : (
+                <div className="p-4">
+                  {renderizarGraficoBarrasVertical(dadosHydro, 'tag_generico', 'horas', 'Tag Genérico')}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+
+      case 'NAVIO':
+        return (
+          <>
+            {/* Métricas de Navio (substitui o gráfico de colunas) */}
+            <Card className="mb-8 bg-white/10 backdrop-blur-sm border-blue-200/30">
+              <CardHeader>
+                <CardTitle className="text-white">Métricas de Navios</CardTitle>
+                <CardDescription className="text-blue-200">
+                  Soma de horas, quantidade de equipamentos e quantidade total por navio
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {carregando ? (
+                  <div className="flex justify-center items-center h-96">
+                    <div className="text-center">
+                      <div className="w-12 h-12 border-4 border-blue-200 border-t-white rounded-full animate-spin mx-auto mb-4"></div>
+                      <p className="text-white">Carregando dados de navios...</p>
+                    </div>
+                  </div>
+                ) : dadosNavio.navios.length === 0 ? (
+                  <div className="flex justify-center items-center h-64">
+                    <p className="text-blue-200">Nenhum dado de navio disponível</p>
+                  </div>
+                ) : (
+                  <div className="p-4">
+                    {renderizarMetricasNavios(dadosNavio.navios, 'Resumo de Navios')}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Gráficos detalhados por Navio+Carga */}
+            {Object.entries(dadosNavio.detalhesNavios).slice(0, 5).map(([navioCarga, tags]) => (
+              <Card key={navioCarga} className="mb-8 bg-white/10 backdrop-blur-sm border-blue-200/30">
+                <CardHeader>
+                  <CardTitle className="text-white">{navioCarga}</CardTitle>
+                  <CardDescription className="text-blue-200">
+                    Distribuição por Tag Genérico
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {tags.length > 0 ? (
+                    <div className="p-4">
+                      {renderizarGraficoBarrasHorizontal(tags, 'tag_generico', 'horas', 'Tag Genérico')}
+                    </div>
+                  ) : (
+                    <div className="flex justify-center items-center h-32">
+                      <p className="text-blue-200">Nenhum dado disponível</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </>
+        );
+
+      case 'ALBRAS':
+        return (
+          <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
+            <CardHeader>
+              <CardTitle className="text-white">ALBRAS - Horas por Tag Genérico</CardTitle>
+              <CardDescription className="text-blue-200">
+                Distribuição de horas trabalhadas no local ALBRAS
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {carregando ? (
+                <div className="flex justify-center items-center h-64">
+                  <div className="text-center">
+                    <div className="w-12 h-12 border-4 border-blue-200 border-t-white rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-white">Carregando dados...</p>
+                  </div>
+                </div>
+              ) : dadosAlbras.length === 0 ? (
+                <div className="flex justify-center items-center h-64">
+                  <p className="text-blue-200">Nenhum dado disponível para ALBRAS</p>
+                </div>
+              ) : (
+                <div className="p-4">
+                  {renderizarGraficoBarrasVertical(dadosAlbras, 'tag_generico', 'horas', 'Tag Genérico')}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+
+      case 'SANTOS_BRASIL':
+        return (
+          <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
+            <CardHeader>
+              <CardTitle className="text-white">SANTOS BRASIL - Horas por Tag Genérico</CardTitle>
+              <CardDescription className="text-blue-200">
+                Distribuição de horas trabalhadas no local SANTOS BRASIL
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {carregando ? (
+                <div className="flex justify-center items-center h-64">
+                  <div className="text-center">
+                    <div className="w-12 h-12 border-4 border-blue-200 border-t-white rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-white">Carregando dados...</p>
+                  </div>
+                </div>
+              ) : dadosSantosBrasil.length === 0 ? (
+                <div className="flex justify-center items-center h-64">
+                  <p className="text-blue-200">Nenhum dado disponível para SANTOS BRASIL</p>
+                </div>
+              ) : (
+                <div className="p-4">
+                  {renderizarGraficoBarrasVertical(dadosSantosBrasil, 'tag_generico', 'horas', 'Tag Genérico')}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+
+      default:
+        return null;
+    }
+  };
 
   if (inicializando) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900 p-6 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-900 p-6 flex items-center justify-center">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-blue-200 border-t-white rounded-full animate-spin mx-auto mb-4"></div>
           <h2 className="text-2xl font-bold text-white mb-2">Carregando Dashboard</h2>
@@ -328,375 +1060,371 @@ const Visuais = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900 p-6">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <Button 
-              onClick={retornarAoMenu}
-              className="bg-white/10 hover:bg-white/20 text-white border border-white/30"
-              size="sm"
+    <div className="min-h-screen bg-gray-900 text-white">
+      {/* Header Mobile */}
+      <div className="lg:hidden bg-blue-900/80 backdrop-blur-md shadow-lg sticky top-0 z-10">
+        <div className="flex justify-between items-center px-4 py-4">
+          <div className="flex items-center space-x-4">
+            <Button
+              variant="ghost"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="text-blue-300 hover:bg-blue-800/50"
+              title="Abrir menu"
             >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Voltar
+              <Menu className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="text-3xl font-bold text-white mb-2">Dashboard de Operações</h1>
-              <p className="text-blue-200">
-                Análise de horas trabalhadas por local - Período: 16 a 15 do mês seguinte
-              </p>
+              <h1 className="text-xl font-bold text-white">Dashboard de Operações</h1>
+              <p className="text-sm text-blue-300">{userProfile?.full_name || 'Usuário'}</p>
             </div>
           </div>
-          <div className="flex gap-3">
-            <Button className="bg-white/10 hover:bg-white/20 text-white border border-white/30">
-              <Download className="h-4 w-4 mr-2" />
-              Exportar
+          <Button
+            variant="ghost"
+            onClick={() => navigate('/')}
+            className="text-blue-300 hover:bg-blue-800/50"
+            title="Voltar ao Dashboard"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Sidebar Mobile */}
+      {sidebarOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 bg-blue-900/95 backdrop-blur-sm">
+          <div className="flex justify-between items-center p-4 border-b border-blue-600/30">
+            <h2 className="text-xl font-bold text-white">Menu</h2>
+            <Button
+              variant="ghost"
+              onClick={() => setSidebarOpen(false)}
+              className="text-white hover:bg-white/20"
+            >
+              <X className="h-6 w-6" />
             </Button>
+          </div>
+          <div className="p-4 space-y-3 overflow-y-auto h-[calc(100%-80px)]">
+            {/* Botões de Vista */}
+            {botoesMenu.map((botao) => (
+              <Button
+                key={botao.id}
+                onClick={() => {
+                  setVistaAtiva(botao.id);
+                  setSidebarOpen(false);
+                }}
+                className={`w-full h-16 ${vistaAtiva === botao.id ? 'ring-2 ring-white/30' : ''} ${
+                  botao.color
+                } text-white text-lg font-semibold rounded-xl transition-all duration-300 relative hover:shadow-lg hover:scale-[1.02]`}
+              >
+                <div className="flex items-center justify-start space-x-4 w-full">
+                  <div className={`${botao.iconBg} p-3 rounded-lg`}>
+                    <botao.icon className={`h-5 w-5 ${botao.iconColor}`} />
+                  </div>
+                  <span className="text-left">{botao.label}</span>
+                </div>
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Desktop Layout */}
+      <div className="hidden lg:flex min-h-screen">
+        {/* Sidebar Desktop */}
+        <div className="w-80 bg-blue-900/30 backdrop-blur-sm border-r border-blue-600/30 flex flex-col">
+          {/* Sidebar Header */}
+          <div className="p-6 border-b border-blue-600/30">
+            <div className="flex items-center space-x-4">
+              <div className="bg-blue-500/20 p-3 rounded-xl">
+                <BarChart3 className="h-8 w-8 text-blue-300" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-white">Dashboard de Horas</h1>
+                <p className="text-blue-300 text-sm">Análise de Operações</p>
+              </div>
+            </div>
+          </div>
+
+          {/* User Info */}
+          <div className="p-6 border-b border-blue-600/30">
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-blue-200/30">
+              <p className="text-white font-semibold text-lg">{userProfile?.full_name || 'Usuário'}</p>
+              <p className="text-blue-300 text-sm mt-1">Status: <span className="text-green-400 font-medium">Ativo</span></p>
+              <p className="text-blue-300 text-sm mt-1">Último acesso: {new Date().toLocaleDateString('pt-BR')}</p>
+            </div>
+          </div>
+
+          {/* Botões de Vista */}
+          <div className="flex-1 p-6 space-y-3 overflow-y-auto">
+            <h3 className="text-blue-200 font-semibold text-sm uppercase tracking-wider mb-4">Vistas</h3>
+            {botoesMenu.map((botao) => (
+              <Button
+                key={botao.id}
+                onClick={() => setVistaAtiva(botao.id)}
+                className={`w-full h-16 ${vistaAtiva === botao.id ? 'ring-2 ring-white/30' : ''} ${
+                  botao.color
+                } text-white text-lg font-semibold rounded-xl transition-all duration-300 relative group hover:shadow-lg hover:scale-[1.02]`}
+              >
+                <div className="flex items-center justify-start space-x-4 w-full">
+                  <div className={`${botao.iconBg} p-3 rounded-lg group-hover:bg-white/30 transition-colors`}>
+                    <botao.icon className={`h-5 w-5 ${botao.iconColor}`} />
+                  </div>
+                  <span className="text-left">{botao.label}</span>
+                </div>
+              </Button>
+            ))}
+          </div>
+
+          {/* Botão Voltar */}
+          <div className="p-6 border-t border-blue-600/30">
+            <Button
+              variant="outline"
+              onClick={() => navigate('/')}
+              className="w-full text-blue-300 hover:text-white hover:bg-blue-500/20 border-blue-300/30 rounded-xl transition-all duration-300 py-3 hover:shadow"
+            >
+              <ArrowLeft className="h-5 w-5 mr-2" />
+              Voltar ao Dashboard
+            </Button>
+          </div>
+        </div>
+
+        {/* Main Content Desktop */}
+        <div className="flex-1 flex flex-col overflow-y-auto">
+          {/* Header com Filtros */}
+          <div className="bg-blue-800/30 backdrop-blur-sm border-b border-blue-600/30 p-6">
+            <div className="max-w-6xl">
+              <h2 className="text-3xl font-bold text-white mb-4">
+                {vistaAtiva === 'GERAL' ? 'Visão Geral' : 
+                 vistaAtiva === 'HYDRO' ? 'Análise HYDRO' :
+                 vistaAtiva === 'NAVIO' ? 'Análise de Navios' :
+                 vistaAtiva === 'ALBRAS' ? 'Análise ALBRAS' : 'Análise SANTOS BRASIL'}
+              </h2>
+              
+              {/* Filtros */}
+              <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
+                <CardContent className="p-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="periodo" className="text-white">Período (16 a 15)</Label>
+                      <Select 
+                        value={filtros.periodo} 
+                        onValueChange={(value) => setFiltros({ ...filtros, periodo: value })}
+                      >
+                        <SelectTrigger className="bg-white/5 border-blue-300/30 text-white">
+                          <SelectValue placeholder="Selecione o período" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {periodos.map((periodo) => (
+                            <SelectItem key={periodo.value} value={periodo.value}>
+                              {periodo.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="local" className="text-white">Local</Label>
+                      <Select 
+                        value={filtros.local} 
+                        onValueChange={(value) => setFiltros({ ...filtros, local: value })}
+                      >
+                        <SelectTrigger className="bg-white/5 border-blue-300/30 text-white">
+                          <SelectValue placeholder="Selecione o local" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {locais.map((local) => (
+                            <SelectItem key={local.value} value={local.value}>
+                              {local.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex items-end gap-2">
+                      <Button 
+                        onClick={aplicarFiltros}
+                        className="bg-orange-500 hover:bg-orange-600 text-white flex-1"
+                        disabled={carregando || !filtros.periodo}
+                      >
+                        <Filter className="h-4 w-4 mr-2" />
+                        {carregando ? 'Aplicando...' : 'Aplicar Filtros'}
+                      </Button>
+                      <Button 
+                        onClick={limparFiltros}
+                        variant="outline"
+                        className="border-blue-300/30 text-white hover:bg-white/10"
+                        disabled={carregando}
+                      >
+                        Limpar
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+
+          {/* Cards de Métricas - APENAS 2 CARDS AGORA */}
+          <div className="p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+              <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30 text-white hover:shadow-lg transition-all hover:scale-[1.02]">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-blue-200 text-sm">Total Horas Trabalhadas</p>
+                      <p className="text-3xl font-bold">{totais.horas.toFixed(1)}h</p>
+                      <p className="text-blue-200 text-xs">Período selecionado</p>
+                    </div>
+                    <div className="bg-blue-500/20 p-3 rounded-xl">
+                      <Clock className="h-6 w-6 text-blue-300" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-white/10 backdrop-blur-sm border-green-200/30 text-white hover:shadow-lg transition-all hover:scale-[1.02]">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-blue-200 text-sm">Total Equipamentos</p>
+                      <p className="text-3xl font-bold">{totais.quantidade}</p>
+                      <p className="text-blue-200 text-xs">Registros no período</p>
+                    </div>
+                    <div className="bg-green-500/20 p-3 rounded-xl">
+                      <Package className="h-6 w-6 text-green-300" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Vista Ativa */}
+            {renderizarVistaAtiva()}
           </div>
         </div>
       </div>
 
-      {/* Filtros Principais */}
-      <Card className="mb-8 bg-white/10 backdrop-blur-sm border-blue-200/30">
-        <CardHeader>
-          <CardTitle className="text-white flex items-center gap-2">
-            <Filter className="h-5 w-5" />
-            Filtros - Período e Local
-          </CardTitle>
-          <CardDescription className="text-blue-200">
-            Selecione o período (16 a 15) e local para análise das horas trabalhadas
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Período */}
-            <div className="space-y-2">
-              <Label htmlFor="periodo" className="text-white">Período (16 a 15)</Label>
-              <Select 
-                value={filtros.periodo} 
-                onValueChange={(value) => setFiltros({ ...filtros, periodo: value })}
+      {/* Mobile Content (quando sidebar fechada) */}
+      {!sidebarOpen && (
+        <div className="lg:hidden p-4">
+          {/* Botões de Vista Mobile */}
+          <div className="grid grid-cols-3 gap-4 mb-6">
+            {botoesMenu.map((botao) => (
+              <Button
+                key={botao.id}
+                onClick={() => setVistaAtiva(botao.id)}
+                className={`h-20 ${vistaAtiva === botao.id ? 'ring-2 ring-white/30' : ''} ${
+                  botao.color
+                } text-white font-semibold rounded-lg`}
               >
-                <SelectTrigger className="bg-white/5 border-blue-300/30 text-white">
-                  <SelectValue placeholder="Selecione o período" />
-                </SelectTrigger>
-                <SelectContent>
-                  {periodos.map((periodo) => (
-                    <SelectItem key={periodo.value} value={periodo.value}>
-                      {periodo.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {filtros.periodo && (
-                <p className="text-orange-300 text-xs mt-1">
-                  Período selecionado
-                </p>
-              )}
-            </div>
-
-            {/* Local */}
-            <div className="space-y-2">
-              <Label htmlFor="local" className="text-white">Local</Label>
-              <Select 
-                value={filtros.local} 
-                onValueChange={(value) => setFiltros({ ...filtros, local: value })}
-              >
-                <SelectTrigger className="bg-white/5 border-blue-300/30 text-white">
-                  <SelectValue placeholder="Selecione o local" />
-                </SelectTrigger>
-                <SelectContent>
-                  {locais.map((local) => (
-                    <SelectItem key={local.value} value={local.value}>
-                      {local.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Botões de Ação */}
-            <div className="flex items-end gap-2">
-              <Button 
-                onClick={aplicarFiltros}
-                className="bg-orange-500 hover:bg-orange-600 text-white flex-1"
-                disabled={carregando || !filtros.periodo}
-              >
-                <Filter className="h-4 w-4 mr-2" />
-                {carregando ? 'Aplicando...' : 'Aplicar Filtros'}
+                <div className="flex flex-col items-center">
+                  <botao.icon className="h-5 w-5 mb-1" />
+                  <span className="text-xs text-center">{botao.label}</span>
+                </div>
               </Button>
-              <Button 
-                onClick={limparFiltros}
-                variant="outline"
-                className="border-blue-300/30 text-white hover:bg-white/10"
-                disabled={carregando}
-              >
-                Limpar
-              </Button>
-            </div>
+            ))}
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Cards de Métricas */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30 text-white">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-blue-200 text-sm">Total Horas Trabalhadas</p>
-                <p className="text-3xl font-bold">{totais.horas.toFixed(1)}h</p>
-                <p className="text-blue-200 text-xs">Soma de horas_trabalhadas</p>
+          {/* Filtros Mobile */}
+          <Card className="mb-8 bg-white/10 backdrop-blur-sm border-blue-200/30">
+            <CardContent className="p-4 space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="periodo" className="text-white">Período (16 a 15)</Label>
+                <Select 
+                  value={filtros.periodo} 
+                  onValueChange={(value) => setFiltros({ ...filtros, periodo: value })}
+                >
+                  <SelectTrigger className="bg-white/5 border-blue-300/30 text-white">
+                    <SelectValue placeholder="Selecione o período" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {periodos.map((periodo) => (
+                      <SelectItem key={periodo.value} value={periodo.value}>
+                        {periodo.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <div className="bg-blue-500/20 p-3 rounded-xl">
-                <BarChart3 className="h-6 w-6 text-blue-300" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
 
-        <Card className="bg-white/10 backdrop-blur-sm border-green-200/30 text-white">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-blue-200 text-sm">Total Equipamentos</p>
-                <p className="text-3xl font-bold">{totais.quantidade}</p>
-                <p className="text-blue-200 text-xs">Registros no período</p>
+              <div className="space-y-2">
+                <Label htmlFor="local" className="text-white">Local</Label>
+                <Select 
+                  value={filtros.local} 
+                  onValueChange={(value) => setFiltros({ ...filtros, local: value })}
+                >
+                  <SelectTrigger className="bg-white/5 border-blue-300/30 text-white">
+                    <SelectValue placeholder="Selecione o local" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {locais.map((local) => (
+                      <SelectItem key={local.value} value={local.value}>
+                        {local.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <div className="bg-green-500/20 p-3 rounded-xl">
-                <TrendingUp className="h-6 w-6 text-green-300" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
 
-        <Card className="bg-white/10 backdrop-blur-sm border-purple-200/30 text-white">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-blue-200 text-sm">Média por Equipamento</p>
-                <p className="text-3xl font-bold">
-                  {totais.quantidade > 0 ? (totais.horas / totais.quantidade).toFixed(1) : '0'}h
-                </p>
-                <p className="text-blue-200 text-xs">Horas por equipamento</p>
+              <div className="flex gap-2 pt-2">
+                <Button 
+                  onClick={aplicarFiltros}
+                  className="bg-orange-500 hover:bg-orange-600 text-white flex-1"
+                  disabled={carregando || !filtros.periodo}
+                >
+                  <Filter className="h-4 w-4 mr-2" />
+                  {carregando ? 'Aplicando...' : 'Aplicar'}
+                </Button>
+                <Button 
+                  onClick={limparFiltros}
+                  variant="outline"
+                  className="border-blue-300/30 text-white hover:bg-white/10"
+                  disabled={carregando}
+                >
+                  Limpar
+                </Button>
               </div>
-              <div className="bg-purple-500/20 p-3 rounded-xl">
-                <PieChart className="h-6 w-6 text-purple-300" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            </CardContent>
+          </Card>
 
-      {/* Gráfico de Horas Trabalhadas por Local */}
-      <Card className="mb-8 bg-white/10 backdrop-blur-sm border-blue-200/30">
-        <CardHeader>
-          <CardTitle className="text-white flex items-center gap-2">
-            <PieChart className="h-5 w-5" />
-            Distribuição de Horas Trabalhadas
-            {carregando && (
-              <span className="text-orange-400 text-sm font-normal">(Atualizando...)</span>
-            )}
-          </CardTitle>
-          <CardDescription className="text-blue-200">
-            {filtros.periodo && (
-              <>
-                Período: {formatarDataBR(filtros.periodo.split('_')[0])} a {formatarDataBR(filtros.periodo.split('_')[1])}
-                {totais.horas > 0 && (
-                  <span className="text-green-300 ml-2">
-                    • {totais.quantidade} equipamentos • {totais.horas.toFixed(1)} horas totais
-                  </span>
-                )}
-              </>
-            )}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {!filtros.periodo ? (
-            <div className="flex justify-center items-center h-64">
-              <div className="text-white text-center">
-                <p>Selecione um período para visualizar os dados</p>
-                <p className="text-sm text-blue-200 mt-2">
-                  Os períodos seguem o padrão de 16 a 15 do mês seguinte
-                </p>
-              </div>
-            </div>
-          ) : carregando ? (
-            <div className="flex justify-center items-center h-64">
-              <div className="text-center">
-                <div className="w-12 h-12 border-4 border-blue-200 border-t-white rounded-full animate-spin mx-auto mb-4"></div>
-                <p className="text-white">Carregando dados das operações...</p>
-              </div>
-            </div>
-          ) : dadosGrafico.length === 0 ? (
-            <div className="flex justify-center items-center h-64">
-              <div className="text-white text-center">
-                <p>Nenhum dado encontrado para os filtros aplicados</p>
-                <p className="text-sm text-blue-200 mt-2">
-                  Não houve operações registradas neste período
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Gráfico de Pizza Visual */}
-              <div className="flex justify-center items-center">
-                <div className="relative w-64 h-64">
-                  {/* Gráfico de Pizza */}
-                  <div className="absolute inset-0 rounded-full border-4 border-white/20">
-                    {dadosGrafico.map((item, index) => {
-                      const porcentagemAcumulada = dadosGrafico
-                        .slice(0, index)
-                        .reduce((acc, curr) => acc + curr.porcentagem, 0);
-                      
-                      return (
-                        <div
-                          key={item.local}
-                          className={`absolute inset-0 rounded-full ${cores[index % cores.length]} opacity-80`}
-                          style={{
-                            clipPath: `conic-gradient(from ${porcentagemAcumulada * 3.6}deg, transparent 0, transparent ${item.porcentagem * 3.6}deg, #0000 0)`
-                          }}
-                        />
-                      );
-                    })}
+          {/* Cards de Métricas Mobile - APENAS 2 CARDS AGORA */}
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30 text-white">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-blue-200 text-xs">Total Horas</p>
+                    <p className="text-xl font-bold">{totais.horas.toFixed(1)}h</p>
                   </div>
-                  
-                  {/* Centro do gráfico */}
-                  <div className="absolute inset-8 bg-blue-900/80 rounded-full backdrop-blur-sm flex items-center justify-center">
-                    <div className="text-center">
-                      <div className="text-white text-2xl font-bold">{totais.horas.toFixed(1)}h</div>
-                      <div className="text-blue-200 text-sm">Total Horas</div>
-                    </div>
+                  <div className="bg-blue-500/20 p-2 rounded-lg">
+                    <Clock className="h-4 w-4 text-blue-300" />
                   </div>
                 </div>
-              </div>
+              </CardContent>
+            </Card>
 
-              {/* Legenda e Detalhes */}
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 gap-3">
-                  {dadosGrafico.map((item, index) => (
-                    <div key={item.local} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-4 h-4 rounded ${cores[index % cores.length]}`} />
-                        <div>
-                          <span className="text-white font-medium">{item.local}</span>
-                          <div className="text-blue-200 text-xs">
-                            {item.quantidade} equipamento{item.quantidade !== 1 ? 's' : ''}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-white font-bold">{item.horas.toFixed(1)}h</div>
-                        <div className="text-blue-200 text-sm">
-                          {item.porcentagem}% do total
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Totais */}
-                <div className="border-t border-white/20 pt-4">
-                  <div className="grid grid-cols-2 gap-4 text-center">
-                    <div className="bg-white/5 rounded-lg p-3">
-                      <Clock className="h-4 w-4 text-blue-300 mx-auto mb-2" />
-                      <div className="text-blue-200 text-sm">Total de Horas</div>
-                      <div className="text-white text-xl font-bold">{totais.horas.toFixed(1)}h</div>
-                    </div>
-                    <div className="bg-white/5 rounded-lg p-3">
-                      <Users className="h-4 w-4 text-green-300 mx-auto mb-2" />
-                      <div className="text-blue-200 text-sm">Total de Equipamentos</div>
-                      <div className="text-white text-xl font-bold">{totais.quantidade}</div>
-                    </div>
+            <Card className="bg-white/10 backdrop-blur-sm border-green-200/30 text-white">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-blue-200 text-xs">Total Equipamentos</p>
+                    <p className="text-xl font-bold">{totais.quantidade}</p>
+                  </div>
+                  <div className="bg-green-500/20 p-2 rounded-lg">
+                    <Package className="h-4 w-4 text-green-300" />
                   </div>
                 </div>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              </CardContent>
+            </Card>
+          </div>
 
-      {/* Tabela Detalhada */}
-      <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
-        <CardHeader>
-          <CardTitle className="text-white flex items-center gap-2">
-            <BarChart3 className="h-5 w-5" />
-            Detalhamento por Local
-          </CardTitle>
-          <CardDescription className="text-blue-200">
-            Análise detalhada das horas trabalhadas em cada local
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {!filtros.periodo ? (
-            <div className="text-center py-8 text-blue-200">
-              Selecione um período para ver os detalhes
-            </div>
-          ) : dadosGrafico.length === 0 ? (
-            <div className="text-center py-8 text-blue-200">
-              Nenhum dado disponível para o período selecionado
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-white">
-                <thead>
-                  <tr className="border-b border-white/20">
-                    <th className="text-left py-3 px-4">Local</th>
-                    <th className="text-right py-3 px-4">Equipamentos</th>
-                    <th className="text-right py-3 px-4">Horas Trabalhadas</th>
-                    <th className="text-right py-3 px-4">Porcentagem</th>
-                    <th className="text-right py-3 px-4">Média por Equip.</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dadosGrafico.map((item, index) => (
-                    <tr key={item.local} className="border-b border-white/10 hover:bg-white/5">
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-3 h-3 rounded ${cores[index % cores.length]}`} />
-                          {item.local}
-                        </div>
-                      </td>
-                      <td className="text-right py-3 px-4">
-                        <span className="font-medium">{item.quantidade}</span>
-                      </td>
-                      <td className="text-right py-3 px-4">
-                        <span className="font-bold">{item.horas.toFixed(1)}h</span>
-                      </td>
-                      <td className="text-right py-3 px-4">
-                        <div className="flex items-center justify-end gap-2">
-                          <div className="w-24 bg-white/10 rounded-full h-2">
-                            <div 
-                              className="bg-blue-400 h-2 rounded-full"
-                              style={{ width: `${item.porcentagem}%` }}
-                            />
-                          </div>
-                          <span className="w-8 text-right">{item.porcentagem}%</span>
-                        </div>
-                      </td>
-                      <td className="text-right py-3 px-4">
-                        <span className="text-orange-300 font-medium">
-                          {item.quantidade > 0 ? (item.horas / item.quantidade).toFixed(1) : '0'}h
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                  {/* Linha de totais */}
-                  <tr className="bg-white/10 font-bold">
-                    <td className="py-3 px-4">TOTAL</td>
-                    <td className="text-right py-3 px-4">{totais.quantidade}</td>
-                    <td className="text-right py-3 px-4">{totais.horas.toFixed(1)}h</td>
-                    <td className="text-right py-3 px-4">100%</td>
-                    <td className="text-right py-3 px-4">
-                      {totais.quantidade > 0 ? (totais.horas / totais.quantidade).toFixed(1) : '0'}h
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          {/* Vista Ativa Mobile */}
+          <div className="mt-4">
+            {renderizarVistaAtiva()}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
