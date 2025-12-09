@@ -23,6 +23,13 @@ interface TagGenericoData {
   porcentagem?: number;
 }
 
+interface CategoriaData {
+  categoria_nome: string;
+  horas: number;
+  quantidade: number;
+  porcentagem?: number;
+}
+
 interface NavioCargaData {
   id: string;
   nome_navio: string;
@@ -30,7 +37,7 @@ interface NavioCargaData {
   navio_carga: string;
   horas: number;
   quantidade: number;
-  quantidade_total: number; // Alterado de quantidade_prevista para quantidade_total
+  quantidade_total: number;
   navio_id?: string;
 }
 
@@ -129,16 +136,29 @@ const Visuais = () => {
   const [dadosGeral, setDadosGeral] = useState<{
     locais: LocalData[];
     tags: TagGenericoData[];
-  }>({ locais: [], tags: [] });
+    categorias: CategoriaData[];
+  }>({ locais: [], tags: [], categorias: [] });
 
   const [dadosNavio, setDadosNavio] = useState<{
     navios: NavioCargaData[];
     detalhesNavios: Record<string, TagGenericoData[]>;
-  }>({ navios: [], detalhesNavios: {} });
+    categoriasNavios: Record<string, CategoriaData[]>;
+  }>({ navios: [], detalhesNavios: {}, categoriasNavios: {} });
 
-  const [dadosAlbras, setDadosAlbras] = useState<TagGenericoData[]>([]);
-  const [dadosSantosBrasil, setDadosSantosBrasil] = useState<TagGenericoData[]>([]);
-  const [dadosHydro, setDadosHydro] = useState<TagGenericoData[]>([]);
+  const [dadosAlbras, setDadosAlbras] = useState<{
+    tags: TagGenericoData[];
+    categorias: CategoriaData[];
+  }>({ tags: [], categorias: [] });
+
+  const [dadosSantosBrasil, setDadosSantosBrasil] = useState<{
+    tags: TagGenericoData[];
+    categorias: CategoriaData[];
+  }>({ tags: [], categorias: [] });
+
+  const [dadosHydro, setDadosHydro] = useState<{
+    tags: TagGenericoData[];
+    categorias: CategoriaData[];
+  }>({ tags: [], categorias: [] });
   
   const [carregando, setCarregando] = useState(false);
   const [inicializando, setInicializando] = useState(true);
@@ -267,7 +287,7 @@ const Visuais = () => {
         naviosMap.set(navio.id, {
           nome_navio: navio.nome_navio,
           carga: navio.carga || 'NÃO INFORMADO',
-          quantidade_total: navio.quantidade_prevista || 0 // Renomeado para quantidade_total
+          quantidade_total: navio.quantidade_prevista || 0
         });
       });
 
@@ -290,10 +310,10 @@ const Visuais = () => {
         return;
       }
 
-      // 3. Buscar equipamentos com paginação
+      // 3. Buscar equipamentos com paginação (incluindo categoria_nome)
       let queryEquipamentos = supabase
         .from('equipamentos')
-        .select('local, horas_trabalhadas, registro_operacoes_id, tag_generico, tag')
+        .select('local, horas_trabalhadas, registro_operacoes_id, tag_generico, tag, categoria_nome')
         .in('registro_operacoes_id', allOperacoes.map(op => op.id));
 
       if (filtros.local !== 'todos') {
@@ -348,11 +368,11 @@ const Visuais = () => {
 
   // Limpar dados
   const limparDados = () => {
-    setDadosGeral({ locais: [], tags: [] });
-    setDadosNavio({ navios: [], detalhesNavios: {} });
-    setDadosAlbras([]);
-    setDadosSantosBrasil([]);
-    setDadosHydro([]);
+    setDadosGeral({ locais: [], tags: [], categorias: [] });
+    setDadosNavio({ navios: [], detalhesNavios: {}, categoriasNavios: {} });
+    setDadosAlbras({ tags: [], categorias: [] });
+    setDadosSantosBrasil({ tags: [], categorias: [] });
+    setDadosHydro({ tags: [], categorias: [] });
     setTotais({ horas: 0, quantidade: 0 });
   };
 
@@ -373,7 +393,6 @@ const Visuais = () => {
         const navioInfo = naviosMap.get(op.navio_id);
         if (navioInfo) {
           nome_navio = navioInfo.nome_navio;
-          // Usar a carga do navio se não tiver na operação
           if (carga === 'NÃO INFORMADO' && navioInfo.carga) {
             carga = navioInfo.carga;
           }
@@ -414,9 +433,9 @@ const Visuais = () => {
     processarDadosPorLocal(equipamentos, 'SANTOS BRASIL', setDadosSantosBrasil);
   };
 
-  // Processar dados para visão geral
+  // Processar dados para visão geral (com categorias)
   const processarDadosGeral = (equipamentos: any[]) => {
-    // Agrupar por local (HYDRO, NAVIO, SANTOS BRASIL, ALBRAS)
+    // Agrupar por local
     const agrupadoPorLocal = equipamentos.reduce((acc, equipamento) => {
       const local = equipamento.local || 'NÃO INFORMADO';
       const localNormalizado = local.includes('NAVIO') ? 'NAVIO' : local;
@@ -439,7 +458,7 @@ const Visuais = () => {
         local,
         horas: parseFloat(dados.horas.toFixed(1)),
         quantidade: dados.quantidade,
-        porcentagem: 0 // Será calculado depois
+        porcentagem: 0
       }))
       .sort((a, b) => b.horas - a.horas);
 
@@ -470,19 +489,43 @@ const Visuais = () => {
         quantidade: dados.quantidade
       }))
       .sort((a, b) => b.horas - a.horas)
-      .slice(0, 15); // Top 15 tags
+      .slice(0, 15);
+
+    // Agrupar por categoria_nome
+    const agrupadoPorCategoria = equipamentos.reduce((acc, equipamento) => {
+      const categoria = equipamento.categoria_nome || 'SEM CATEGORIA';
+      
+      if (!acc[categoria]) {
+        acc[categoria] = { horas: 0, quantidade: 0 };
+      }
+      
+      acc[categoria].horas += Number(equipamento.horas_trabalhadas) || 0;
+      acc[categoria].quantidade += 1;
+      
+      return acc;
+    }, {} as Record<string, { horas: number; quantidade: number }>);
+
+    const dadosCategorias = Object.entries(agrupadoPorCategoria)
+      .map(([categoria_nome, dados]) => ({
+        categoria_nome,
+        horas: parseFloat(dados.horas.toFixed(1)),
+        quantidade: dados.quantidade
+      }))
+      .sort((a, b) => b.horas - a.horas)
+      .slice(0, 15);
 
     setDadosGeral({
       locais: dadosLocaisComPorcentagem,
-      tags: dadosTags
+      tags: dadosTags,
+      categorias: dadosCategorias
     });
   };
 
-  // Processar dados para navios
+  // Processar dados para navios (com categorias)
   const processarDadosNavios = (equipamentos: any[], operacoesMap: Map<any, any>) => {
-    // Agrupar por navio+carga
     const agrupadoPorNavioCarga: Record<string, NavioCargaData> = {};
     const detalhesPorNavioCarga: Record<string, Record<string, { horas: number; quantidade: number }>> = {};
+    const categoriasPorNavioCarga: Record<string, Record<string, { horas: number; quantidade: number }>> = {};
 
     equipamentos.forEach(equipamento => {
       const operacao = operacoesMap.get(equipamento.registro_operacoes_id);
@@ -491,8 +534,8 @@ const Visuais = () => {
         const carga = operacao.carga;
         const quantidadeTotal = operacao.quantidade_total || 0;
         const tagGenerico = equipamento.tag_generico || 'SEM TAG';
+        const categoria = equipamento.categoria_nome || 'SEM CATEGORIA';
         
-        // Criar chave única para navio+carga
         const chaveNavioCarga = `${nomeNavio} - ${carga}`;
         const idUnico = `${nomeNavio}_${carga}_${operacao.navio_id}`;
 
@@ -512,7 +555,7 @@ const Visuais = () => {
         agrupadoPorNavioCarga[idUnico].horas += Number(equipamento.horas_trabalhadas) || 0;
         agrupadoPorNavioCarga[idUnico].quantidade += 1;
 
-        // Detalhes por tag genérico para este navio+carga
+        // Detalhes por tag genérico
         if (!detalhesPorNavioCarga[chaveNavioCarga]) {
           detalhesPorNavioCarga[chaveNavioCarga] = {};
         }
@@ -521,13 +564,23 @@ const Visuais = () => {
         }
         detalhesPorNavioCarga[chaveNavioCarga][tagGenerico].horas += Number(equipamento.horas_trabalhadas) || 0;
         detalhesPorNavioCarga[chaveNavioCarga][tagGenerico].quantidade += 1;
+
+        // Detalhes por categoria
+        if (!categoriasPorNavioCarga[chaveNavioCarga]) {
+          categoriasPorNavioCarga[chaveNavioCarga] = {};
+        }
+        if (!categoriasPorNavioCarga[chaveNavioCarga][categoria]) {
+          categoriasPorNavioCarga[chaveNavioCarga][categoria] = { horas: 0, quantidade: 0 };
+        }
+        categoriasPorNavioCarga[chaveNavioCarga][categoria].horas += Number(equipamento.horas_trabalhadas) || 0;
+        categoriasPorNavioCarga[chaveNavioCarga][categoria].quantidade += 1;
       }
     });
 
     // Converter para arrays
     const naviosArray = Object.values(agrupadoPorNavioCarga)
       .sort((a, b) => b.horas - a.horas)
-      .slice(0, 15); // Top 15 navios+cargas
+      .slice(0, 15);
 
     const detalhesArray: Record<string, TagGenericoData[]> = {};
     Object.entries(detalhesPorNavioCarga).forEach(([navioCarga, tags]) => {
@@ -538,35 +591,39 @@ const Visuais = () => {
           quantidade: dados.quantidade
         }))
         .sort((a, b) => b.horas - a.horas)
-        .slice(0, 10); // Top 10 tags por navio+carga
+        .slice(0, 10);
+    });
+
+    const categoriasArray: Record<string, CategoriaData[]> = {};
+    Object.entries(categoriasPorNavioCarga).forEach(([navioCarga, categorias]) => {
+      categoriasArray[navioCarga] = Object.entries(categorias)
+        .map(([categoria_nome, dados]) => ({
+          categoria_nome,
+          horas: parseFloat(dados.horas.toFixed(1)),
+          quantidade: dados.quantidade
+        }))
+        .sort((a, b) => b.horas - a.horas)
+        .slice(0, 10);
     });
 
     setDadosNavio({
       navios: naviosArray,
-      detalhesNavios: detalhesArray
-    });
-
-    console.log('📊 Dados navio processados:', {
-      totalNavios: naviosArray.length,
-      naviosExemplo: naviosArray.slice(0, 3).map(n => ({ 
-        navio_carga: n.navio_carga, 
-        horas: n.horas,
-        quantidade: n.quantidade,
-        quantidade_total: n.quantidade_total
-      }))
+      detalhesNavios: detalhesArray,
+      categoriasNavios: categoriasArray
     });
   };
 
-  // Processar dados por local específico
+  // Processar dados por local específico (com categorias)
   const processarDadosPorLocal = (
     equipamentos: any[], 
     localFiltro: string,
-    setState: React.Dispatch<React.SetStateAction<TagGenericoData[]>>
+    setState: React.Dispatch<React.SetStateAction<{tags: TagGenericoData[], categorias: CategoriaData[]}>>
   ) => {
     const equipamentosFiltrados = equipamentos.filter(
       equip => equip.local === localFiltro
     );
 
+    // Agrupar por tag genérico
     const agrupadoPorTag = equipamentosFiltrados.reduce((acc, equipamento) => {
       const tagGenerico = equipamento.tag_generico || 'SEM TAG';
       
@@ -587,9 +644,35 @@ const Visuais = () => {
         quantidade: dados.quantidade
       }))
       .sort((a, b) => b.horas - a.horas)
-      .slice(0, 15); // Top 15 tags
+      .slice(0, 15);
 
-    setState(dadosTags);
+    // Agrupar por categoria
+    const agrupadoPorCategoria = equipamentosFiltrados.reduce((acc, equipamento) => {
+      const categoria = equipamento.categoria_nome || 'SEM CATEGORIA';
+      
+      if (!acc[categoria]) {
+        acc[categoria] = { horas: 0, quantidade: 0 };
+      }
+      
+      acc[categoria].horas += Number(equipamento.horas_trabalhadas) || 0;
+      acc[categoria].quantidade += 1;
+      
+      return acc;
+    }, {} as Record<string, { horas: number; quantidade: number }>);
+
+    const dadosCategorias = Object.entries(agrupadoPorCategoria)
+      .map(([categoria_nome, dados]) => ({
+        categoria_nome,
+        horas: parseFloat(dados.horas.toFixed(1)),
+        quantidade: dados.quantidade
+      }))
+      .sort((a, b) => b.horas - a.horas)
+      .slice(0, 15);
+
+    setState({
+      tags: dadosTags,
+      categorias: dadosCategorias
+    });
   };
 
   // Buscar dados quando filtros mudarem
@@ -651,11 +734,10 @@ const Visuais = () => {
     );
   };
 
-  // Renderizar visual de métricas para navios (substitui o gráfico de colunas)
+  // Renderizar visual de métricas para navios
   const renderizarMetricasNavios = (navios: NavioCargaData[], titulo: string) => {
     if (navios.length === 0) return null;
 
-    // Calcular totais para os cards principais
     const totalHoras = navios.reduce((sum, navio) => sum + navio.horas, 0);
     const totalEquipamentos = navios.reduce((sum, navio) => sum + navio.quantidade, 0);
     
@@ -663,7 +745,6 @@ const Visuais = () => {
       <div className="space-y-6">
         <h3 className="text-white font-semibold text-xl">{titulo}</h3>
         
-        {/* Cards de Métricas Principais - APENAS 2 CARDS AGORA */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30 text-white hover:shadow-lg transition-all hover:scale-[1.02]">
             <CardContent className="p-6">
@@ -730,18 +811,13 @@ const Visuais = () => {
                 </tbody>
               </table>
             </div>
-            {navios.length === 0 && (
-              <div className="text-center py-8 text-blue-200">
-                Nenhum dado de navio disponível
-              </div>
-            )}
           </CardContent>
         </Card>
       </div>
     );
   };
 
-  // Renderizar gráfico de barras vertical para tags
+  // Renderizar gráfico de barras vertical para tags ou categorias
   const renderizarGraficoBarrasVertical = (dados: any[], campoLabel: string, campoValor: string, titulo: string) => {
     if (dados.length === 0) return null;
 
@@ -877,7 +953,7 @@ const Visuais = () => {
             </Card>
 
             {/* Gráfico de Coluna por Tag Genérico */}
-            <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
+            <Card className="mb-8 bg-white/10 backdrop-blur-sm border-blue-200/30">
               <CardHeader>
                 <CardTitle className="text-white">Horas por Tag Genérico (Top 15)</CardTitle>
               </CardHeader>
@@ -893,43 +969,87 @@ const Visuais = () => {
                 )}
               </CardContent>
             </Card>
+
+            {/* GRÁFICO NOVO: Por Categoria */}
+            <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
+              <CardHeader>
+                <CardTitle className="text-white">Horas por Categoria (Top 15)</CardTitle>
+                <CardDescription className="text-blue-200">
+                  Distribuição de horas por tipo de equipamento/categoria
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {dadosGeral.categorias.length > 0 ? (
+                  <div className="p-4">
+                    {renderizarGraficoBarrasVertical(dadosGeral.categorias, 'categoria_nome', 'horas', 'Categoria')}
+                  </div>
+                ) : (
+                  <div className="flex justify-center items-center h-64">
+                    <p className="text-blue-200">Nenhum dado de categoria disponível</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </>
         );
 
       case 'HYDRO':
         return (
-          <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
-            <CardHeader>
-              <CardTitle className="text-white">HYDRO - Horas por Tag Genérico</CardTitle>
-              <CardDescription className="text-blue-200">
-                Distribuição de horas trabalhadas no local HYDRO
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {carregando ? (
-                <div className="flex justify-center items-center h-64">
-                  <div className="text-center">
-                    <div className="w-12 h-12 border-4 border-blue-200 border-t-white rounded-full animate-spin mx-auto mb-4"></div>
-                    <p className="text-white">Carregando dados...</p>
+          <>
+            <Card className="mb-8 bg-white/10 backdrop-blur-sm border-blue-200/30">
+              <CardHeader>
+                <CardTitle className="text-white">HYDRO - Horas por Tag Genérico</CardTitle>
+                <CardDescription className="text-blue-200">
+                  Distribuição de horas trabalhadas no local HYDRO
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {carregando ? (
+                  <div className="flex justify-center items-center h-64">
+                    <div className="text-center">
+                      <div className="w-12 h-12 border-4 border-blue-200 border-t-white rounded-full animate-spin mx-auto mb-4"></div>
+                      <p className="text-white">Carregando dados...</p>
+                    </div>
                   </div>
-                </div>
-              ) : dadosHydro.length === 0 ? (
-                <div className="flex justify-center items-center h-64">
-                  <p className="text-blue-200">Nenhum dado disponível para HYDRO</p>
-                </div>
-              ) : (
-                <div className="p-4">
-                  {renderizarGraficoBarrasVertical(dadosHydro, 'tag_generico', 'horas', 'Tag Genérico')}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                ) : dadosHydro.tags.length === 0 ? (
+                  <div className="flex justify-center items-center h-64">
+                    <p className="text-blue-200">Nenhum dado disponível para HYDRO</p>
+                  </div>
+                ) : (
+                  <div className="p-4">
+                    {renderizarGraficoBarrasVertical(dadosHydro.tags, 'tag_generico', 'horas', 'Tag Genérico')}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* GRÁFICO NOVO: HYDRO Por Categoria */}
+            <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
+              <CardHeader>
+                <CardTitle className="text-white">HYDRO - Horas por Categoria</CardTitle>
+                <CardDescription className="text-blue-200">
+                  Distribuição de horas por categoria no local HYDRO
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {dadosHydro.categorias.length > 0 ? (
+                  <div className="p-4">
+                    {renderizarGraficoBarrasVertical(dadosHydro.categorias, 'categoria_nome', 'horas', 'Categoria')}
+                  </div>
+                ) : (
+                  <div className="flex justify-center items-center h-64">
+                    <p className="text-blue-200">Nenhum dado de categoria disponível para HYDRO</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
         );
 
       case 'NAVIO':
         return (
           <>
-            {/* Métricas de Navio (substitui o gráfico de colunas) */}
+            {/* Métricas de Navio */}
             <Card className="mb-8 bg-white/10 backdrop-blur-sm border-blue-200/30">
               <CardHeader>
                 <CardTitle className="text-white">Métricas de Navios</CardTitle>
@@ -957,11 +1077,11 @@ const Visuais = () => {
               </CardContent>
             </Card>
 
-            {/* Gráficos detalhados por Navio+Carga */}
-            {Object.entries(dadosNavio.detalhesNavios).slice(0, 5).map(([navioCarga, tags]) => (
-              <Card key={navioCarga} className="mb-8 bg-white/10 backdrop-blur-sm border-blue-200/30">
+            {/* Gráficos detalhados por Navio+Carga - Tags */}
+            {Object.entries(dadosNavio.detalhesNavios).slice(0, 3).map(([navioCarga, tags]) => (
+              <Card key={`${navioCarga}-tags`} className="mb-8 bg-white/10 backdrop-blur-sm border-blue-200/30">
                 <CardHeader>
-                  <CardTitle className="text-white">{navioCarga}</CardTitle>
+                  <CardTitle className="text-white">{navioCarga} - Tags</CardTitle>
                   <CardDescription className="text-blue-200">
                     Distribuição por Tag Genérico
                   </CardDescription>
@@ -979,67 +1099,136 @@ const Visuais = () => {
                 </CardContent>
               </Card>
             ))}
+
+            {/* GRÁFICOS NOVOS: Por Categoria para cada Navio */}
+            {Object.entries(dadosNavio.categoriasNavios).slice(0, 3).map(([navioCarga, categorias]) => (
+              <Card key={`${navioCarga}-categorias`} className="mb-8 bg-white/10 backdrop-blur-sm border-blue-200/30">
+                <CardHeader>
+                  <CardTitle className="text-white">{navioCarga} - Categorias</CardTitle>
+                  <CardDescription className="text-blue-200">
+                    Distribuição por Categoria
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {categorias.length > 0 ? (
+                    <div className="p-4">
+                      {renderizarGraficoBarrasHorizontal(categorias, 'categoria_nome', 'horas', 'Categoria')}
+                    </div>
+                  ) : (
+                    <div className="flex justify-center items-center h-32">
+                      <p className="text-blue-200">Nenhum dado de categoria disponível</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
           </>
         );
 
       case 'ALBRAS':
         return (
-          <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
-            <CardHeader>
-              <CardTitle className="text-white">ALBRAS - Horas por Tag Genérico</CardTitle>
-              <CardDescription className="text-blue-200">
-                Distribuição de horas trabalhadas no local ALBRAS
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {carregando ? (
-                <div className="flex justify-center items-center h-64">
-                  <div className="text-center">
-                    <div className="w-12 h-12 border-4 border-blue-200 border-t-white rounded-full animate-spin mx-auto mb-4"></div>
-                    <p className="text-white">Carregando dados...</p>
+          <>
+            <Card className="mb-8 bg-white/10 backdrop-blur-sm border-blue-200/30">
+              <CardHeader>
+                <CardTitle className="text-white">ALBRAS - Horas por Tag Genérico</CardTitle>
+                <CardDescription className="text-blue-200">
+                  Distribuição de horas trabalhadas no local ALBRAS
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {carregando ? (
+                  <div className="flex justify-center items-center h-64">
+                    <div className="text-center">
+                      <div className="w-12 h-12 border-4 border-blue-200 border-t-white rounded-full animate-spin mx-auto mb-4"></div>
+                      <p className="text-white">Carregando dados...</p>
+                    </div>
                   </div>
-                </div>
-              ) : dadosAlbras.length === 0 ? (
-                <div className="flex justify-center items-center h-64">
-                  <p className="text-blue-200">Nenhum dado disponível para ALBRAS</p>
-                </div>
-              ) : (
-                <div className="p-4">
-                  {renderizarGraficoBarrasVertical(dadosAlbras, 'tag_generico', 'horas', 'Tag Genérico')}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                ) : dadosAlbras.tags.length === 0 ? (
+                  <div className="flex justify-center items-center h-64">
+                    <p className="text-blue-200">Nenhum dado disponível para ALBRAS</p>
+                  </div>
+                ) : (
+                  <div className="p-4">
+                    {renderizarGraficoBarrasVertical(dadosAlbras.tags, 'tag_generico', 'horas', 'Tag Genérico')}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* GRÁFICO NOVO: ALBRAS Por Categoria */}
+            <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
+              <CardHeader>
+                <CardTitle className="text-white">ALBRAS - Horas por Categoria</CardTitle>
+                <CardDescription className="text-blue-200">
+                  Distribuição de horas por categoria no local ALBRAS
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {dadosAlbras.categorias.length > 0 ? (
+                  <div className="p-4">
+                    {renderizarGraficoBarrasVertical(dadosAlbras.categorias, 'categoria_nome', 'horas', 'Categoria')}
+                  </div>
+                ) : (
+                  <div className="flex justify-center items-center h-64">
+                    <p className="text-blue-200">Nenhum dado de categoria disponível para ALBRAS</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
         );
 
       case 'SANTOS_BRASIL':
         return (
-          <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
-            <CardHeader>
-              <CardTitle className="text-white">SANTOS BRASIL - Horas por Tag Genérico</CardTitle>
-              <CardDescription className="text-blue-200">
-                Distribuição de horas trabalhadas no local SANTOS BRASIL
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {carregando ? (
-                <div className="flex justify-center items-center h-64">
-                  <div className="text-center">
-                    <div className="w-12 h-12 border-4 border-blue-200 border-t-white rounded-full animate-spin mx-auto mb-4"></div>
-                    <p className="text-white">Carregando dados...</p>
+          <>
+            <Card className="mb-8 bg-white/10 backdrop-blur-sm border-blue-200/30">
+              <CardHeader>
+                <CardTitle className="text-white">SANTOS BRASIL - Horas por Tag Genérico</CardTitle>
+                <CardDescription className="text-blue-200">
+                  Distribuição de horas trabalhadas no local SANTOS BRASIL
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {carregando ? (
+                  <div className="flex justify-center items-center h-64">
+                    <div className="text-center">
+                      <div className="w-12 h-12 border-4 border-blue-200 border-t-white rounded-full animate-spin mx-auto mb-4"></div>
+                      <p className="text-white">Carregando dados...</p>
+                    </div>
                   </div>
-                </div>
-              ) : dadosSantosBrasil.length === 0 ? (
-                <div className="flex justify-center items-center h-64">
-                  <p className="text-blue-200">Nenhum dado disponível para SANTOS BRASIL</p>
-                </div>
-              ) : (
-                <div className="p-4">
-                  {renderizarGraficoBarrasVertical(dadosSantosBrasil, 'tag_generico', 'horas', 'Tag Genérico')}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                ) : dadosSantosBrasil.tags.length === 0 ? (
+                  <div className="flex justify-center items-center h-64">
+                    <p className="text-blue-200">Nenhum dado disponível para SANTOS BRASIL</p>
+                  </div>
+                ) : (
+                  <div className="p-4">
+                    {renderizarGraficoBarrasVertical(dadosSantosBrasil.tags, 'tag_generico', 'horas', 'Tag Genérico')}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* GRÁFICO NOVO: SANTOS BRASIL Por Categoria */}
+            <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
+              <CardHeader>
+                <CardTitle className="text-white">SANTOS BRASIL - Horas por Categoria</CardTitle>
+                <CardDescription className="text-blue-200">
+                  Distribuição de horas por categoria no local SANTOS BRASIL
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {dadosSantosBrasil.categorias.length > 0 ? (
+                  <div className="p-4">
+                    {renderizarGraficoBarrasVertical(dadosSantosBrasil.categorias, 'categoria_nome', 'horas', 'Categoria')}
+                  </div>
+                ) : (
+                  <div className="flex justify-center items-center h-64">
+                    <p className="text-blue-200">Nenhum dado de categoria disponível para SANTOS BRASIL</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
         );
 
       default:
@@ -1265,7 +1454,7 @@ const Visuais = () => {
             </div>
           </div>
 
-          {/* Cards de Métricas - APENAS 2 CARDS AGORA */}
+          {/* Cards de Métricas */}
           <div className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
               <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30 text-white hover:shadow-lg transition-all hover:scale-[1.02]">
@@ -1388,7 +1577,7 @@ const Visuais = () => {
             </CardContent>
           </Card>
 
-          {/* Cards de Métricas Mobile - APENAS 2 CARDS AGORA */}
+          {/* Cards de Métricas Mobile */}
           <div className="grid grid-cols-2 gap-4 mb-6">
             <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30 text-white">
               <CardContent className="p-4">
