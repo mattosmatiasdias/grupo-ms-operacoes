@@ -112,6 +112,20 @@ const getOperacaoIcon = (op: string): LucideIcon => {
   }
 };
 
+// Função para ordenar por nome em ordem alfabética
+const ordenarPorNome = <T extends { nome: string }>(array: T[]): T[] => {
+  return [...array].sort((a, b) => 
+    a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' })
+  );
+};
+
+// Função para ordenar equipamentos por motorista_operador
+const ordenarEquipamentosPorOperador = (equipamentos: Equipamento[]): Equipamento[] => {
+  return [...equipamentos].sort((a, b) => 
+    (a.motorista_operador || '').localeCompare((b.motorista_operador || ''), 'pt-BR', { sensitivity: 'base' })
+  );
+};
+
 // 3. Custom Hook
 const useTransporteData = () => {
   const { toast } = useToast();
@@ -249,11 +263,16 @@ const useTransporteData = () => {
               data: corrigirFusoHorarioData(ausencia.data)
             })) : [];
 
+            // Ordenar ajudantes e ausências alfabeticamente
+            const ajudantesOrdenados = ordenarPorNome(ajudantesCorrigidos);
+            const ausenciasOrdenadas = ordenarPorNome(ausenciasCorrigidas);
+            const equipamentosOrdenados = ordenarEquipamentosPorOperador(equipamentosResult.data || []);
+
             return {
               ...operacao,
-              equipamentos: equipamentosResult.data || [],
-              ajudantes: ajudantesCorrigidos,
-              ausencias: ausenciasCorrigidas,
+              equipamentos: equipamentosOrdenados,
+              ajudantes: ajudantesOrdenados,
+              ausencias: ausenciasOrdenadas,
             } as OperacaoCompleta;
           } catch (error) {
             console.error(`Erro ao carregar dados para operação ${operacao.id}:`, error);
@@ -789,7 +808,7 @@ const TabelaOperacao: React.FC<TabelaOperacaoProps> = ({
     ? `${operacao.navios.nome_navio} - ${operacao.navios.carga}`
     : operacao.op;
 
-  // Agrupar equipamentos por grupo_operacao
+  // Agrupar equipamentos por grupo_operacao e ordenar alfabeticamente dentro de cada grupo
   const equipamentosPorGrupo = operacao.equipamentos.reduce((acc, eq) => {
     const grupo = eq.grupo_operacao || 'Sem grupo';
     if (!acc[grupo]) {
@@ -798,6 +817,13 @@ const TabelaOperacao: React.FC<TabelaOperacaoProps> = ({
     acc[grupo].push(eq);
     return acc;
   }, {} as Record<string, Equipamento[]>);
+
+  // Ordenar equipamentos dentro de cada grupo por motorista_operador
+  Object.keys(equipamentosPorGrupo).forEach(grupo => {
+    equipamentosPorGrupo[grupo] = equipamentosPorGrupo[grupo].sort((a, b) => 
+      (a.motorista_operador || '').localeCompare((b.motorista_operador || ''), 'pt-BR', { sensitivity: 'base' })
+    );
+  });
 
   return (
     <Card className="h-full bg-white/10 backdrop-blur-sm border-blue-200/30 flex flex-col">
@@ -927,7 +953,12 @@ interface TabelaAjudantesProps {
 }
 
 const TabelaAjudantes: React.FC<TabelaAjudantesProps> = ({ ajudantes }) => {
-  if (ajudantes.length === 0) {
+  // Ordenar ajudantes alfabeticamente
+  const ajudantesOrdenados = useMemo(() => {
+    return ordenarPorNome(ajudantes);
+  }, [ajudantes]);
+
+  if (ajudantesOrdenados.length === 0) {
     return (
       <Card className="h-full bg-white/10 backdrop-blur-sm border-blue-200/30">
         <CardHeader>
@@ -943,7 +974,7 @@ const TabelaAjudantes: React.FC<TabelaAjudantesProps> = ({ ajudantes }) => {
   return (
     <Card className="h-full bg-white/10 backdrop-blur-sm border-blue-200/30 flex flex-col">
       <CardHeader className="pb-3">
-        <CardTitle className="text-white">Ajudantes ({ajudantes.length})</CardTitle>
+        <CardTitle className="text-white">Ajudantes ({ajudantesOrdenados.length})</CardTitle>
       </CardHeader>
       <CardContent className="flex-1 overflow-hidden min-h-0">
         <div className="overflow-auto h-full border border-blue-200/20 rounded-lg">
@@ -956,7 +987,7 @@ const TabelaAjudantes: React.FC<TabelaAjudantesProps> = ({ ajudantes }) => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {ajudantes.map((ajudante) => (
+              {ajudantesOrdenados.map((ajudante) => (
                 <TableRow key={ajudante.id} className="hover:bg-white/5 border-b border-blue-200/10">
                   <TableCell className="py-3">
                     <p className="text-sm text-white truncate">{ajudante.nome}</p>
@@ -987,7 +1018,12 @@ interface TabelaAusenciasProps {
 }
 
 const TabelaAusencias: React.FC<TabelaAusenciasProps> = ({ ausencias }) => {
-  if (ausencias.length === 0) {
+  // Ordenar ausências alfabeticamente
+  const ausenciasOrdenadas = useMemo(() => {
+    return ordenarPorNome(ausencias);
+  }, [ausencias]);
+
+  if (ausenciasOrdenadas.length === 0) {
     return (
       <Card className="h-full bg-white/10 backdrop-blur-sm border-blue-200/30">
         <CardHeader>
@@ -1003,7 +1039,7 @@ const TabelaAusencias: React.FC<TabelaAusenciasProps> = ({ ausencias }) => {
   return (
     <Card className="h-full bg-white/10 backdrop-blur-sm border-blue-200/30 flex flex-col">
       <CardHeader className="pb-3">
-        <CardTitle className="text-white">Ausências ({ausencias.length})</CardTitle>
+        <CardTitle className="text-white">Ausências ({ausenciasOrdenadas.length})</CardTitle>
       </CardHeader>
       <CardContent className="flex-1 overflow-hidden min-h-0">
         <div className="overflow-auto h-full border border-blue-200/20 rounded-lg">
@@ -1016,7 +1052,7 @@ const TabelaAusencias: React.FC<TabelaAusenciasProps> = ({ ausencias }) => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {ausencias.map((ausencia) => (
+              {ausenciasOrdenadas.map((ausencia) => (
                 <TableRow key={ausencia.id} className="hover:bg-white/5 border-b border-blue-200/10">
                   <TableCell className="py-3">
                     <p className="text-sm text-white truncate">{ausencia.nome}</p>

@@ -219,12 +219,6 @@ const Visuais = () => {
     }
   ];
 
-  // Cores para gráficos
-  const cores = [
-    '#3B82F6', '#10B981', '#8B5CF6', '#F59E0B', '#EF4444', '#06B6D4',
-    '#8B5CF6', '#EC4899', '#84CC16', '#F97316', '#6366F1', '#14B8A6'
-  ];
-
   // Inicializar períodos
   useEffect(() => {
     const inicializar = async () => {
@@ -488,8 +482,7 @@ const Visuais = () => {
         horas: parseFloat(dados.horas.toFixed(1)),
         quantidade: dados.quantidade
       }))
-      .sort((a, b) => b.horas - a.horas)
-      .slice(0, 15);
+      .sort((a, b) => b.horas - a.horas);
 
     // Agrupar por categoria_nome
     const agrupadoPorCategoria = equipamentos.reduce((acc, equipamento) => {
@@ -511,8 +504,7 @@ const Visuais = () => {
         horas: parseFloat(dados.horas.toFixed(1)),
         quantidade: dados.quantidade
       }))
-      .sort((a, b) => b.horas - a.horas)
-      .slice(0, 15);
+      .sort((a, b) => b.horas - a.horas);
 
     setDadosGeral({
       locais: dadosLocaisComPorcentagem,
@@ -579,8 +571,7 @@ const Visuais = () => {
 
     // Converter para arrays
     const naviosArray = Object.values(agrupadoPorNavioCarga)
-      .sort((a, b) => b.horas - a.horas)
-      .slice(0, 15);
+      .sort((a, b) => b.horas - a.horas);
 
     const detalhesArray: Record<string, TagGenericoData[]> = {};
     Object.entries(detalhesPorNavioCarga).forEach(([navioCarga, tags]) => {
@@ -590,8 +581,7 @@ const Visuais = () => {
           horas: parseFloat(dados.horas.toFixed(1)),
           quantidade: dados.quantidade
         }))
-        .sort((a, b) => b.horas - a.horas)
-        .slice(0, 10);
+        .sort((a, b) => b.horas - a.horas);
     });
 
     const categoriasArray: Record<string, CategoriaData[]> = {};
@@ -602,8 +592,7 @@ const Visuais = () => {
           horas: parseFloat(dados.horas.toFixed(1)),
           quantidade: dados.quantidade
         }))
-        .sort((a, b) => b.horas - a.horas)
-        .slice(0, 10);
+        .sort((a, b) => b.horas - a.horas);
     });
 
     setDadosNavio({
@@ -643,8 +632,7 @@ const Visuais = () => {
         horas: parseFloat(dados.horas.toFixed(1)),
         quantidade: dados.quantidade
       }))
-      .sort((a, b) => b.horas - a.horas)
-      .slice(0, 15);
+      .sort((a, b) => b.horas - a.horas);
 
     // Agrupar por categoria
     const agrupadoPorCategoria = equipamentosFiltrados.reduce((acc, equipamento) => {
@@ -666,8 +654,7 @@ const Visuais = () => {
         horas: parseFloat(dados.horas.toFixed(1)),
         quantidade: dados.quantidade
       }))
-      .sort((a, b) => b.horas - a.horas)
-      .slice(0, 15);
+      .sort((a, b) => b.horas - a.horas);
 
     setState({
       tags: dadosTags,
@@ -701,6 +688,12 @@ const Visuais = () => {
   const renderizarGraficoPizza = (dados: LocalData[]) => {
     if (dados.length === 0) return null;
 
+    // Cores para o gráfico de pizza (mantido igual)
+    const coresPizza = [
+      '#3B82F6', '#10B981', '#8B5CF6', '#F59E0B', '#EF4444', '#06B6D4',
+      '#8B5CF6', '#EC4899', '#84CC16', '#F97316', '#6366F1', '#14B8A6'
+    ];
+
     return (
       <div className="relative w-64 h-64">
         <div className="absolute inset-0 rounded-full border-4 border-white/20">
@@ -714,7 +707,7 @@ const Visuais = () => {
                 key={item.local}
                 className="absolute inset-0 rounded-full opacity-80"
                 style={{
-                  backgroundColor: cores[index % cores.length],
+                  backgroundColor: coresPizza[index % coresPizza.length],
                   clipPath: `conic-gradient(from ${porcentagemAcumulada * 3.6}deg, transparent 0, transparent ${item.porcentagem * 3.6}deg, #0000 0)`
                 }}
               />
@@ -798,7 +791,7 @@ const Visuais = () => {
                         <div className="flex items-center">
                           <div 
                             className="w-3 h-3 rounded-full mr-3"
-                            style={{ backgroundColor: cores[index % cores.length] }}
+                            style={{ backgroundColor: `#3B82F6` }}
                           />
                           {navio.navio_carga}
                         </div>
@@ -817,35 +810,77 @@ const Visuais = () => {
     );
   };
 
+  // Função para gerar gradiente de cores baseado no valor
+  const getColorByValue = (value: number, maxValue: number, baseColor: string = '#3B82F6') => {
+    if (maxValue === 0) return baseColor;
+    
+    // Calcula a intensidade baseada no valor relativo ao máximo
+    const intensity = value / maxValue;
+    
+    // Para azul: mais escuro para valores maiores
+    if (baseColor === '#3B82F6') {
+      // Varia de azul claro (baixo) a azul escuro (alto)
+      const darkenAmount = Math.floor(intensity * 40); // 0 a 40%
+      return `hsl(217, 91%, ${60 - darkenAmount}%)`;
+    }
+    
+    // Para outras cores base, ajuste similar
+    return baseColor;
+  };
+
   // Renderizar gráfico de barras vertical para tags ou categorias
   const renderizarGraficoBarrasVertical = (dados: any[], campoLabel: string, campoValor: string, titulo: string) => {
     if (dados.length === 0) return null;
 
     const maxValor = Math.max(...dados.map(item => item[campoValor]));
-    const alturaMaxima = 200;
+    const alturaFixa = 200; // Altura fixa para todas as colunas
 
     return (
       <div className="space-y-4">
         <h3 className="text-white font-semibold text-lg">{titulo}</h3>
-        <div className="flex items-end space-x-2 h-64">
-          {dados.slice(0, 12).map((item, index) => {
-            const altura = (item[campoValor] / maxValor) * alturaMaxima;
+        <div className="flex items-end space-x-2 h-80 overflow-x-auto pb-4">
+          {dados.map((item, index) => {
+            const cor = getColorByValue(item[campoValor], maxValor, '#3B82F6');
+            
             return (
-              <div key={index} className="flex-1 flex flex-col items-center">
-                <div className="text-xs text-blue-200 mb-1 h-12 overflow-hidden text-center">
+              <div key={index} className="flex flex-col items-center min-w-[100px]"> {/* Largura dobrada */}
+                {/* Coluna com altura fixa e borda branca */}
+                <div className="relative">
+                  <div
+                    className="w-24 rounded-lg transition-all duration-500 hover:opacity-90 relative border-2 border-white shadow-lg" 
+                    style={{
+                      height: `${alturaFixa}px`,
+                      backgroundColor: cor,
+                    }}
+                    title={`${item[campoLabel]}: ${item[campoValor].toFixed(1)}h`}
+                  >
+                    {/* Valor no meio da coluna com fundo semi-transparente */}
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="bg-black/40 backdrop-blur-sm rounded-md px-2 py-1">
+                        <div className="text-white font-bold text-xl text-center">
+                          {item[campoValor].toFixed(0)}h
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Efeito de gradiente interno para mais profundidade */}
+                    <div 
+                      className="absolute inset-0 rounded-lg opacity-30"
+                      style={{
+                        background: `linear-gradient(to top, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 50%)`
+                      }}
+                    />
+                  </div>
+                </div>
+                
+                {/* Descrição abaixo da coluna (acima da quantidade) */}
+                <div className="text-sm text-white font-bold mt-2 h-auto max-h-20 text-center px-1">
                   {item[campoLabel]}
                 </div>
-                <div
-                  className="w-full rounded-t-lg transition-all duration-500 hover:opacity-90"
-                  style={{
-                    height: `${altura}px`,
-                    backgroundColor: cores[index % cores.length],
-                    minHeight: '4px'
-                  }}
-                  title={`${item[campoLabel]}: ${item[campoValor].toFixed(1)}h`}
-                />
-                <div className="text-xs text-white mt-1 font-medium">
-                  {item[campoValor].toFixed(0)}h
+                
+                {/* Quantidade de equipamentos */}
+                <div className="text-xs text-white/70 mt-1">
+                  {item.quantidade} equip.
                 </div>
               </div>
             );
@@ -865,26 +900,54 @@ const Visuais = () => {
       <div className="space-y-3">
         <h3 className="text-white font-semibold text-lg mb-4">{titulo}</h3>
         <div className="space-y-4">
-          {dados.map((item, index) => (
-            <div key={index} className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-white font-medium">{item[campoLabel]}</span>
-                <span className="text-blue-300 font-bold">{item[campoValor].toFixed(1)}h</span>
+          {dados.map((item, index) => {
+            const porcentagem = (item[campoValor] / maxValor) * 100;
+            const cor = getColorByValue(item[campoValor], maxValor, '#3B82F6');
+            
+            return (
+              <div key={index} className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <div>
+                    {/* Descrição com fonte maior e negrito */}
+                    <span className="text-white font-bold text-base">{item[campoLabel]}</span>
+                    {/* Quantidade de equipamentos */}
+                    <div className="text-xs text-blue-200 mt-1">
+                      {item.quantidade} equipamento{item.quantidade !== 1 ? 's' : ''}
+                    </div>
+                  </div>
+                  {/* Valor com fonte aumentada */}
+                  <span className="text-blue-300 font-bold text-lg">{item[campoValor].toFixed(1)}h</span>
+                </div>
+                <div className="w-full bg-white/10 rounded-full h-6 relative"> {/* Altura aumentada */}
+                  <div 
+                    className="h-6 rounded-full transition-all duration-500 relative border-2 border-white"
+                    style={{
+                      width: `${porcentagem}%`,
+                      backgroundColor: cor,
+                      minWidth: '40px' // Largura mínima para barras muito pequenas
+                    }}
+                  >
+                    {/* Valor no meio da barra horizontal */}
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="bg-black/40 backdrop-blur-sm rounded-md px-2 py-1">
+                        <span className="text-white font-bold text-sm">
+                          {item[campoValor].toFixed(0)}h
+                        </span>
+                      </div>
+                    </div>
+                    
+                    {/* Efeito de gradiente para barras horizontais */}
+                    <div 
+                      className="absolute inset-0 rounded-full opacity-50"
+                      style={{
+                        background: `linear-gradient(to right, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0) 100%)`
+                      }}
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="w-full bg-white/10 rounded-full h-4">
-                <div 
-                  className="h-4 rounded-full transition-all duration-500"
-                  style={{
-                    width: `${(item[campoValor] / maxValor) * 100}%`,
-                    backgroundColor: cores[index % cores.length]
-                  }}
-                />
-              </div>
-              <div className="text-xs text-blue-200">
-                {item.quantidade} equipamento{item.quantidade !== 1 ? 's' : ''}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     );
@@ -928,7 +991,7 @@ const Visuais = () => {
                             <div className="flex items-center gap-3">
                               <div 
                                 className="w-4 h-4 rounded" 
-                                style={{ backgroundColor: cores[index % cores.length] }}
+                                style={{ backgroundColor: `#3B82F6` }}
                               />
                               <div>
                                 <span className="text-white font-medium">{item.local}</span>
@@ -955,7 +1018,10 @@ const Visuais = () => {
             {/* Gráfico de Coluna por Tag Genérico */}
             <Card className="mb-8 bg-white/10 backdrop-blur-sm border-blue-200/30">
               <CardHeader>
-                <CardTitle className="text-white">Horas por Tag Genérico (Top 15)</CardTitle>
+                <CardTitle className="text-white">Horas por Tag Genérico</CardTitle>
+                <CardDescription className="text-blue-200">
+                  Todos os tags genéricos com colunas de tamanho fixo e borda branca
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 {dadosGeral.tags.length > 0 ? (
@@ -973,9 +1039,9 @@ const Visuais = () => {
             {/* GRÁFICO NOVO: Por Categoria */}
             <Card className="bg-white/10 backdrop-blur-sm border-blue-200/30">
               <CardHeader>
-                <CardTitle className="text-white">Horas por Categoria (Top 15)</CardTitle>
+                <CardTitle className="text-white">Horas por Categoria</CardTitle>
                 <CardDescription className="text-blue-200">
-                  Distribuição de horas por tipo de equipamento/categoria
+                  Distribuição de horas por tipo de equipamento/categoria com colunas fixas
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -1000,7 +1066,7 @@ const Visuais = () => {
               <CardHeader>
                 <CardTitle className="text-white">HYDRO - Horas por Tag Genérico</CardTitle>
                 <CardDescription className="text-blue-200">
-                  Distribuição de horas trabalhadas no local HYDRO
+                  Distribuição de horas trabalhadas no local HYDRO com colunas fixas
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -1028,7 +1094,7 @@ const Visuais = () => {
               <CardHeader>
                 <CardTitle className="text-white">HYDRO - Horas por Categoria</CardTitle>
                 <CardDescription className="text-blue-200">
-                  Distribuição de horas por categoria no local HYDRO
+                  Distribuição de horas por categoria no local HYDRO com colunas fixas
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -1083,7 +1149,7 @@ const Visuais = () => {
                 <CardHeader>
                   <CardTitle className="text-white">{navioCarga} - Tags</CardTitle>
                   <CardDescription className="text-blue-200">
-                    Distribuição por Tag Genérico
+                    Distribuição por Tag Genérico com barras horizontais e borda
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -1106,7 +1172,7 @@ const Visuais = () => {
                 <CardHeader>
                   <CardTitle className="text-white">{navioCarga} - Categorias</CardTitle>
                   <CardDescription className="text-blue-200">
-                    Distribuição por Categoria
+                    Distribuição por Categoria com barras horizontais e borda
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -1132,7 +1198,7 @@ const Visuais = () => {
               <CardHeader>
                 <CardTitle className="text-white">ALBRAS - Horas por Tag Genérico</CardTitle>
                 <CardDescription className="text-blue-200">
-                  Distribuição de horas trabalhadas no local ALBRAS
+                  Distribuição de horas trabalhadas no local ALBRAS com colunas fixas
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -1160,7 +1226,7 @@ const Visuais = () => {
               <CardHeader>
                 <CardTitle className="text-white">ALBRAS - Horas por Categoria</CardTitle>
                 <CardDescription className="text-blue-200">
-                  Distribuição de horas por categoria no local ALBRAS
+                  Distribuição de horas por categoria no local ALBRAS com colunas fixas
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -1185,7 +1251,7 @@ const Visuais = () => {
               <CardHeader>
                 <CardTitle className="text-white">SANTOS BRASIL - Horas por Tag Genérico</CardTitle>
                 <CardDescription className="text-blue-200">
-                  Distribuição de horas trabalhadas no local SANTOS BRASIL
+                  Distribuição de horas trabalhadas no local SANTOS BRASIL com colunas fixas
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -1213,7 +1279,7 @@ const Visuais = () => {
               <CardHeader>
                 <CardTitle className="text-white">SANTOS BRASIL - Horas por Categoria</CardTitle>
                 <CardDescription className="text-blue-200">
-                  Distribuição de horas por categoria no local SANTOS BRASIL
+                  Distribuição de horas por categoria no local SANTOS BRASIL com colunas fixas
                 </CardDescription>
               </CardHeader>
               <CardContent>
