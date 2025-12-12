@@ -7,7 +7,19 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Menu, X, LogOut, ArrowLeft, Ship, Calendar, Package, Anchor, BarChart3, Plus } from 'lucide-react';
+import { 
+  Menu, 
+  X, 
+  LogOut, 
+  ArrowLeft, 
+  Ship, 
+  Calendar, 
+  Package, 
+  Anchor, 
+  BarChart3, 
+  Plus,
+  ChevronDown 
+} from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface EquipamentoNavio {
@@ -17,6 +29,16 @@ interface EquipamentoNavio {
   hora_inicial?: string;
   hora_final?: string;
 }
+
+const tiposCarga = [
+  "HIDRATO",
+  "CARVAO",
+  "BAUXITA",
+  "COQUE",
+  "PICHE",
+  "FLUORETO",
+  "LINGOTE"
+];
 
 const NovoNavio = () => {
   const navigate = useNavigate();
@@ -37,10 +59,16 @@ const NovoNavio = () => {
   });
 
   const [equipamentosNavio, setEquipamentosNavio] = useState<EquipamentoNavio[]>([]);
+  const [cargaDropdownOpen, setCargaDropdownOpen] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target;
     setFormData(prev => ({ ...prev, [id]: value }));
+  };
+
+  const handleCargaSelect = (carga: string) => {
+    setFormData(prev => ({ ...prev, carga }));
+    setCargaDropdownOpen(false);
   };
 
   const addEquipamentoNavio = (count = 1) => {
@@ -342,18 +370,61 @@ const NovoNavio = () => {
                         placeholder="Ex: Navio Cargueiro A"
                       />
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-2 relative">
                       <Label htmlFor="carga" className="text-white text-sm flex items-center space-x-2">
                         <Package className="h-4 w-4 text-blue-300" />
                         <span>Carga</span>
                       </Label>
-                      <Input 
-                        id="carga" 
-                        value={formData.carga} 
-                        onChange={handleChange} 
-                        className="bg-white/5 border-blue-300/30 text-white placeholder:text-blue-300/50 focus:border-blue-300"
-                        placeholder="Tipo de carga"
-                      />
+                      <div className="relative">
+                        <Button
+                          type="button"
+                          onClick={() => setCargaDropdownOpen(!cargaDropdownOpen)}
+                          className="w-full bg-white/5 border border-blue-300/30 text-white hover:bg-white/10 hover:border-blue-300 justify-between px-3"
+                        >
+                          <span className={formData.carga ? "text-white" : "text-blue-300/50"}>
+                            {formData.carga || "Selecione o tipo de carga"}
+                          </span>
+                          <ChevronDown className={`h-4 w-4 transition-transform ${cargaDropdownOpen ? 'rotate-180' : ''}`} />
+                        </Button>
+                        
+                        {cargaDropdownOpen && (
+                          <div className="absolute z-10 mt-1 w-full bg-gray-800 border border-blue-300/30 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                            <div className="py-1">
+                              {tiposCarga.map((carga) => (
+                                <button
+                                  key={carga}
+                                  type="button"
+                                  onClick={() => handleCargaSelect(carga)}
+                                  className={`w-full text-left px-4 py-2 hover:bg-blue-600/30 transition-colors ${
+                                    formData.carga === carga 
+                                      ? 'bg-blue-600 text-white' 
+                                      : 'text-blue-200'
+                                  }`}
+                                >
+                                  {carga}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      {formData.carga && (
+                        <div className="flex justify-between items-center mt-2">
+                          <span className="text-blue-300 text-sm">Selecionado: <span className="text-white">{formData.carga}</span></span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setFormData(prev => ({ ...prev, carga: '' }));
+                              setCargaDropdownOpen(false);
+                            }}
+                            className="h-6 px-2 text-xs text-red-300 hover:text-red-200 hover:bg-red-500/20"
+                          >
+                            Limpar
+                          </Button>
+                        </div>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="berco" className="text-white text-sm flex items-center space-x-2">
@@ -582,17 +653,43 @@ const NovoNavio = () => {
                       placeholder="Ex: Navio Cargueiro A"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="carga_mobile" className="text-white text-sm">Carga</Label>
-                      <Input 
-                        id="carga_mobile" 
-                        value={formData.carga} 
-                        onChange={handleChange} 
-                        className="bg-white/5 border-blue-300/30 text-white"
-                        placeholder="Tipo de carga"
-                      />
+                  <div className="space-y-2">
+                    <Label htmlFor="carga_mobile" className="text-white text-sm">Carga</Label>
+                    <div className="relative">
+                      <Button
+                        type="button"
+                        onClick={() => setCargaDropdownOpen(!cargaDropdownOpen)}
+                        className="w-full bg-white/5 border border-blue-300/30 text-white hover:bg-white/10 hover:border-blue-300 justify-between px-3 h-10"
+                      >
+                        <span className={formData.carga ? "text-white" : "text-blue-300/50"}>
+                          {formData.carga || "Selecione o tipo de carga"}
+                        </span>
+                        <ChevronDown className={`h-4 w-4 transition-transform ${cargaDropdownOpen ? 'rotate-180' : ''}`} />
+                      </Button>
+                      
+                      {cargaDropdownOpen && (
+                        <div className="absolute z-10 mt-1 w-full bg-gray-800 border border-blue-300/30 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                          <div className="py-1">
+                            {tiposCarga.map((carga) => (
+                              <button
+                                key={carga}
+                                type="button"
+                                onClick={() => handleCargaSelect(carga)}
+                                className={`w-full text-left px-4 py-2 hover:bg-blue-600/30 transition-colors ${
+                                  formData.carga === carga 
+                                    ? 'bg-blue-600 text-white' 
+                                    : 'text-blue-200'
+                                }`}
+                              >
+                                {carga}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2">
                       <Label htmlFor="berco_mobile" className="text-white text-sm">Berço</Label>
                       <Input 

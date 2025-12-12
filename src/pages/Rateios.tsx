@@ -115,9 +115,11 @@ const centrosResultado = [
   'MANUTENÇÃO',
   'SESMT',
   'MS GRANEIS',
+  'VALE - DRENAGEM SUPERFICIAL',
   'ORÇAMENTOS',
   'DP/RH',
   'DIRETORIA',
+  'HYDRO - PAVIMENTAÇÃO DO DIQUE DO DRS2',
   'ADMINISTRAÇÃO CENTRAL'
 ];
 

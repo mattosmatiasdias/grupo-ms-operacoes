@@ -830,7 +830,17 @@ const TabelaOperacao: React.FC<TabelaOperacaoProps> = ({
       <CardHeader className="pb-3">
         <div className="flex justify-between items-center">
           <div className="flex-1">
-            <CardTitle className="text-white text-lg truncate">{displayName}</CardTitle>
+            <div className="flex justify-between items-start mb-2">
+              <CardTitle className="text-white text-lg truncate">{displayName}</CardTitle>
+              {/* ID da operação */}
+              <div className="bg-blue-900/50 px-3 py-1 rounded-lg">
+                <p className="text-xs text-blue-300">ID da Operação</p>
+                <p className="text-sm font-mono text-white font-medium break-all max-w-[200px]">
+                  {operacao.id}
+                </p>
+              </div>
+            </div>
+            
             <div className="grid grid-cols-3 gap-2 mt-2">
               <div>
                 <p className="text-xs text-blue-300">Data</p>
@@ -858,15 +868,29 @@ const TabelaOperacao: React.FC<TabelaOperacaoProps> = ({
                 <p className="text-xs text-blue-300">Total Equipamentos</p>
                 <p className="text-lg font-bold text-white">{operacao.equipamentos.length}</p>
               </div>
-              <Button 
-                variant="outline"
-                size="sm"
-                onClick={() => navigate(`/operacao/${operacao.id}/visualizar`)}
-                className="text-blue-300 hover:text-white hover:bg-blue-500/20 border-blue-300/30"
-              >
-                <EyeOff className="h-4 w-4 mr-1" />
-                Detalhes
-              </Button>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigator.clipboard.writeText(operacao.id)}
+                  className="text-blue-300 hover:text-white hover:bg-blue-500/20 border-blue-300/30"
+                  title="Copiar ID da operação"
+                >
+                  <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  Copiar ID
+                </Button>
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate(`/operacao/${operacao.id}/visualizar`)}
+                  className="text-blue-300 hover:text-white hover:bg-blue-500/20 border-blue-300/30"
+                >
+                  <EyeOff className="h-4 w-4 mr-1" />
+                  Detalhes
+                </Button>
+              </div>
             </div>
             {operacao.observacao && (
               <div className="mt-2">
@@ -1402,13 +1426,13 @@ const RelatorioTransporte = () => {
                     ? 'Todas as Operações' 
                     : `Operações - ${operacaoSelecionada}`}
               </CardTitle>
+              {operacaoIdSelecionado && operacaoAtual && (
+                <p className="text-sm text-blue-300">
+                  ID: <span className="font-mono text-white">{operacaoAtual.id}</span> • {formatarDataBR(operacaoAtual.data)} • {operacaoAtual.hora_inicial} - {operacaoAtual.hora_final}
+                </p>
+              )}
               <p className="text-sm text-blue-300">
                 {dataFiltro ? `Dados de ${formatarDataBR(dataFiltro)}` : 'Selecione uma data para filtrar'}
-                {operacaoIdSelecionado && operacaoAtual && (
-                  <span className="ml-2">
-                    • {formatarDataBR(operacaoAtual.data)} • {operacaoAtual.hora_inicial} - {operacaoAtual.hora_final}
-                  </span>
-                )}
               </p>
             </CardHeader>
             <CardContent className="p-6 min-h-[500px]">
