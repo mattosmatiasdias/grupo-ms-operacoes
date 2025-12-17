@@ -116,6 +116,7 @@ const centrosResultado = [
   'SESMT',
   'MS GRANEIS',
   'VALE - DRENAGEM SUPERFICIAL',
+  'ADMINISTRACAO CENTRAL',
   'ORÇAMENTOS',
   'DP/RH',
   'DIRETORIA',
