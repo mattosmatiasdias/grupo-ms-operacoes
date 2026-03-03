@@ -1,4 +1,4 @@
-// src/App.tsx (ATUALIZADO - com rotas para BM Form)
+// src/App.tsx (ATUALIZADO - removidas todas as rotas de escalas)
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -35,15 +35,6 @@ import Vistorias from "./pages/Vistorias";
 
 // Página do módulo de Rateios
 import Rateios from "./pages/Rateios";
-
-// Páginas do módulo de Escalas
-import EscalasDashboard from "./pages/escalas/dashboard";
-import EscalasCalendar from "./pages/escalas/escalas";
-import Ocorrencias from "./pages/escalas/ocorrencias";
-import Pessoal from "./pages/escalas/pessoal";
-import Relatorios from "./pages/escalas/relatorios";
-import Salarios from "./pages/escalas/salarios";
-import NovaEscala from "./pages/escalas/novaescala";
 
 // NOVO MÓDULO - Homem Hora
 import HomemHora from "./pages/HomemHora";
@@ -161,49 +152,6 @@ const App = () => (
             <Route path="/rateios" element={
               <ProtectedRoute>
                 <Rateios />
-              </ProtectedRoute>
-            } />
-
-            {/* Rotas do módulo de Escalas */}
-            <Route path="/escalas" element={
-              <ProtectedRoute>
-                <EscalasCalendar />
-              </ProtectedRoute>
-            } />
-
-            <Route path="/escalas/dashboard" element={
-              <ProtectedRoute>
-                <EscalasDashboard />
-              </ProtectedRoute>
-            } />
-
-            <Route path="/escalas/ocorrencias" element={
-              <ProtectedRoute>
-                <Ocorrencias />
-              </ProtectedRoute>
-            } />
-
-            <Route path="/escalas/pessoal" element={
-              <ProtectedRoute>
-                <Pessoal />
-              </ProtectedRoute>
-            } />
-
-            <Route path="/escalas/relatorios" element={
-              <ProtectedRoute>
-                <Relatorios />
-              </ProtectedRoute>
-            } />
-
-            <Route path="/escalas/salarios" element={
-              <ProtectedRoute>
-                <Salarios />
-              </ProtectedRoute>
-            } />
-
-            <Route path="/escalas/nova" element={
-              <ProtectedRoute>
-                <NovaEscala />
               </ProtectedRoute>
             } />
 
