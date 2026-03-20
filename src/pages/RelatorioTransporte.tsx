@@ -22,10 +22,18 @@ interface Navio {
   carga: string;
 }
 
+interface Colaborador {
+  id: string;
+  nome_completo: string;
+  funcao_atual: string;
+}
+
 interface Equipamento {
   id: string;
   tag: string;
   motorista_operador: string;
+  colaborador_id: string | null;
+  funcao_no_registro: string | null;
   horas_trabalhadas: number;
   grupo_operacao: string;
   hora_inicial: string | null;
@@ -34,6 +42,7 @@ interface Equipamento {
   categoria_nome?: string;
   local?: string;
   horas_operando?: number;
+  colaborador?: Colaborador;
 }
 
 interface Ajudante {
@@ -85,6 +94,8 @@ interface RelatorioItem {
   categoria_nome: string;
   local: string;
   motorista_operador: string;
+  colaborador_nome: string;
+  funcao_no_registro: string;
   horas_trabalhadas: number;
   horas_operando: number;
 }
@@ -134,9 +145,24 @@ const ordenarPorNome = <T extends { nome: string }>(array: T[]): T[] => {
 };
 
 const ordenarEquipamentosPorOperador = (equipamentos: Equipamento[]): Equipamento[] => {
-  return [...equipamentos].sort((a, b) => 
-    (a.motorista_operador || '').localeCompare((b.motorista_operador || ''), 'pt-BR', { sensitivity: 'base' })
-  );
+  return [...equipamentos].sort((a, b) => {
+    const nomeA = a.colaborador?.nome_completo || a.motorista_operador || '';
+    const nomeB = b.colaborador?.nome_completo || b.motorista_operador || '';
+    return nomeA.localeCompare(nomeB, 'pt-BR', { sensitivity: 'base' });
+  });
+};
+
+// Função para obter o nome do operador (prioriza colaborador)
+const getNomeOperador = (equipamento: Equipamento): string => {
+  if (equipamento.colaborador?.nome_completo) {
+    return equipamento.colaborador.nome_completo;
+  }
+  return equipamento.motorista_operador || '-';
+};
+
+// Função para obter a função do operador (usa funcao_no_registro)
+const getFuncaoOperador = (equipamento: Equipamento): string | null => {
+  return equipamento.funcao_no_registro || null;
 };
 
 // --- 3. COMPONENTES AUXILIARES ---
@@ -378,7 +404,7 @@ const ResumoCards: React.FC<ResumoCardsProps> = ({ operacoesFiltradas, setOperac
   );
 };
 
-// TABELA DE OPERAÇÃO (Principal) - CORRIGIDA (Bloqueio Triplo)
+// TABELA DE OPERAÇÃO (Principal) - COM COLABORADOR
 const TabelaOperacao: React.FC<{ 
   operacao: OperacaoCompleta | null; 
   formatarDataBR: (d: string) => string; 
@@ -410,7 +436,11 @@ const TabelaOperacao: React.FC<{
   }, {} as Record<string, Equipamento[]>);
 
   Object.keys(equipamentosPorGrupo).forEach(grupo => {
-    equipamentosPorGrupo[grupo].sort((a, b) => (a.motorista_operador || '').localeCompare((b.motorista_operador || ''), 'pt-BR'));
+    equipamentosPorGrupo[grupo].sort((a, b) => {
+      const nomeA = getNomeOperador(a);
+      const nomeB = getNomeOperador(b);
+      return nomeA.localeCompare(nomeB, 'pt-BR', { sensitivity: 'base' });
+    });
   });
 
   return (
@@ -471,36 +501,56 @@ const TabelaOperacao: React.FC<{
                     {eqs.length} itens • {formatarHoras(eqs.reduce((a,b) => a + (Number(b.horas_trabalhadas)||0), 0))}
                   </span>
                 </div>
-                {/* Wrapper com fundo explícito e Table com fundo explícito */}
                 <div className="rounded-lg border border-slate-800 overflow-hidden bg-slate-900">
                   <Table className="bg-slate-900">
                     <TableHeader className="bg-slate-950">
                       <TableRow className="bg-slate-950 border-slate-800 hover:bg-slate-950">
                         <TableHead className="text-slate-400 font-medium text-[10px] py-1.5 pl-2 bg-slate-950">Tag</TableHead>
                         <TableHead className="text-slate-400 font-medium text-[10px] py-1.5 bg-slate-950">Operador</TableHead>
+                        <TableHead className="text-slate-400 font-medium text-[10px] py-1.5 bg-slate-950">Função</TableHead>
                         <TableHead className="text-slate-400 font-medium text-[10px] py-1.5 text-right pr-2 bg-slate-950">Horas</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody className="bg-slate-900">
-                      {eqs.map(eq => (
-                        <TableRow key={eq.id} className="bg-slate-900 hover:bg-slate-800/30 transition-colors border-slate-800">
-                          <TableCell className="py-1.5 pl-2 bg-transparent">
-                            <code className="text-[10px] bg-slate-950 px-1.5 py-0.5 rounded text-blue-400 border border-slate-700 font-mono">
-                              {eq.tag}
-                            </code>
-                          </TableCell>
-                          <TableCell className="py-1.5 bg-transparent">
-                            <span className="text-xs text-slate-300 font-medium">
-                              {eq.motorista_operador || '-'}
-                            </span>
-                          </TableCell>
-                          <TableCell className="py-1.5 text-right pr-2 bg-transparent">
-                            <span className="font-mono text-emerald-400 text-xs font-bold">
-                              {eq.horas_trabalhadas}h
-                            </span>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {eqs.map(eq => {
+                        const nomeOperador = getNomeOperador(eq);
+                        const funcaoOperador = getFuncaoOperador(eq);
+                        return (
+                          <TableRow key={eq.id} className="bg-slate-900 hover:bg-slate-800/30 transition-colors border-slate-800">
+                            <TableCell className="py-1.5 pl-2 bg-transparent">
+                              <code className="text-[10px] bg-slate-950 px-1.5 py-0.5 rounded text-blue-400 border border-slate-700 font-mono">
+                                {eq.tag}
+                              </code>
+                            </TableCell>
+                            <TableCell className="py-1.5 bg-transparent">
+                              <div className="flex flex-col">
+                                <span className="text-xs text-slate-300 font-medium">
+                                  {nomeOperador}
+                                </span>
+                                {eq.motorista_operador && eq.colaborador?.nome_completo && (
+                                  <span className="text-[9px] text-slate-500">
+                                    (original: {eq.motorista_operador})
+                                  </span>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="py-1.5 bg-transparent">
+                              {funcaoOperador ? (
+                                <Badge variant="secondary" className="bg-slate-800 text-slate-300 text-[9px] px-1.5 py-0.5">
+                                  {funcaoOperador}
+                                </Badge>
+                              ) : (
+                                <span className="text-[9px] text-slate-500">-</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="py-1.5 text-right pr-2 bg-transparent">
+                              <span className="font-mono text-emerald-400 text-xs font-bold">
+                                {eq.horas_trabalhadas}h
+                              </span>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>
@@ -513,7 +563,7 @@ const TabelaOperacao: React.FC<{
   );
 };
 
-// TABELA DE AJUDANTES E AUSÊNCIAS (Lado Direito) - CORRIGIDA (Bloqueio Triplo)
+// TABELA DE AJUDANTES E AUSÊNCIAS (Lado Direito)
 const PainelLateral: React.FC<{ ajudantes: Ajudante[], ausencias: Ausencia[] }> = ({ ajudantes, ausencias }) => {
   return (
     <div className="flex flex-col gap-3 h-full">
@@ -523,7 +573,6 @@ const PainelLateral: React.FC<{ ajudantes: Ajudante[], ausencias: Ausencia[] }> 
           <CardTitle className="text-sm font-semibold text-slate-200">Ajudantes</CardTitle>
           <Badge variant="secondary" className="h-4 px-1.5 text-[10px] bg-blue-500/10 text-blue-400 border-blue-500/20">{ajudantes.length}</Badge>
         </CardHeader>
-        {/* Wrapper e Table com fundo explícito */}
         <div className="flex-1 p-0 bg-slate-900">
           <Table className="bg-slate-900">
             <TableHeader className="bg-slate-950">
@@ -568,7 +617,6 @@ const PainelLateral: React.FC<{ ajudantes: Ajudante[], ausencias: Ausencia[] }> 
           <CardTitle className="text-sm font-semibold text-slate-200">Ausências</CardTitle>
           <Badge variant="secondary" className="h-4 px-1.5 text-[10px] bg-red-500/10 text-red-400 border-red-500/20">{ausencias.length}</Badge>
         </CardHeader>
-        {/* Wrapper e Table com fundo explícito */}
         <div className="flex-1 p-0 bg-slate-900">
            <Table className="bg-slate-900">
             <TableHeader className="bg-slate-950">
@@ -690,9 +738,36 @@ const RelatorioTransporte = () => {
           supabase.from('ajudantes').select('*').eq('registro_operacoes_id', op.id),
           supabase.from('ausencias').select('*').eq('registro_operacoes_id', op.id)
         ]);
+        
+        // Buscar colaboradores para os equipamentos
+        const equipamentos = eqRes.data || [];
+        const colaboradoresIds = equipamentos
+          .filter(eq => eq.colaborador_id)
+          .map(eq => eq.colaborador_id);
+        
+        let colaboradoresMap: Record<string, Colaborador> = {};
+        if (colaboradoresIds.length > 0) {
+          const { data: colsData } = await supabase
+            .from('colaboradores')
+            .select('id, nome_completo, funcao_atual')
+            .in('id', colaboradoresIds);
+          
+          if (colsData) {
+            colaboradoresMap = colsData.reduce((acc, col) => {
+              acc[col.id] = col;
+              return acc;
+            }, {} as Record<string, Colaborador>);
+          }
+        }
+        
+        const equipamentosComColaborador = equipamentos.map(eq => ({
+          ...eq,
+          colaborador: eq.colaborador_id ? colaboradoresMap[eq.colaborador_id] : undefined
+        }));
+        
         return {
           ...op, data: corrigirFusoHorarioData(op.data),
-          equipamentos: ordenarEquipamentosPorOperador(eqRes.data || []),
+          equipamentos: ordenarEquipamentosPorOperador(equipamentosComColaborador),
           ajudantes: ordenarPorNome((ajRes.data || []).map(a => ({...a, data: corrigirFusoHorarioData(a.data)}))),
           ausencias: ordenarPorNome((auRes.data || []).map(a => ({...a, data: corrigirFusoHorarioData(a.data)})))
         } as OperacaoCompleta;
@@ -707,18 +782,16 @@ const RelatorioTransporte = () => {
 
   useEffect(() => { if (filtroAplicado.data) fetchOperacoes(); }, [filtroAplicado, fetchOperacoes]);
 
-  // Função corrigida para gerar relatório CSV completo
+  // Função para gerar relatório CSV completo
   const gerarRelatorioCSV = async (dataInicial: string, dataFinal: string) => {
     setGerandoRelatorio(true);
     
     try {
-      // Corrigir fusos horários das datas
       const dataInicialCorrigida = corrigirFusoHorarioData(dataInicial);
       const dataFinalCorrigida = corrigirFusoHorarioData(dataFinal);
 
       console.log('Buscando dados para o relatório:', dataInicialCorrigida, 'até', dataFinalCorrigida);
 
-      // Buscar dados completos com relacionamentos
       const { data: relatorioData, error } = await supabase
         .from('registro_operacoes')
         .select(`
@@ -734,6 +807,8 @@ const RelatorioTransporte = () => {
             categoria_nome,
             local,
             motorista_operador,
+            colaborador_id,
+            funcao_no_registro,
             horas_trabalhadas,
             horas_operando
           )
@@ -758,13 +833,39 @@ const RelatorioTransporte = () => {
         return;
       }
 
-      // Processar os dados conforme o SQL fornecido
+      // Buscar todos os colaboradores relacionados
+      const todosColaboradoresIds: string[] = [];
+      relatorioData.forEach(operacao => {
+        const equipamentos = operacao.equipamentos || [];
+        equipamentos.forEach(eq => {
+          if (eq.colaborador_id) todosColaboradoresIds.push(eq.colaborador_id);
+        });
+      });
+      
+      let colaboradoresMap: Record<string, Colaborador> = {};
+      if (todosColaboradoresIds.length > 0) {
+        const { data: colsData } = await supabase
+          .from('colaboradores')
+          .select('id, nome_completo, funcao_atual')
+          .in('id', [...new Set(todosColaboradoresIds)]);
+        
+        if (colsData) {
+          colaboradoresMap = colsData.reduce((acc, col) => {
+            acc[col.id] = col;
+            return acc;
+          }, {} as Record<string, Colaborador>);
+        }
+      }
+
+      // Processar os dados
       const dadosProcessados: RelatorioItem[] = [];
 
       relatorioData.forEach(operacao => {
         const equipamentos = operacao.equipamentos || [];
         
         equipamentos.forEach(equipamento => {
+          const colaborador = equipamento.colaborador_id ? colaboradoresMap[equipamento.colaborador_id] : undefined;
+          
           const item: RelatorioItem = {
             registro_id: operacao.id,
             operacao: operacao.op === 'NAVIO' && operacao.navios
@@ -784,6 +885,8 @@ const RelatorioTransporte = () => {
             categoria_nome: equipamento.categoria_nome || '',
             local: equipamento.local || '',
             motorista_operador: equipamento.motorista_operador || '',
+            colaborador_nome: colaborador?.nome_completo || '',
+            funcao_no_registro: equipamento.funcao_no_registro || colaborador?.funcao_atual || '',
             horas_trabalhadas: equipamento.horas_trabalhadas || 0,
             horas_operando: equipamento.horas_operando || 0
           };
@@ -809,7 +912,9 @@ const RelatorioTransporte = () => {
         'Tag Genérico',
         'Categoria',
         'Local',
-        'Motorista/Operador',
+        'Motorista/Operador (Original)',
+        'Colaborador (Nome Correto)',
+        'Função no Registro',
         'Horas Trabalhadas',
         'Horas Operando'
       ];
@@ -829,6 +934,8 @@ const RelatorioTransporte = () => {
         item.categoria_nome,
         item.local,
         item.motorista_operador,
+        item.colaborador_nome,
+        item.funcao_no_registro,
         item.horas_trabalhadas.toString(),
         item.horas_operando.toString()
       ]);
@@ -838,7 +945,6 @@ const RelatorioTransporte = () => {
         ...linhas.map(row => row.map(cell => `"${cell}"`).join(','))
       ].join('\n');
 
-      // Criar e baixar o arquivo
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
@@ -894,7 +1000,11 @@ const RelatorioTransporte = () => {
 
   const operacoesFiltradas = useMemo(() => operacoes.filter(op => {
     const matchHora = filtroAplicado.hora === 'Todos' || op.hora_inicial === filtroAplicado.hora;
-    const matchOp = !filtroAplicado.operador || op.equipamentos.some(e => e.motorista_operador?.toLowerCase().includes(filtroAplicado.operador.toLowerCase()));
+    const matchOp = !filtroAplicado.operador || op.equipamentos.some(e => {
+      const nomeColaborador = e.colaborador?.nome_completo || '';
+      return nomeColaborador.toLowerCase().includes(filtroAplicado.operador.toLowerCase()) ||
+             (e.motorista_operador || '').toLowerCase().includes(filtroAplicado.operador.toLowerCase());
+    });
     return matchHora && matchOp;
   }), [operacoes, filtroAplicado]);
 
@@ -913,7 +1023,6 @@ const RelatorioTransporte = () => {
 
   return (
     <>
-      {/* CORREÇÃO DE FUNDO BRANCO: Força o body a ter o fundo escuro e remove margens */}
       <style>{`body { margin: 0; background-color: #020617; }`}</style>
       
       <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-blue-500/30 overflow-visible">

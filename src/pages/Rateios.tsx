@@ -88,6 +88,7 @@ const centrosResultado = [
   'SESMT',
   'MS GRANEIS',
   'VALE - DRENAGEM SUPERFICIAL',
+  'VALE PA - CAMINHÃO PLATAFORMA',
   'HYDRO - IFPA ABAETETUBA',
   'OPERACIONAL',
   'COMPRAS',
@@ -96,6 +97,7 @@ const centrosResultado = [
   'DP/RH',
   'DIRETORIA',
   'HYDRO - PAVIMENTAÇÃO DO DIQUE DO DRS2',
+  'HYDRO - AGUA MINERAL',
   'TERMINAL I',
 ];
 

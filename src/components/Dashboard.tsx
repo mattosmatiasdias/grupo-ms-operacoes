@@ -4,137 +4,267 @@ import { useNotifications } from '@/hooks/useNotifications';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label'; // Certifique-se que este componente existe no seu projeto ou use um Input simples
+import { Input } from '@/components/ui/input';
 import { 
   Bell, FileText, Ship, LogOut, BarChart3, Menu, X, 
   Calendar, ClipboardCheck, Car, AlertTriangle, Building2, 
   Percent, Activity, Clock, ArrowUpRight, Users, 
-  ScrollText // NOVO: Ícone para Contratos
+  ScrollText, Loader2, Factory, Warehouse, Filter, Download 
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+
+// --- IMPORTAÇÕES DO RECHARTS ---
+import { 
+  PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as BarTooltip 
+} from 'recharts';
+
+// --- TIPOS ---
+interface Navio {
+  id: string;
+  nome_navio: string;
+  carga: string;
+}
+
+interface Equipamento {
+  id: string;
+  horas_trabalhadas: number;
+}
+
+interface OperacaoDashboard {
+  id: string;
+  op: string;
+  data: string;
+  hora_inicial: string;
+  hora_final: string;
+  carga: string | null;
+  navios: Navio | null;
+  equipamentos: Equipamento[];
+}
+
+// --- UTILITÁRIOS ---
+const formatarDataBR = (dataString: string): string => {
+  if (!dataString) return '';
+  const [ano, mes, dia] = dataString.split('-');
+  return `${dia}/${mes}/${ano}`;
+};
+
+const getOperacaoIcon = (op: string) => {
+  switch (op) {
+    case 'NAVIO': return Ship;
+    case 'ALBRAS': return Factory;
+    case 'SANTOS BRASIL': return Warehouse;
+    case 'HYDRO': return Building2;
+    default: return BarChart3;
+  }
+};
+
+// Cores para os gráficos
+const COLORS = {
+  HYDRO: '#3b82f6',     // blue-500
+  NAVIO: '#a855f7',     // purple-500
+  ALBRAS: '#f97316',    // orange-500
+  'SANTOS BRASIL': '#06b6d4', // cyan-500
+  OTHERS: '#64748b'     // slate-500
+};
 
 const Dashboard = () => {
   const { userProfile, signOut } = useAuth();
   const { hasUnread } = useNotifications();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  
+  // Filtros de Data
+  const [dataInicial, setDataInicial] = useState('');
+  const [dataFinal, setDataFinal] = useState('');
+  const [operacoes, setOperacoes] = useState<OperacaoDashboard[]>([]);
+
+  // Inicializar datas com o mês atual
+  useEffect(() => {
+    const hoje = new Date();
+    const primeiroDia = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    const formatoISO = (d: Date) => d.toISOString().split('T')[0];
+    
+    setDataInicial(formatoISO(primeiroDia));
+    setDataFinal(formatoISO(hoje));
+  }, []);
+
+  // Busca de dados
+  const fetchData = async () => {
+    if (!dataInicial || !dataFinal) return;
+    
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('registro_operacoes')
+        .select(`
+          *,
+          navios ( id, nome_navio, carga ),
+          equipamentos ( id, horas_trabalhadas )
+        `)
+        .gte('data', dataInicial)
+        .lte('data', dataFinal)
+        .order('data', { ascending: true });
+
+      if (error) throw error;
+      setOperacoes(data || []);
+    } catch (error: any) {
+      console.error("Erro ao carregar dados:", error);
+      toast({
+        title: "Erro",
+        description: "Falha ao carregar dados do dashboard.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Carregar dados ao mudar o filtro
+  useEffect(() => {
+    fetchData();
+  }, [dataInicial, dataFinal]);
+
+  // --- PROCESSAMENTO DE DADOS ---
+
+  // 1. Soma de Horas por Tipo (HYDRO, NAVIO, ALBRAS, SANTOS BRASIL)
+  const horasPorTipo = useMemo(() => {
+    const inicial = { HYDRO: 0, NAVIO: 0, ALBRAS: 0, 'SANTOS BRASIL': 0 };
+    
+    return operacoes.reduce((acc, op) => {
+      const totalHorasOp = op.equipamentos.reduce((sum, eq) => sum + (Number(eq.horas_trabalhadas) || 0), 0);
+      
+      if (acc.hasOwnProperty(op.op)) {
+        acc[op.op as keyof typeof acc] += totalHorasOp;
+      }
+      return acc;
+    }, inicial);
+  }, [operacoes]);
+
+  // 2. Dados para Gráfico de Pizza (Distribuição %)
+  const dadosGraficoPizza = useMemo(() => {
+    const totalGeral = Object.values(horasPorTipo).reduce((a, b) => a + b, 0);
+    
+    return Object.entries(horasPorTipo).map(([key, value]) => ({
+      name: key,
+      value: value,
+      percent: totalGeral > 0 ? ((value / totalGeral) * 100).toFixed(1) : 0,
+      color: COLORS[key as keyof typeof COLORS] || COLORS.OTHERS
+    })).filter(item => item.value > 0);
+  }, [horasPorTipo]);
+
+  // 3. Dados para Gráfico de Colunas (Navios)
+  // Agrupa por "Nome do Navio - Carga", soma horas e conta operações
+  const dadosGraficoNavios = useMemo(() => {
+    const mapaNavios = new Map<string, { horas: number; qtd: number }>();
+
+    operacoes.forEach(op => {
+      if (op.op === 'NAVIO' && op.navios) {
+        const label = `${op.navios.nome_navio} - ${op.navios.carga || op.carga || 'Sem Carga'}`;
+        const horasOp = op.equipamentos.reduce((sum, eq) => sum + (Number(eq.horas_trabalhadas) || 0), 0);
+        
+        const atual = mapaNavios.get(label) || { horas: 0, qtd: 0 };
+        mapaNavios.set(label, { 
+          horas: atual.horas + horasOp, 
+          qtd: atual.qtd + 1 
+        });
+      }
+    });
+
+    return Array.from(mapaNavios.entries()).map(([name, data]) => ({
+      name,
+      horas: Number(data.horas.toFixed(1)),
+      qtd: data.qtd
+    })).sort((a, b) => b.horas - a.horas); // Ordenar por mais horas
+  }, [operacoes]);
+
+  // 4. Quantidade de Navios Operados (Distintos)
+  const qtdNaviosDistintos = useMemo(() => {
+    const ids = new Set(operacoes.filter(op => op.op === 'NAVIO' && op.navio_id).map(op => op.navio_id));
+    return ids.size;
+  }, [operacoes]);
+
+  // 5. Dados para Gráfico de Barras (Tipo de Carga)
+  const dadosGraficoCargas = useMemo(() => {
+    const mapaCargas = new Map<string, number>();
+
+    operacoes.forEach(op => {
+      // Tenta pegar carga do navio primeiro, senão da operação
+      let cargaNome = 'Não Definida';
+      if (op.op === 'NAVIO' && op.navios?.carga) {
+        cargaNome = op.navios.carga;
+      } else if (op.carga) {
+        cargaNome = op.carga;
+      }
+
+      const atual = mapaCargas.get(cargaNome) || 0;
+      mapaCargas.set(cargaNome, atual + 1);
+    });
+
+    return Array.from(mapaCargas.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [operacoes]);
 
   const handleSignOut = async () => {
     await signOut();
   };
 
   const menuItems = [
-    {
-      icon: FileText,
-      label: 'Relatório Transporte',
-      path: '/relatorio-transporte',
-      color: 'text-blue-400',
-      bgHover: 'hover:bg-blue-500/10',
-    },
-    {
-      icon: Ship,
-      label: 'Navios',
-      path: '/navios',
-      color: 'text-purple-400',
-      bgHover: 'hover:bg-purple-500/10',
-    },
-    {
-      icon: Calendar,
-      label: 'Escalas',
-      path: '/escalas',
-      color: 'text-cyan-400',
-      bgHover: 'hover:bg-cyan-500/10',
-    },
-    {
-      icon: ClipboardCheck,
-      label: 'Vistorias',
-      path: '/vistorias',
-      color: 'text-teal-400',
-      bgHover: 'hover:bg-teal-500/10',
-    },
-    {
-      icon: Car,
-      label: 'Master Drive',
-      path: '/master-drive',
-      color: 'text-indigo-400',
-      bgHover: 'hover:bg-indigo-500/10',
-    },
-    {
-      icon: AlertTriangle,
-      label: 'Ocorrências',
-      path: '/ocorrencias',
-      color: 'text-orange-400',
-      bgHover: 'hover:bg-orange-500/10',
-    },
-    {
-      icon: Percent,
-      label: 'Rateios',
-      path: '/rateios',
-      color: 'text-amber-400',
-      bgHover: 'hover:bg-amber-500/10',
-    },
-    {
-      icon: Bell,
-      label: 'Notificações',
-      path: '/notificacao',
-      color: 'text-violet-400',
-      bgHover: 'hover:bg-violet-500/10',
-      hasNotification: hasUnread
-    },
-    {
-      icon: Building2,
-      label: 'RDO Santos Brasil',
-      path: '/santos-brasil',
-      color: 'text-red-400',
-      bgHover: 'hover:bg-red-500/10',
-    },
-    {
-      icon: BarChart3,
-      label: 'Visuais e Dashboard',
-      path: '/visuais',
-      color: 'text-emerald-400',
-      bgHover: 'hover:bg-emerald-500/10',
-    },
-    // NOVO MÓDULO HH - HOMEM HORA
-    {
-      icon: Users,
-      label: 'Homem Hora',
-      path: '/homem-hora',
-      color: 'text-pink-400',
-      bgHover: 'hover:bg-pink-500/10',
-    },
-    // NOVO MÓDULO - CONTRATOS BM
-    {
-      icon: ScrollText,
-      label: 'Contratos - BM',
-      path: '/contratos', // Esta rota levará para a lista de contratos
-      color: 'text-rose-400', // Cor rosa avermelhada para destacar
-      bgHover: 'hover:bg-rose-500/10',
+    { icon: FileText, label: 'Relatório Transporte', path: '/relatorio-transporte', color: 'text-blue-400', bgHover: 'hover:bg-blue-500/10' },
+    { icon: Ship, label: 'Navios', path: '/navios', color: 'text-purple-400', bgHover: 'hover:bg-purple-500/10' },
+    { icon: Calendar, label: 'Escalas', path: '/escalas', color: 'text-cyan-400', bgHover: 'hover:bg-cyan-500/10' },
+    { icon: ClipboardCheck, label: 'Vistorias', path: '/vistorias', color: 'text-teal-400', bgHover: 'hover:bg-teal-500/10' },
+    { icon: Car, label: 'Master Drive', path: '/master-drive', color: 'text-indigo-400', bgHover: 'hover:bg-indigo-500/10' },
+    { icon: AlertTriangle, label: 'Ocorrências', path: '/ocorrencias', color: 'text-orange-400', bgHover: 'hover:bg-orange-500/10' },
+    { icon: Percent, label: 'Rateios', path: '/rateios', color: 'text-amber-400', bgHover: 'hover:bg-amber-500/10' },
+    { icon: Bell, label: 'Notificações', path: '/notificacao', color: 'text-violet-400', bgHover: 'hover:bg-violet-500/10', hasNotification: hasUnread },
+    { icon: Building2, label: 'RDO Santos Brasil', path: '/santos-brasil', color: 'text-red-400', bgHover: 'hover:bg-red-500/10' },
+    { icon: BarChart3, label: 'Visuais e Dashboard', path: '/visuais', color: 'text-emerald-400', bgHover: 'hover:bg-emerald-500/10' },
+    { icon: Users, label: 'Homem Hora', path: '/homem-hora', color: 'text-pink-400', bgHover: 'hover:bg-pink-500/10' },
+    { icon: ScrollText, label: 'Contratos - BM', path: '/contratos', color: 'text-rose-400', bgHover: 'hover:bg-rose-500/10' }
+  ];
+
+  // Tooltip Customizado para Gráficos
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-slate-900 border border-slate-700 p-3 rounded-lg shadow-xl text-slate-200">
+          <p className="font-bold text-sm mb-1">{label}</p>
+          {payload.map((entry: any, index: number) => (
+            <p key={index} className="text-xs" style={{ color: entry.color }}>
+              {entry.name}: {entry.value}
+            </p>
+          ))}
+        </div>
+      );
     }
-  ];
+    return null;
+  };
 
-  // Dados de Estatísticas
-  const statsData = [
-    { label: 'Operações Hoje', value: '12', change: '+2', icon: FileText, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-    { label: 'Navios Ativos', value: '3', change: 'Estável', icon: Ship, color: 'text-purple-500', bg: 'bg-purple-500/10' },
-    { label: 'Rateios Pendentes', value: '8', change: '-1', icon: Percent, color: 'text-amber-500', bg: 'bg-amber-500/10' },
-  ];
-
-  // Dados de Atividade Recente com Mapeamento de Ícones para evitar erros JSX
-  const rawRecentActivity = [
-    { title: 'Novo relatório de transporte', sub: 'Operação HYDRO - Área 82', time: '2h', type: 'file' as const, colorClass: 'bg-blue-500/10 text-blue-400' },
-    { title: 'Rateio processado', sub: 'BM-001 - ALBRAS COQUE', time: '3h', type: 'percent' as const, colorClass: 'bg-amber-500/10 text-amber-400' },
-    { title: 'Navio atualizado', sub: 'LCA/UFO MAY2010 - 0.5%', time: '4h', type: 'ship' as const, colorClass: 'bg-purple-500/10 text-purple-400' },
-  ];
-
-  // Mapeamento seguro dos ícones
-  const recentActivity = rawRecentActivity.map(item => ({
-    ...item,
-    Icon: item.type === 'file' ? FileText : (item.type === 'ship' ? Ship : Percent)
-  }));
+  const CustomPieTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-slate-900 border border-slate-700 p-3 rounded-lg shadow-xl text-slate-200">
+          <p className="font-bold text-sm mb-1">{payload[0].name}</p>
+          <p className="text-xs text-slate-400">Horas: {payload[0].value}h</p>
+          <p className="text-xs text-slate-400">Percentual: {payload[0].payload.percent}%</p>
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-blue-500/30">
+      <style>{`body { margin: 0; background-color: #020617; }`}</style>
+      
       {/* Layout Desktop */}
       <div className="hidden lg:flex min-h-screen">
         {/* Sidebar Desktop */}
@@ -146,22 +276,15 @@ const Dashboard = () => {
               </div>
               <div>
                 <h1 className="text-lg font-bold text-white tracking-tight leading-none">Gestão Ops</h1>
-                <p className="text-xs text-slate-500 mt-1">VERSÃO: 26.0</p>
+                <p className="text-xs text-slate-500 mt-1">VERSÃO: 26.2</p>
               </div>
             </div>
           </div>
 
           <div className="flex-1 p-4 overflow-y-auto space-y-1">
-            <div className="px-2 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Módulos
-            </div>
+            <div className="px-2 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Módulos</div>
             {menuItems.map((item) => (
-              <Button
-                key={item.path}
-                onClick={() => navigate(item.path)}
-                variant="ghost"
-                className={`w-full justify-start h-10 px-3 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors relative group ${item.bgHover}`}
-              >
+              <Button key={item.path} onClick={() => navigate(item.path)} variant="ghost" className={`w-full justify-start h-10 px-3 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors relative group ${item.bgHover}`}>
                 <item.icon className={`mr-3 h-4 w-4 ${item.color}`} />
                 <span className="text-sm font-medium">{item.label}</span>
                 {item.hasNotification && (
@@ -184,142 +307,216 @@ const Dashboard = () => {
                 <span className="text-xs text-slate-500 truncate">Operador</span>
               </div>
             </div>
-            <Button
-              variant="outline"
-              onClick={handleSignOut}
-              className="w-full border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-white justify-start h-9 text-sm"
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              Sair do Sistema
+            <Button variant="outline" onClick={handleSignOut} className="w-full border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-white justify-start h-9 text-sm">
+              <LogOut className="mr-2 h-4 w-4" /> Sair do Sistema
             </Button>
           </div>
         </div>
 
         {/* Main Content Desktop */}
-        <div className="flex-1 flex flex-col min-w-0 bg-slate-950/50">
-          <div className="sticky top-0 z-20 bg-slate-950/80 backdrop-blur-md border-b border-slate-800/50 px-8 py-4 flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-bold text-white">Visão Geral</h2>
-              <p className="text-xs text-slate-400">Resumo das operações diárias</p>
-            </div>
-            <div className="flex items-center gap-3">
-               <div className="text-right hidden sm:block">
-                 <div className="text-sm font-medium text-white">{new Date().toLocaleDateString('pt-BR')}</div>
-                 <div className="text-xs text-slate-500">{new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}</div>
-               </div>
-               <Button variant="ghost" size="icon" className="relative text-slate-400 hover:text-white hover:bg-slate-800">
-                 <Bell className="h-5 w-5" />
-                 {hasUnread && (
-                   <span className="absolute top-2 right-2 h-2 w-2 bg-red-500 rounded-full border-2 border-slate-950"></span>
-                 )}
-               </Button>
+        <div className="flex-1 flex flex-col min-w-0 bg-slate-950/50 overflow-y-auto">
+          <div className="sticky top-0 z-20 bg-slate-950/80 backdrop-blur-md border-b border-slate-800/50 px-8 py-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-bold text-white">Dashboard Analítico</h2>
+                <p className="text-xs text-slate-400">Visão gerencial de operações e produtividade</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="text-right hidden sm:block">
+                  <div className="text-sm font-medium text-white">{new Date().toLocaleDateString('pt-BR')}</div>
+                </div>
+                <Button variant="ghost" size="icon" className="relative text-slate-400 hover:text-white hover:bg-slate-800">
+                  <Bell className="h-5 w-5" />
+                  {hasUnread && <span className="absolute top-2 right-2 h-2 w-2 bg-red-500 rounded-full border-2 border-slate-950"></span>}
+                </Button>
+              </div>
             </div>
           </div>
 
-          <main className="flex-1 overflow-y-auto p-6 space-y-6">
-            <div className="rounded-xl bg-gradient-to-r from-blue-900/40 to-slate-900/40 border border-blue-800/30 p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div>
-                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                  Bem-vindo, <span className="text-blue-400">{userProfile?.full_name?.split(' ')[0] || 'Usuário'}</span>
-                </h3>
-                <p className="text-sm text-slate-400 mt-1">Sistema de gestão de operações portuárias integradas.</p>
-              </div>
-              <div className="flex gap-2">
-                 <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-600/20 h-9">
-                   <Activity className="mr-2 h-4 w-4" /> Status Operacional
-                 </Button>
-              </div>
+          <main className="flex-1 p-6 space-y-6">
+            {/* Filtros */}
+            <Card className="bg-slate-900/40 border-slate-800">
+              <CardContent className="pt-6">
+                <div className="flex flex-wrap items-end gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs text-slate-400 font-semibold uppercase">Data Inicial</Label>
+                    <Input type="date" value={dataInicial} onChange={(e) => setDataInicial(e.target.value)} className="bg-slate-950 border-slate-700 text-white w-40" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-slate-400 font-semibold uppercase">Data Final</Label>
+                    <Input type="date" value={dataFinal} onChange={(e) => setDataFinal(e.target.value)} className="bg-slate-950 border-slate-700 text-white w-40" />
+                  </div>
+                  <Button onClick={fetchData} disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white h-10">
+                    {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Filter className="h-4 w-4 mr-2" />}
+                    Filtrar Dados
+                  </Button>
+                  <div className="ml-auto flex items-center gap-2 text-xs text-slate-500">
+                    <span>Período:</span>
+                    <Badge variant="outline" className="border-slate-700 text-slate-300">
+                      {formatarDataBR(dataInicial)} a {formatarDataBR(dataFinal)}
+                    </Badge>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Cards de Soma de Horas */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <Card className="bg-slate-900 border border-slate-800 p-4 flex flex-col justify-between hover:border-blue-500/50 transition-colors">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-500 uppercase">Hydro</p>
+                    <h3 className="text-2xl font-bold text-blue-500 mt-1">{horasPorTipo.HYDRO.toFixed(1)}h</h3>
+                  </div>
+                  <div className="p-2 bg-blue-500/10 rounded-lg text-blue-500">
+                    <Building2 className="w-5 h-5" />
+                  </div>
+                </div>
+              </Card>
+
+              <Card className="bg-slate-900 border border-slate-800 p-4 flex flex-col justify-between hover:border-purple-500/50 transition-colors">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-500 uppercase">Navios</p>
+                    <h3 className="text-2xl font-bold text-purple-500 mt-1">{horasPorTipo.NAVIO.toFixed(1)}h</h3>
+                  </div>
+                  <div className="p-2 bg-purple-500/10 rounded-lg text-purple-500">
+                    <Ship className="w-5 h-5" />
+                  </div>
+                </div>
+              </Card>
+
+              <Card className="bg-slate-900 border border-slate-800 p-4 flex flex-col justify-between hover:border-orange-500/50 transition-colors">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-500 uppercase">Albras</p>
+                    <h3 className="text-2xl font-bold text-orange-500 mt-1">{horasPorTipo.ALBRAS.toFixed(1)}h</h3>
+                  </div>
+                  <div className="p-2 bg-orange-500/10 rounded-lg text-orange-500">
+                    <Factory className="w-5 h-5" />
+                  </div>
+                </div>
+              </Card>
+
+              <Card className="bg-slate-900 border border-slate-800 p-4 flex flex-col justify-between hover:border-cyan-500/50 transition-colors">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-500 uppercase">Santos Brasil</p>
+                    <h3 className="text-2xl font-bold text-cyan-500 mt-1">{horasPorTipo['SANTOS BRASIL'].toFixed(1)}h</h3>
+                  </div>
+                  <div className="p-2 bg-cyan-500/10 rounded-lg text-cyan-500">
+                    <Warehouse className="w-5 h-5" />
+                  </div>
+                </div>
+              </Card>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {statsData.map((stat, idx) => (
-                <Card key={idx} className="bg-slate-900/40 border-slate-800 p-4 flex items-center justify-between hover:border-slate-700 transition-colors">
-                  <div className="flex items-center gap-4">
-                    <div className={`p-2.5 rounded-lg ${stat.bg} ${stat.color}`}>
-                      <stat.icon className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{stat.label}</p>
-                      <p className="text-xl font-bold text-white mt-0.5">{stat.value}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${stat.change.startsWith('+') ? 'bg-green-500/10 text-green-400' : 'bg-slate-800 text-slate-400'}`}>
-                      {stat.change}
-                    </span>
-                  </div>
-                </Card>
-              ))}
-            </div>
-
+            {/* Gráficos Row 1: Pizza + KPI Navios */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2 space-y-6">
-                <Card className="bg-slate-900/40 border-slate-800 shadow-sm">
-                  <CardHeader className="pb-3 border-b border-slate-800/50 px-6">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-slate-100 text-base font-medium">Atividade Recente</CardTitle>
-                      <Button variant="ghost" size="sm" className="text-xs text-blue-400 hover:text-blue-300 h-auto p-0">Ver tudo</Button>
-                    </div>
+              <div className="lg:col-span-2">
+                <Card className="bg-slate-900/40 border-slate-800 h-full">
+                  <CardHeader>
+                    <CardTitle className="text-sm font-medium text-slate-200">Distribuição de Horas por Local (%)</CardTitle>
                   </CardHeader>
-                  <CardContent className="p-4 space-y-1">
-                    {recentActivity.map((activity, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-3 rounded-lg hover:bg-slate-800/40 transition-colors group cursor-default">
-                        <div className="flex items-center gap-4 overflow-hidden">
-                          <div className={`p-2 rounded-md ${activity.colorClass}`}>
-                             <activity.Icon className="h-4 w-4"/>
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-slate-200 group-hover:text-white truncate">{activity.title}</p>
-                            <p className="text-xs text-slate-500 truncate">{activity.sub}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3 flex-shrink-0">
-                           <Badge variant="outline" className="bg-slate-900/50 border-slate-700 text-slate-400 text-xs py-0 h-5 px-2">
-                             {activity.time}
-                           </Badge>
-                           <ArrowUpRight className="h-4 w-4 text-slate-600 group-hover:text-slate-400 transition-colors"/>
-                        </div>
-                      </div>
-                    ))}
+                  <CardContent className="pt-0">
+                    <div className="h-64 w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={dadosGraficoPizza}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            label={(entry) => `${entry.percent}%`}
+                            outerRadius={80}
+                            fill="#8884d8"
+                            dataKey="value"
+                          >
+                            {dadosGraficoPizza.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip content={<CustomPieTooltip />} />
+                          <Legend formatter={(value) => <span className="text-slate-300 text-xs">{value}</span>} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
                   </CardContent>
                 </Card>
               </div>
+              
+              <div className="flex flex-col gap-6">
+                <Card className="bg-gradient-to-br from-indigo-900/30 to-slate-900/40 border border-indigo-800/30 p-6 flex-1 flex flex-col items-center justify-center text-center">
+                  <div className="w-16 h-16 bg-indigo-500/20 rounded-full flex items-center justify-center mb-4 text-indigo-400">
+                    <Ship className="w-8 h-8" />
+                  </div>
+                  <h4 className="text-slate-400 text-xs uppercase font-bold tracking-wider mb-1">Navios Operados</h4>
+                  <p className="text-4xl font-bold text-white">{loading ? '...' : qtdNaviosDistintos}</p>
+                  <p className="text-xs text-slate-500 mt-2">Navios distintos no período</p>
+                </Card>
 
-              <div className="space-y-6">
-                 <Card className="bg-gradient-to-br from-indigo-900/20 to-slate-900/40 border-indigo-800/30 p-5 text-center">
-                    <div className="w-12 h-12 bg-indigo-500/20 rounded-full flex items-center justify-center mx-auto mb-3 text-indigo-400">
-                       <BarChart3 className="w-6 h-6" />
-                    </div>
-                    <h4 className="text-white font-medium">Visuais Avançados</h4>
-                    <p className="text-xs text-slate-400 mt-2 mb-4 leading-relaxed">
-                      Acesse gráficos detalhados de produtividade e rateios por centro de custo.
-                    </p>
-                    <Button onClick={() => navigate('/visuais')} variant="outline" className="w-full border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/10 text-xs h-8">
-                       Abrir Dashboard
-                    </Button>
-                 </Card>
-
-                 <Card className="bg-slate-900/40 border-slate-800 p-0 overflow-hidden">
-                    <div className="bg-slate-800/50 px-4 py-2 border-b border-slate-800">
-                        <h4 className="text-xs font-semibold text-slate-300 uppercase">Acesso Rápido</h4>
-                    </div>
-                    <div className="p-2">
-                        <Button onClick={() => navigate('/novo-lancamento')} variant="ghost" className="w-full justify-start h-9 px-3 text-slate-400 hover:text-white hover:bg-slate-800">
-                           <FileText className="mr-2 h-3.5 w-3.5 text-blue-400" /> Novo Relatório
-                        </Button>
-                        <Button onClick={() => navigate('/ocorrencias')} variant="ghost" className="w-full justify-start h-9 px-3 text-slate-400 hover:text-white hover:bg-slate-800">
-                           <AlertTriangle className="mr-2 h-3.5 w-3.5 text-orange-400" /> Registrar Ocorrência
-                        </Button>
-                    </div>
-                 </Card>
+                <Card className="bg-slate-900/40 border-slate-800 p-4">
+                   <h4 className="text-xs font-semibold text-slate-300 uppercase mb-3">Acesso Rápido</h4>
+                   <div className="space-y-2">
+                      <Button onClick={() => navigate('/novo-lancamento')} variant="ghost" className="w-full justify-start h-8 px-2 text-slate-400 hover:text-white hover:bg-slate-800 text-xs">
+                         <FileText className="mr-2 h-3.5 w-3.5 text-blue-400" /> Novo Relatório
+                      </Button>
+                      <Button onClick={() => navigate('/relatorio-transporte')} variant="ghost" className="w-full justify-start h-8 px-2 text-slate-400 hover:text-white hover:bg-slate-800 text-xs">
+                         <Download className="mr-2 h-3.5 w-3.5 text-emerald-400" /> Baixar CSV
+                      </Button>
+                   </div>
+                </Card>
               </div>
             </div>
+
+            {/* Gráfico de Colunas: Navios */}
+            <Card className="bg-slate-900/40 border-slate-800">
+              <CardHeader>
+                <CardTitle className="text-sm font-medium text-slate-200">Performance por Navio (Horas vs Operações)</CardTitle>
+                <CardDescription className="text-xs text-slate-500">Soma de horas trabalhadas por navio e carga no período selecionado.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-80 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={dadosGraficoNavios} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
+                      <XAxis type="number" stroke="#94a3b8" fontSize={12} tickFormatter={(value) => `${value}h`} />
+                      <YAxis dataKey="name" type="category" width={250} stroke="#94a3b8" fontSize={11} tick={{fill: '#cbd5e1'}} />
+                      <Tooltip content={<CustomTooltip />} cursor={{fill: 'rgba(255,255,255,0.05)'}} />
+                      <Bar dataKey="horas" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Gráfico de Barras: Tipo de Carga */}
+            <Card className="bg-slate-900/40 border-slate-800">
+              <CardHeader>
+                <CardTitle className="text-sm font-medium text-slate-200">Quantidade de Operações por Tipo de Carga</CardTitle>
+                <CardDescription className="text-xs text-slate-500">Volume de operações agrupado pelo tipo de carga manuseada.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-64 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={dadosGraficoCargas}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                      <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} tick={{fill: '#cbd5e1'}} angle={-45} textAnchor="end" height={60} />
+                      <YAxis stroke="#94a3b8" fontSize={12} allowDecimals={false} />
+                      <Tooltip content={<CustomTooltip />} cursor={{fill: 'rgba(255,255,255,0.05)'}} />
+                      <Bar dataKey="count" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
           </main>
         </div>
       </div>
 
-      {/* Mobile Layout */}
-      <div className="lg:hidden flex flex-col min-h-screen bg-slate-950">
+      {/* Layout Mobile (Simplificado para foco nos gráficos) */}
+      <div className="lg:hidden flex flex-col min-h-screen bg-slate-950 pb-20">
         <div className="bg-slate-900 border-b border-slate-800 p-4 sticky top-0 z-30 flex items-center justify-between shadow-md">
           <div className="flex items-center gap-3">
             <Button onClick={() => setSidebarOpen(true)} variant="ghost" size="icon" className="text-white hover:bg-slate-800">
@@ -327,96 +524,60 @@ const Dashboard = () => {
             </Button>
             <div className="flex items-center gap-2">
                <BarChart3 className="text-blue-500 w-5 h-5" />
-               <h1 className="text-lg font-bold text-white leading-tight">Gestão Ops</h1>
+               <h1 className="text-lg font-bold text-white leading-tight">Dashboard</h1>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="relative text-slate-400 hover:text-white">
-              <Bell className="h-5 w-5" />
-              {hasUnread && (
-                <span className="absolute top-2 right-2 h-2 w-2 bg-red-500 rounded-full border border-slate-900"></span>
-              )}
-            </Button>
-            <Button onClick={handleSignOut} variant="ghost" size="icon" className="text-slate-400 hover:text-red-400 hover:bg-red-500/10">
-              <LogOut className="h-5 w-5" />
-            </Button>
           </div>
         </div>
 
-        {sidebarOpen && (
-          <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="flex justify-between items-center p-4 border-b border-slate-800">
-              <h2 className="text-white font-bold text-lg">Menu de Navegação</h2>
-              <Button onClick={() => setSidebarOpen(false)} variant="ghost" size="icon" className="text-white hover:bg-slate-800">
-                <X className="w-6 h-6" />
-              </Button>
-            </div>
-            <div className="p-4 space-y-2 overflow-y-auto h-[calc(100%-80px)]">
-              {menuItems.map((item) => (
-                <Button
-                  key={item.path}
-                  onClick={() => {
-                    navigate(item.path);
-                    setSidebarOpen(false);
-                  }}
-                  className={`w-full justify-start h-12 px-4 ${item.bgHover} bg-slate-900 text-slate-300 hover:text-white border border-slate-800 rounded-lg transition-all`}
-                >
-                  <item.icon className={`mr-3 h-5 w-5 ${item.color}`} />
-                  <span className="text-sm font-medium">{item.label}</span>
-                  {item.hasNotification && (
-                    <span className="ml-auto h-2 w-2 rounded-full bg-red-500"></span>
-                  )}
-                </Button>
-              ))}
-            </div>
-          </div>
-        )}
+        <div className="p-4 space-y-6">
+          <Card className="bg-slate-900 border border-slate-800">
+            <CardContent className="pt-4 space-y-3">
+               <div>
+                  <Label className="text-xs text-slate-400">Início</Label>
+                  <Input type="date" value={dataInicial} onChange={(e) => setDataInicial(e.target.value)} className="bg-slate-950 border-slate-700 text-white mt-1" />
+               </div>
+               <div>
+                  <Label className="text-xs text-slate-400">Fim</Label>
+                  <Input type="date" value={dataFinal} onChange={(e) => setDataFinal(e.target.value)} className="bg-slate-950 border-slate-700 text-white mt-1" />
+               </div>
+               <Button onClick={fetchData} className="w-full bg-blue-600 hover:bg-blue-700">Filtrar</Button>
+            </CardContent>
+          </Card>
 
-        <div className="p-4 space-y-6 pb-20">
-            <div className="rounded-xl bg-slate-900 border border-slate-800 p-4 flex items-center justify-between">
-              <div>
-                <p className="text-xs text-slate-500 uppercase font-bold mb-1">Total Horas (Hoje)</p>
-                <p className="text-2xl font-bold text-white">124.5h</p>
-              </div>
-              <div className="h-10 w-10 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500">
-                <Clock className="w-5 h-5" />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              {menuItems.slice(0, 6).map((item) => (
-                 <Card key={item.path} className="bg-slate-900/40 border-slate-800 hover:border-slate-600 transition-colors cursor-pointer group" onClick={() => navigate(item.path)}>
-                    <CardContent className="p-4 flex flex-col items-center justify-center text-center gap-2">
-                       <div className={`p-2 rounded-lg ${item.bgHover} ${item.color} group-hover:scale-110 transition-transform`}>
-                         <item.icon className="w-6 h-6" />
-                       </div>
-                       <span className="text-xs font-semibold text-slate-300 group-hover:text-white">{item.label}</span>
-                    </CardContent>
-                 </Card>
-              ))}
-            </div>
-
-            <Card className="bg-slate-900/40 border-slate-800">
-               <CardHeader className="px-4 py-3 border-b border-slate-800/50">
-                  <CardTitle className="text-sm font-medium text-slate-300">Recentes</CardTitle>
-               </CardHeader>
-               <CardContent className="p-0">
-                  {recentActivity.map((activity, idx) => (
-                     <div key={idx} className="p-3 border-b border-slate-800/50 last:border-0 flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                           <div className={`p-1.5 rounded ${activity.colorClass}`}>
-                              <activity.Icon className="h-3.5 w-3.5"/>
-                           </div>
-                           <div className="flex flex-col">
-                              <span className="text-xs font-medium text-white">{activity.title}</span>
-                              <span className="text-[10px] text-slate-500">{activity.sub}</span>
-                           </div>
-                        </div>
-                        <span className="text-[10px] text-slate-500 bg-slate-900 px-1.5 py-0.5 rounded">{activity.time}</span>
-                     </div>
-                  ))}
-               </CardContent>
+          <div className="grid grid-cols-2 gap-3">
+            <Card className="bg-slate-900 p-3 border border-blue-900/50">
+               <p className="text-[10px] text-blue-400 uppercase font-bold">Hydro</p>
+               <p className="text-xl font-bold text-white">{horasPorTipo.HYDRO.toFixed(1)}h</p>
             </Card>
+            <Card className="bg-slate-900 p-3 border border-purple-900/50">
+               <p className="text-[10px] text-purple-400 uppercase font-bold">Navios</p>
+               <p className="text-xl font-bold text-white">{horasPorTipo.NAVIO.toFixed(1)}h</p>
+            </Card>
+            <Card className="bg-slate-900 p-3 border border-orange-900/50">
+               <p className="text-[10px] text-orange-400 uppercase font-bold">Albras</p>
+               <p className="text-xl font-bold text-white">{horasPorTipo.ALBRAS.toFixed(1)}h</p>
+            </Card>
+            <Card className="bg-slate-900 p-3 border border-cyan-900/50">
+               <p className="text-[10px] text-cyan-400 uppercase font-bold">Santos BR</p>
+               <p className="text-xl font-bold text-white">{horasPorTipo['SANTOS BRASIL'].toFixed(1)}h</p>
+            </Card>
+          </div>
+
+          <Card className="bg-slate-900 border border-slate-800 p-4">
+             <h3 className="text-sm font-bold text-white mb-4">Navios Operados: {qtdNaviosDistintos}</h3>
+             <div className="h-48">
+                <ResponsiveContainer width="100%" height="100%">
+                   <PieChart>
+                     <Pie data={dadosGraficoPizza} innerRadius={40} outerRadius={60} paddingAngle={5} dataKey="value">
+                        {dadosGraficoPizza.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                     </Pie>
+                     <Tooltip />
+                   </PieChart>
+                </ResponsiveContainer>
+             </div>
+          </Card>
         </div>
       </div>
     </div>
