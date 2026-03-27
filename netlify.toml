@@ -1,5 +1,5 @@
 [build]
-  command = "npm install --legacy-peer-deps --include-workspace-root && npx --yes vite build"
+  command = "npm install --legacy-peer-deps --include=dev && npm run build"
   publish = "dist"
 
 [build.environment]
