@@ -4,13 +4,14 @@ import { useNotifications } from '@/hooks/useNotifications';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Label } from '@/components/ui/label'; // Certifique-se que este componente existe no seu projeto ou use um Input simples
+import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { 
   Bell, FileText, Ship, LogOut, BarChart3, Menu, X, 
   Calendar, ClipboardCheck, Car, AlertTriangle, Building2, 
   Percent, Activity, Clock, ArrowUpRight, Users, 
-  ScrollText, Loader2, Factory, Warehouse, Filter, Download 
+  ScrollText, Loader2, Factory, Warehouse, Filter, Download,
+  Database // ADICIONADO
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect, useMemo } from 'react';
@@ -218,6 +219,9 @@ const Dashboard = () => {
 
   const menuItems = [
     { icon: FileText, label: 'Relatório Transporte', path: '/relatorio-transporte', color: 'text-blue-400', bgHover: 'hover:bg-blue-500/10' },
+    // --- NOVO BOTÃO AQUI ---
+    { icon: Database, label: 'Relatórios Avançados', path: '/relatorio-dinamico', color: 'text-teal-400', bgHover: 'hover:bg-teal-500/10' },
+    // ------------------------
     { icon: Ship, label: 'Navios', path: '/navios', color: 'text-purple-400', bgHover: 'hover:bg-purple-500/10' },
     { icon: Calendar, label: 'Escalas', path: '/escalas', color: 'text-cyan-400', bgHover: 'hover:bg-cyan-500/10' },
     { icon: ClipboardCheck, label: 'Vistorias', path: '/vistorias', color: 'text-teal-400', bgHover: 'hover:bg-teal-500/10' },
@@ -276,7 +280,7 @@ const Dashboard = () => {
               </div>
               <div>
                 <h1 className="text-lg font-bold text-white tracking-tight leading-none">Gestão Ops</h1>
-                <p className="text-xs text-slate-500 mt-1">VERSÃO: 26.2</p>
+                <p className="text-xs text-slate-500 mt-1">VERSÃO: 31.01.02/p>
               </div>
             </div>
           </div>

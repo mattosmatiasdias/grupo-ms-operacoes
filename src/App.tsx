@@ -1,4 +1,4 @@
-// src/App.tsx (ATUALIZADO - removidas todas as rotas de escalas)
+// src/App.tsx (ATUALIZADO - Adicionada rota Master Drive)
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -16,6 +16,7 @@ import Visuais from "./pages/Visuais";
 
 // Páginas do sistema de 'Relatório de Transporte'
 import RelatorioTransporte from "./pages/RelatorioTransporte";
+import RelatorioDinamico from "./pages/RelatorioDinamico";
 import NovoLancamento from "./pages/NovoLancamento";
 import FormularioOperacao from "./pages/FormularioOperacao";
 import EditarOperacao from "./pages/EditarOperacao";
@@ -36,15 +37,18 @@ import Vistorias from "./pages/Vistorias";
 // Página do módulo de Rateios
 import Rateios from "./pages/Rateios";
 
-// NOVO MÓDULO - Homem Hora
+// Módulo Homem Hora
 import HomemHora from "./pages/HomemHora";
 
-// NOVO MÓDULO - Contratos
+// Módulo Contratos
 import Contratos from "./pages/Contratos";
 import ContractDetail from "./pages/ContractDetail";
 
 // Página de Boletim de Medição (BM)
 import BMForm from "./pages/BMForm";
+
+// NOVO MÓDULO - Master Drive (Treinamentos e Desvios)
+import MasterDrive from "./pages/MasterDrive";
 
 const queryClient = new QueryClient();
 
@@ -82,6 +86,13 @@ const App = () => (
             <Route path="/relatorio-transporte" element={
               <ProtectedRoute>
                 <RelatorioTransporte />
+              </ProtectedRoute>
+            } />
+
+            {/* Relatórios Avançados (SQL) */}
+            <Route path="/relatorio-dinamico" element={
+              <ProtectedRoute>
+                <RelatorioDinamico />
               </ProtectedRoute>
             } />
 
@@ -155,14 +166,14 @@ const App = () => (
               </ProtectedRoute>
             } />
 
-            {/* NOVA ROTA - Homem Hora */}
+            {/* Rota do módulo Homem Hora */}
             <Route path="/homem-hora" element={
               <ProtectedRoute>
                 <HomemHora />
               </ProtectedRoute>
             } />
 
-            {/* NOVAS ROTAS - Contratos BM */}
+            {/* Rotas do módulo Contratos BM */}
             <Route path="/contratos" element={
               <ProtectedRoute>
                 <Contratos />
@@ -175,7 +186,7 @@ const App = () => (
               </ProtectedRoute>
             } />
 
-            {/* ROTAS DO BOLETIM DE MEDIÇÃO */}
+            {/* Rotas do Boletim de Medição */}
             <Route path="/contrato/:id/bm/novo" element={
               <ProtectedRoute>
                 <BMForm />
@@ -185,6 +196,13 @@ const App = () => (
             <Route path="/contrato/:id/bm/:bmId" element={
               <ProtectedRoute>
                 <BMForm />
+              </ProtectedRoute>
+            } />
+
+            {/* NOVA ROTA - Master Drive (Treinamentos e Desvios) */}
+            <Route path="/master-drive" element={
+              <ProtectedRoute>
+                <MasterDrive />
               </ProtectedRoute>
             } />
 

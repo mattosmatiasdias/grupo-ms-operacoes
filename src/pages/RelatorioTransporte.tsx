@@ -14,12 +14,14 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import * as XLSX from 'xlsx';
 
 // --- 1. INTERFACES E TIPOS ---
 interface Navio {
   id: string;
   nome_navio: string;
   carga: string;
+  quantidade_prevista?: number;
 }
 
 interface Equipamento {
@@ -89,6 +91,15 @@ interface RelatorioItem {
   horas_operando: number;
 }
 
+interface NavioRelatorio {
+  navio_carga: string;
+  horas: number;
+  apontamentos: number;
+  tons_produzidos: number;
+  quantidade_total: number;
+  percentual_cumprido: number;
+}
+
 // --- 2. FUNÇÕES DE UTILIDADE ---
 const corrigirFusoHorarioData = (dataString: string): string => {
   try {
@@ -117,6 +128,18 @@ const formatarDataBR = (dataString: string): string => {
 const formatarHoras = (totalHoras: number): string => {
   if (totalHoras === 0) return '0h';
   return `${totalHoras.toFixed(1)}h`;
+};
+
+const formatarNumeroBR = (valor: number, casasDecimais: number = 2): string => {
+  if (isNaN(valor) || valor === null) return '0,00';
+  // Formatar com as casas decimais especificadas
+  const valorFormatado = valor.toFixed(casasDecimais);
+  // Separar parte inteira e decimal
+  const [parteInteira, parteDecimal] = valorFormatado.split('.');
+  // Adicionar separador de milhar na parte inteira
+  const parteInteiraFormatada = parteInteira.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  // Retornar no formato brasileiro
+  return `${parteInteiraFormatada},${parteDecimal}`;
 };
 
 const getOperacaoIcon = (op: string): LucideIcon => {
@@ -378,7 +401,7 @@ const ResumoCards: React.FC<ResumoCardsProps> = ({ operacoesFiltradas, setOperac
   );
 };
 
-// TABELA DE OPERAÇÃO (Principal) - CORRIGIDA (Bloqueio Triplo)
+// TABELA DE OPERAÇÃO (Principal)
 const TabelaOperacao: React.FC<{ 
   operacao: OperacaoCompleta | null; 
   formatarDataBR: (d: string) => string; 
@@ -471,7 +494,6 @@ const TabelaOperacao: React.FC<{
                     {eqs.length} itens • {formatarHoras(eqs.reduce((a,b) => a + (Number(b.horas_trabalhadas)||0), 0))}
                   </span>
                 </div>
-                {/* Wrapper com fundo explícito e Table com fundo explícito */}
                 <div className="rounded-lg border border-slate-800 overflow-hidden bg-slate-900">
                   <Table className="bg-slate-900">
                     <TableHeader className="bg-slate-950">
@@ -513,7 +535,7 @@ const TabelaOperacao: React.FC<{
   );
 };
 
-// TABELA DE AJUDANTES E AUSÊNCIAS (Lado Direito) - CORRIGIDA (Bloqueio Triplo)
+// TABELA DE AJUDANTES E AUSÊNCIAS (Lado Direito)
 const PainelLateral: React.FC<{ ajudantes: Ajudante[], ausencias: Ausencia[] }> = ({ ajudantes, ausencias }) => {
   return (
     <div className="flex flex-col gap-3 h-full">
@@ -523,7 +545,6 @@ const PainelLateral: React.FC<{ ajudantes: Ajudante[], ausencias: Ausencia[] }> 
           <CardTitle className="text-sm font-semibold text-slate-200">Ajudantes</CardTitle>
           <Badge variant="secondary" className="h-4 px-1.5 text-[10px] bg-blue-500/10 text-blue-400 border-blue-500/20">{ajudantes.length}</Badge>
         </CardHeader>
-        {/* Wrapper e Table com fundo explícito */}
         <div className="flex-1 p-0 bg-slate-900">
           <Table className="bg-slate-900">
             <TableHeader className="bg-slate-950">
@@ -568,7 +589,6 @@ const PainelLateral: React.FC<{ ajudantes: Ajudante[], ausencias: Ausencia[] }> 
           <CardTitle className="text-sm font-semibold text-slate-200">Ausências</CardTitle>
           <Badge variant="secondary" className="h-4 px-1.5 text-[10px] bg-red-500/10 text-red-400 border-red-500/20">{ausencias.length}</Badge>
         </CardHeader>
-        {/* Wrapper e Table com fundo explícito */}
         <div className="flex-1 p-0 bg-slate-900">
            <Table className="bg-slate-900">
             <TableHeader className="bg-slate-950">
@@ -707,25 +727,26 @@ const RelatorioTransporte = () => {
 
   useEffect(() => { if (filtroAplicado.data) fetchOperacoes(); }, [filtroAplicado, fetchOperacoes]);
 
-  // Função corrigida para gerar relatório CSV completo
-  const gerarRelatorioCSV = async (dataInicial: string, dataFinal: string) => {
+  // Função para gerar relatório Excel com duas abas (sem linha de total)
+  const gerarRelatorioExcel = async (dataInicial: string, dataFinal: string) => {
     setGerandoRelatorio(true);
     
     try {
-      // Corrigir fusos horários das datas
       const dataInicialCorrigida = corrigirFusoHorarioData(dataInicial);
       const dataFinalCorrigida = corrigirFusoHorarioData(dataFinal);
 
       console.log('Buscando dados para o relatório:', dataInicialCorrigida, 'até', dataFinalCorrigida);
 
-      // Buscar dados completos com relacionamentos
+      // Buscar dados de operações com equipamentos
       const { data: relatorioData, error } = await supabase
         .from('registro_operacoes')
         .select(`
           *,
           navios (
+            id,
             nome_navio,
-            carga
+            carga,
+            quantidade_prevista
           ),
           equipamentos (
             id,
@@ -758,7 +779,7 @@ const RelatorioTransporte = () => {
         return;
       }
 
-      // Processar os dados conforme o SQL fornecido
+      // ==================== ABA 1: DADOS DETALHADOS ====================
       const dadosProcessados: RelatorioItem[] = [];
 
       relatorioData.forEach(operacao => {
@@ -792,10 +813,102 @@ const RelatorioTransporte = () => {
         });
       });
 
-      console.log('Dados processados:', dadosProcessados.length, 'registros');
+      // ==================== ABA 2: PRODUÇÃO POR NAVIO ====================
+      
+      // Buscar registros de produção no período
+      const { data: producaoData, error: producaoError } = await supabase
+        .from('registros_producao')
+        .select(`
+          *,
+          navios (
+            id,
+            nome_navio,
+            carga,
+            quantidade_prevista
+          )
+        `)
+        .gte('data', dataInicialCorrigida)
+        .lte('data', dataFinalCorrigida);
 
-      // Gerar CSV com cabeçalho completo
-      const cabecalho = [
+      if (producaoError) {
+        console.error('Erro ao buscar produção:', producaoError);
+      }
+
+      // Processar equipamentos por navio (horas e apontamentos)
+      const equipamentosPorNavio: Record<string, { horas: number; apontamentos: number }> = {};
+      
+      relatorioData.forEach(operacao => {
+        if (operacao.navio_id) {
+          if (!equipamentosPorNavio[operacao.navio_id]) {
+            equipamentosPorNavio[operacao.navio_id] = { horas: 0, apontamentos: 0 };
+          }
+          
+          const equipamentos = operacao.equipamentos || [];
+          equipamentos.forEach(equip => {
+            equipamentosPorNavio[operacao.navio_id].horas += Number(equip.horas_trabalhadas) || 0;
+            equipamentosPorNavio[operacao.navio_id].apontamentos += 1;
+          });
+        }
+      });
+
+      // Processar produção por navio
+      const producaoPorNavio: Record<string, { 
+        tons_produzidos: number; 
+        quantidade_prevista: number; 
+        nome_navio: string; 
+        carga: string 
+      }> = {};
+      
+      if (producaoData) {
+        producaoData.forEach(reg => {
+          if (reg.navio_id) {
+            if (!producaoPorNavio[reg.navio_id]) {
+              producaoPorNavio[reg.navio_id] = {
+                tons_produzidos: 0,
+                quantidade_prevista: reg.navios?.quantidade_prevista || 0,
+                nome_navio: reg.navios?.nome_navio || 'NÃO INFORMADO',
+                carga: reg.navios?.carga || 'NÃO INFORMADO'
+              };
+            }
+            producaoPorNavio[reg.navio_id].tons_produzidos += Number(reg.tons_total) || 0;
+          }
+        });
+      }
+
+      // Construir tabela de navios (SEM linha de total)
+      const naviosArray: NavioRelatorio[] = [];
+
+      Object.entries(equipamentosPorNavio).forEach(([navioId, dados]) => {
+        const producao = producaoPorNavio[navioId] || { 
+          tons_produzidos: 0, 
+          quantidade_prevista: 0, 
+          nome_navio: 'NÃO INFORMADO', 
+          carga: 'NÃO INFORMADO' 
+        };
+        
+        const navioCarga = `${producao.nome_navio} - ${producao.carga}`;
+        const percentual = producao.quantidade_prevista > 0 
+          ? (producao.tons_produzidos / producao.quantidade_prevista) * 100 
+          : 0;
+        
+        naviosArray.push({
+          navio_carga: navioCarga,
+          horas: dados.horas,
+          apontamentos: dados.apontamentos,
+          tons_produzidos: producao.tons_produzidos,
+          quantidade_total: producao.quantidade_prevista,
+          percentual_cumprido: percentual
+        });
+      });
+
+      // Ordenar por horas decrescente
+      naviosArray.sort((a, b) => b.horas - a.horas);
+
+      // ==================== CRIAR WORKBOOK EXCEL ====================
+      const workbook = XLSX.utils.book_new();
+
+      // Aba 1: Dados Detalhados
+      const detalhadoHeader = [
         'Registro ID',
         'Operação',
         'Carga Operação',
@@ -814,7 +927,7 @@ const RelatorioTransporte = () => {
         'Horas Operando'
       ];
 
-      const linhas = dadosProcessados.map(item => [
+      const detalhadoRows = dadosProcessados.map(item => [
         item.registro_id,
         item.operacao,
         item.carga_operacao,
@@ -829,31 +942,54 @@ const RelatorioTransporte = () => {
         item.categoria_nome,
         item.local,
         item.motorista_operador,
-        item.horas_trabalhadas.toString(),
-        item.horas_operando.toString()
+        // Formatar horas com 3 casas decimais no padrão brasileiro
+        formatarNumeroBR(item.horas_trabalhadas, 3),
+        formatarNumeroBR(item.horas_operando, 3)
       ]);
 
-      const csvContent = [
-        cabecalho.join(','),
-        ...linhas.map(row => row.map(cell => `"${cell}"`).join(','))
-      ].join('\n');
+      const detalhadoSheet = XLSX.utils.aoa_to_sheet([detalhadoHeader, ...detalhadoRows]);
+      XLSX.utils.book_append_sheet(workbook, detalhadoSheet, 'Detalhado');
 
-      // Criar e baixar o arquivo
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
+      // Aba 2: Produção por Navio (com formatação brasileira)
+      const naviosHeader = [
+        'Navio / Carga',
+        'Horas',
+        'Apontamentos',
+        'Produção no Período (Tons)',
+        'Quantidade Total',
+        '% Realizado no Período'
+      ];
+
+      const naviosRows = naviosArray.map(navio => [
+        navio.navio_carga,
+        `${formatarNumeroBR(navio.horas, 1)}h`,
+        navio.apontamentos,
+        formatarNumeroBR(navio.tons_produzidos, 2),
+        formatarNumeroBR(navio.quantidade_total, 2),
+        `${formatarNumeroBR(navio.percentual_cumprido, 1)}%`
+      ]);
+
+      const naviosSheet = XLSX.utils.aoa_to_sheet([naviosHeader, ...naviosRows]);
       
-      link.setAttribute('href', url);
-      link.setAttribute('download', `relatorio_operacoes_${dataInicialCorrigida}_${dataFinalCorrigida}.csv`);
-      link.style.visibility = 'hidden';
+      // Ajustar largura das colunas
+      naviosSheet['!cols'] = [
+        { wch: 35 }, // Navio / Carga
+        { wch: 12 }, // Horas
+        { wch: 12 }, // Apontamentos
+        { wch: 20 }, // Produção no Período (Tons)
+        { wch: 15 }, // Quantidade Total
+        { wch: 18 }  // % Realizado no Período
+      ];
       
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      XLSX.utils.book_append_sheet(workbook, naviosSheet, 'Produção por Navio');
+
+      // Gerar e baixar o arquivo
+      const fileName = `relatorio_operacoes_${dataInicialCorrigida}_${dataFinalCorrigida}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
 
       toast({
         title: "Relatório gerado",
-        description: `Relatório de ${formatarDataBR(dataInicialCorrigida)} a ${formatarDataBR(dataFinalCorrigida)} baixado com sucesso.`,
+        description: `Relatório de ${formatarDataBR(dataInicialCorrigida)} a ${formatarDataBR(dataFinalCorrigida)} baixado com sucesso.\nArquivo contém as abas: "Detalhado" e "Produção por Navio".`,
       });
 
       setModalRelatorioOpen(false);
@@ -913,7 +1049,6 @@ const RelatorioTransporte = () => {
 
   return (
     <>
-      {/* CORREÇÃO DE FUNDO BRANCO: Força o body a ter o fundo escuro e remove margens */}
       <style>{`body { margin: 0; background-color: #020617; }`}</style>
       
       <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-blue-500/30 overflow-visible">
@@ -922,7 +1057,7 @@ const RelatorioTransporte = () => {
           handleExecutarSQL={handleExecutarSQL} handleOpenModalRelatorio={() => setModalRelatorioOpen(true)} atualizando={atualizando} 
         />
         
-        <ModalRelatorio isOpen={modalRelatorioOpen} onClose={() => setModalRelatorioOpen(false)} onDownload={gerarRelatorioCSV} loading={gerandoRelatorio} />
+        <ModalRelatorio isOpen={modalRelatorioOpen} onClose={() => setModalRelatorioOpen(false)} onDownload={gerarRelatorioExcel} loading={gerandoRelatorio} />
         
         <FiltrosArea 
           dataFiltro={dataFiltro} setDataFiltro={setDataFiltro}
