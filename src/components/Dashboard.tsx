@@ -11,7 +11,7 @@ import {
   Calendar, ClipboardCheck, Car, AlertTriangle, Building2, 
   Percent, Activity, Clock, ArrowUpRight, Users, 
   ScrollText, Loader2, Factory, Warehouse, Filter, Download,
-  Database // ADICIONADO
+  Database, Heart, Leaf, Shield
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect, useMemo } from 'react';
@@ -66,11 +66,11 @@ const getOperacaoIcon = (op: string) => {
 
 // Cores para os gráficos
 const COLORS = {
-  HYDRO: '#3b82f6',     // blue-500
-  NAVIO: '#a855f7',     // purple-500
-  ALBRAS: '#f97316',    // orange-500
-  'SANTOS BRASIL': '#06b6d4', // cyan-500
-  OTHERS: '#64748b'     // slate-500
+  HYDRO: '#3b82f6',
+  NAVIO: '#a855f7',
+  ALBRAS: '#f97316',
+  'SANTOS BRASIL': '#06b6d4',
+  OTHERS: '#64748b'
 };
 
 const Dashboard = () => {
@@ -80,6 +80,7 @@ const Dashboard = () => {
   const { toast } = useToast();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [bannerFechado, setBannerFechado] = useState(false);
   
   // Filtros de Data
   const [dataInicial, setDataInicial] = useState('');
@@ -134,7 +135,7 @@ const Dashboard = () => {
 
   // --- PROCESSAMENTO DE DADOS ---
 
-  // 1. Soma de Horas por Tipo (HYDRO, NAVIO, ALBRAS, SANTOS BRASIL)
+  // 1. Soma de Horas por Tipo
   const horasPorTipo = useMemo(() => {
     const inicial = { HYDRO: 0, NAVIO: 0, ALBRAS: 0, 'SANTOS BRASIL': 0 };
     
@@ -148,7 +149,7 @@ const Dashboard = () => {
     }, inicial);
   }, [operacoes]);
 
-  // 2. Dados para Gráfico de Pizza (Distribuição %)
+  // 2. Dados para Gráfico de Pizza
   const dadosGraficoPizza = useMemo(() => {
     const totalGeral = Object.values(horasPorTipo).reduce((a, b) => a + b, 0);
     
@@ -161,7 +162,6 @@ const Dashboard = () => {
   }, [horasPorTipo]);
 
   // 3. Dados para Gráfico de Colunas (Navios)
-  // Agrupa por "Nome do Navio - Carga", soma horas e conta operações
   const dadosGraficoNavios = useMemo(() => {
     const mapaNavios = new Map<string, { horas: number; qtd: number }>();
 
@@ -182,10 +182,10 @@ const Dashboard = () => {
       name,
       horas: Number(data.horas.toFixed(1)),
       qtd: data.qtd
-    })).sort((a, b) => b.horas - a.horas); // Ordenar por mais horas
+    })).sort((a, b) => b.horas - a.horas);
   }, [operacoes]);
 
-  // 4. Quantidade de Navios Operados (Distintos)
+  // 4. Quantidade de Navios Operados
   const qtdNaviosDistintos = useMemo(() => {
     const ids = new Set(operacoes.filter(op => op.op === 'NAVIO' && op.navio_id).map(op => op.navio_id));
     return ids.size;
@@ -196,7 +196,6 @@ const Dashboard = () => {
     const mapaCargas = new Map<string, number>();
 
     operacoes.forEach(op => {
-      // Tenta pegar carga do navio primeiro, senão da operação
       let cargaNome = 'Não Definida';
       if (op.op === 'NAVIO' && op.navios?.carga) {
         cargaNome = op.navios.carga;
@@ -219,9 +218,7 @@ const Dashboard = () => {
 
   const menuItems = [
     { icon: FileText, label: 'Relatório Transporte', path: '/relatorio-transporte', color: 'text-blue-400', bgHover: 'hover:bg-blue-500/10' },
-    // --- NOVO BOTÃO AQUI ---
     { icon: Database, label: 'Relatórios Avançados', path: '/relatorio-dinamico', color: 'text-teal-400', bgHover: 'hover:bg-teal-500/10' },
-    // ------------------------
     { icon: Ship, label: 'Navios', path: '/navios', color: 'text-purple-400', bgHover: 'hover:bg-purple-500/10' },
     { icon: Calendar, label: 'Escalas', path: '/escalas', color: 'text-cyan-400', bgHover: 'hover:bg-cyan-500/10' },
     { icon: ClipboardCheck, label: 'Vistorias', path: '/vistorias', color: 'text-teal-400', bgHover: 'hover:bg-teal-500/10' },
@@ -338,6 +335,91 @@ const Dashboard = () => {
           </div>
 
           <main className="flex-1 p-6 space-y-6">
+            {/* BANNER DAS CAMPANHAS ABRIL VERDE E ABRIL AZUL */}
+            {!bannerFechado && (
+              <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-green-900/40 via-slate-900/60 to-blue-900/40 border border-green-500/30 shadow-lg">
+                <div className="absolute inset-0 bg-[url(&quot;data:image/svg+xml,%3Csvg width=&apos;60&apos; height=&apos;60&apos; xmlns=&apos;http://www.w3.org/2000/svg&apos;%3E%3Cdefs%3E%3Cpattern id=&apos;grid&apos; width=&apos;60&apos; height=&apos;60&apos; patternUnits=&apos;userSpaceOnUse&apos;%3E%3Cpath d=&apos;M 60 0 L 0 0 0 60&apos; fill=&apos;none&apos; stroke=&apos;rgba(255,255,255,0.03)&apos; stroke-width=&apos;1&apos;/%3E%3C/pattern%3E%3C/defs%3E%3Crect width=&apos;100%25&apos; height=&apos;100%25&apos; fill=&apos;url(%23grid)&apos;/%3E%3C/svg%3E&quot;)] opacity-30"></div>
+                
+                <div className="relative p-5">
+                  <button 
+                    onClick={() => setBannerFechado(true)}
+                    className="absolute top-3 right-3 text-slate-400 hover:text-white transition-colors"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                  
+                  <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                    <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
+                      {/* Abril Verde */}
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center border border-green-500/30">
+                          <Leaf className="w-6 h-6 text-green-400" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-bold text-green-400">💚 ABRIL VERDE</h3>
+                          <p className="text-xs text-slate-300 max-w-xs">
+                            Mês da Segurança e Saúde no Trabalho • Prevenção de acidentes é compromisso de todos
+                          </p>
+                          <div className="flex gap-2 mt-1">
+                            <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-[10px]">
+                              Segurança em Primeiro Lugar
+                            </Badge>
+                            <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-[10px]">
+                              SST
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Separador */}
+                      <div className="hidden md:block w-px h-12 bg-slate-700"></div>
+                      
+                      {/* Abril Azul */}
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center border border-blue-500/30">
+                          <Heart className="w-6 h-6 text-blue-400" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-bold text-blue-400">💙 ABRIL AZUL</h3>
+                          <p className="text-xs text-slate-300 max-w-xs">
+                            Conscientização sobre o Transtorno do Espectro Autista • Inclusão e respeito para todos
+                          </p>
+                          <div className="flex gap-2 mt-1">
+                            <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-[10px]">
+                              #Inclusão
+                            </Badge>
+                            <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-[10px]">
+                              Respeito às Diferenças
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Call to Action */}
+                    <div className="flex gap-2">
+                      <Button 
+                        onClick={() => window.open('https://www.gov.br/trabalho-e-emprego/pt-br/assuntos/inspecao-do-trabalho/seguranca-e-saude-no-trabalho', '_blank')}
+                        variant="outline" 
+                        className="border-green-500/50 text-green-400 hover:bg-green-500/10 hover:text-green-300 text-xs h-8"
+                      >
+                        <Shield className="mr-1 h-3 w-3" />
+                        Segurança do Trabalho
+                      </Button>
+                      <Button 
+                        onClick={() => window.open('https://www.gov.br/saude/pt-br/assuntos/saude-de-a-a-z/t/transtorno-do-espectro-autista-tea', '_blank')}
+                        variant="outline" 
+                        className="border-blue-500/50 text-blue-400 hover:bg-blue-500/10 hover:text-blue-300 text-xs h-8"
+                      >
+                        <Heart className="mr-1 h-3 w-3" />
+                        Sobre o TEA
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Filtros */}
             <Card className="bg-slate-900/40 border-slate-800">
               <CardContent className="pt-6">
@@ -519,7 +601,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Layout Mobile (Simplificado para foco nos gráficos) */}
+      {/* Layout Mobile */}
       <div className="lg:hidden flex flex-col min-h-screen bg-slate-950 pb-20">
         <div className="bg-slate-900 border-b border-slate-800 p-4 sticky top-0 z-30 flex items-center justify-between shadow-md">
           <div className="flex items-center gap-3">
@@ -534,6 +616,30 @@ const Dashboard = () => {
         </div>
 
         <div className="p-4 space-y-6">
+          {/* Banner Mobile */}
+          {!bannerFechado && (
+            <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-green-900/40 via-slate-900/60 to-blue-900/40 border border-green-500/30 p-4">
+              <button 
+                onClick={() => setBannerFechado(true)}
+                className="absolute top-2 right-2 text-slate-400 hover:text-white"
+              >
+                <X className="h-3 w-3" />
+              </button>
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Leaf className="w-5 h-5 text-green-400" />
+                  <span className="text-xs font-bold text-green-400">ABRIL VERDE</span>
+                </div>
+                <p className="text-[11px] text-slate-300">Prevenção de acidentes e doenças no trabalho • Segurança em primeiro lugar</p>
+                <div className="flex items-center gap-2">
+                  <Heart className="w-5 h-5 text-blue-400" />
+                  <span className="text-xs font-bold text-blue-400">ABRIL AZUL</span>
+                </div>
+                <p className="text-[11px] text-slate-300">Conscientização sobre o TEA • Inclusão e respeito para todos</p>
+              </div>
+            </div>
+          )}
+
           <Card className="bg-slate-900 border border-slate-800">
             <CardContent className="pt-4 space-y-3">
                <div>
