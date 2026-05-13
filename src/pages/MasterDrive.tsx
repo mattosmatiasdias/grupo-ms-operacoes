@@ -35,6 +35,7 @@ import { TreinamentoForm } from '@/components/master-drive/TreinamentoForm';
 import { TreinamentoCard } from '@/components/master-drive/TreinamentoCard';
 import { TreinamentoDetalhesModal } from '@/components/master-drive/TreinamentoDetalhesModal';
 import { DesvioForm } from '@/components/master-drive/DesvioForm';
+import { RelatorioGeral } from '@/components/master-drive/RelatorioGeral';
 
 // Função para converter interval do PostgreSQL para horas decimais
 const converterIntervalParaHoras = (interval: any): number => {
@@ -463,6 +464,7 @@ export default function MasterDrive() {
     colaboradores = [],
     tiposTreinamento = [],
     treinamentos = [],
+    colaboradoresTreinados = [],
     desvios = [],
     indicadores = {},
     filtros = {},
@@ -563,9 +565,9 @@ export default function MasterDrive() {
 
       {/* Conteúdo Principal */}
       <main className="p-4 md:p-6">
-        <Tabs defaultValue="por-funcionario" className="w-full space-y-6">
+        <Tabs defaultValue="visao-gerencial" className="w-full space-y-6">
           
-          <TabsList className="bg-slate-900 border border-slate-800 w-full md:w-auto h-auto p-1 grid grid-cols-1 md:grid-cols-4">
+          <TabsList className="bg-slate-900 border border-slate-800 w-full md:w-auto h-auto p-1 grid grid-cols-1 md:grid-cols-5">
             <TabsTrigger value="visao-gerencial" className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white py-3 px-4 justify-start gap-2">
               <Layout className="h-4 w-4" />
               <div className="text-left">
@@ -585,6 +587,13 @@ export default function MasterDrive() {
               <div className="text-left">
                 <div className="text-xs font-bold uppercase leading-none">Por Funcionário</div>
                 <div className="text-[10px] opacity-70 mt-1">Histórico Individual</div>
+              </div>
+            </TabsTrigger>
+            <TabsTrigger value="relatorio-geral" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white py-3 px-4 justify-start gap-2">
+              <FileText className="h-4 w-4" />
+              <div className="text-left">
+                <div className="text-xs font-bold uppercase leading-none">Relatório Geral</div>
+                <div className="text-[10px] opacity-70 mt-1">Análise Completa</div>
               </div>
             </TabsTrigger>
             <TabsTrigger value="desvios" className="data-[state=active]:bg-orange-600 data-[state=active]:text-white py-3 px-4 justify-start gap-2">
@@ -667,7 +676,17 @@ export default function MasterDrive() {
             />
           </TabsContent>
 
-          {/* ABA 4: Gestão de Desvios */}
+          {/* ABA 4 - Relatório Geral */}
+          <TabsContent value="relatorio-geral" className="space-y-6 mt-0">
+            <RelatorioGeral 
+              treinamentos={treinamentos || []}
+              colaboradoresTreinados={colaboradoresTreinados || []}
+              colaboradores={colaboradores || []}
+              anoReferencia={2026}
+            />
+          </TabsContent>
+
+          {/* ABA 5: Gestão de Desvios */}
           <TabsContent value="desvios" className="space-y-6 mt-0">
             <div className="flex justify-between items-center mb-2">
               <div><h2 className="text-xl font-bold text-white">Registro de Não Conformidades</h2></div>

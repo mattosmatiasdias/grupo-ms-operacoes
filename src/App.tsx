@@ -1,4 +1,4 @@
-// src/App.tsx (ATUALIZADO - Adicionada rota Master Drive)
+// src/App.tsx (ATUALIZADO - Adicionadas rotas Master Drive e Dano Material)
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -47,8 +47,11 @@ import ContractDetail from "./pages/ContractDetail";
 // Página de Boletim de Medição (BM)
 import BMForm from "./pages/BMForm";
 
-// NOVO MÓDULO - Master Drive (Treinamentos e Desvios)
+// Módulo Master Drive (Treinamentos e Desvios)
 import MasterDrive from "./pages/MasterDrive";
+
+// Módulo Dano Material
+import DanoMaterial from "./pages/DanoMaterial";
 
 const queryClient = new QueryClient();
 
@@ -199,10 +202,17 @@ const App = () => (
               </ProtectedRoute>
             } />
 
-            {/* NOVA ROTA - Master Drive (Treinamentos e Desvios) */}
+            {/* Rota Master Drive (Treinamentos e Desvios) */}
             <Route path="/master-drive" element={
               <ProtectedRoute>
                 <MasterDrive />
+              </ProtectedRoute>
+            } />
+
+            {/* Rota Dano Material */}
+            <Route path="/dano-material" element={
+              <ProtectedRoute>
+                <DanoMaterial />
               </ProtectedRoute>
             } />
 

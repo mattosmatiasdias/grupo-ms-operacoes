@@ -1,6 +1,6 @@
 // src/hooks/useMasterDrive.ts
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { 
@@ -9,7 +9,8 @@ import {
   FiltrosMasterDrive, 
   Indicadores,
   Colaborador,
-  TipoTreinamento
+  TipoTreinamento,
+  ColaboradorTreinado
 } from '@/types/masterDrive';
 
 export const useMasterDrive = () => {
@@ -18,6 +19,7 @@ export const useMasterDrive = () => {
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([]);
   const [tiposTreinamento, setTiposTreinamento] = useState<TipoTreinamento[]>([]);
   const [treinamentos, setTreinamentos] = useState<(Treinamento & { participantes?: Colaborador[] })[]>([]);
+  const [colaboradoresTreinados, setColaboradoresTreinados] = useState<ColaboradorTreinado[]>([]);
   const [desvios, setDesvios] = useState<Desvio[]>([]);
   const [indicadores, setIndicadores] = useState<Indicadores>({
     totalHorasTreinamento: 0,
@@ -40,6 +42,7 @@ export const useMasterDrive = () => {
 
   useEffect(() => {
     carregarTreinamentos();
+    carregarColaboradoresTreinados();
     carregarDesvios();
     calcularIndicadores();
   }, [filtros]);
@@ -165,7 +168,6 @@ export const useMasterDrive = () => {
       }
 
       // Montar os treinamentos com os dados relacionados
-      // IMPORTANTE: Manter a data como string original do banco
       const treinamentosCompletos = treinamentosData.map(t => ({
         ...t,
         data_treinamento: t.data_treinamento,
@@ -183,6 +185,127 @@ export const useMasterDrive = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  // NOVA FUNÇÃO: Carregar colaboradores treinados com detalhes individuais
+  const carregarColaboradoresTreinados = async () => {
+    try {
+      // Buscar todos os treinamentos
+      let queryTreinos = supabase
+        .from('master_treinamentos')
+        .select('id, topico_treinamento, data_treinamento, carga_horaria_base, carga_horaria_total, tipo_treinamento_id')
+        .order('data_treinamento', { ascending: false });
+
+      if (filtros.dataInicio) {
+        queryTreinos = queryTreinos.gte('data_treinamento', filtros.dataInicio);
+      }
+      if (filtros.dataFim) {
+        queryTreinos = queryTreinos.lte('data_treinamento', filtros.dataFim);
+      }
+
+      const { data: treinamentosData, error: treinamentosError } = await queryTreinos;
+
+      if (treinamentosError) throw treinamentosError;
+
+      if (!treinamentosData || treinamentosData.length === 0) {
+        setColaboradoresTreinados([]);
+        return;
+      }
+
+      // Buscar participantes
+      const treinamentoIds = treinamentosData.map(t => t.id);
+      const { data: participantesData, error: participantesError } = await supabase
+        .from('master_participantes_treinamento')
+        .select('treinamento_id, colaborador_id')
+        .in('treinamento_id', treinamentoIds);
+
+      if (participantesError) throw participantesError;
+
+      if (!participantesData || participantesData.length === 0) {
+        setColaboradoresTreinados([]);
+        return;
+      }
+
+      // Buscar colaboradores com suas funções
+      const colaboradorIds = [...new Set(participantesData.map(p => p.colaborador_id))];
+      const { data: colsData, error: colsError } = await supabase
+        .from('colaboradores')
+        .select('id, nome_completo, funcao_atual')
+        .in('id', colaboradorIds);
+
+      if (colsError) throw colsError;
+
+      const colaboradorMap = new Map();
+      colsData?.forEach(col => {
+        colaboradorMap.set(col.id, {
+          nome: col.nome_completo,
+          funcao: col.funcao_atual
+        });
+      });
+
+      // Criar mapa de treinamentos
+      const treinamentoMap = new Map();
+      treinamentosData.forEach(t => {
+        treinamentoMap.set(t.id, {
+          topico: t.topico_treinamento,
+          data: t.data_treinamento,
+          cargaHoraria: t.carga_horaria_base
+        });
+      });
+
+      // Buscar tipos de treinamento para mapeamento
+      const tipoIds = [...new Set(treinamentosData.map(t => t.tipo_treinamento_id).filter(Boolean))];
+      let tipoMap = new Map();
+      if (tipoIds.length > 0) {
+        const { data: tiposData } = await supabase
+          .from('master_tipos_treinamento')
+          .select('id, nome')
+          .in('id', tipoIds);
+        
+        if (tiposData) {
+          tiposData.forEach(tipo => {
+            tipoMap.set(tipo.id, tipo.nome);
+          });
+        }
+      }
+
+      // Função para converter interval para horas decimais
+      const intervalToHours = (interval: string): number => {
+        if (!interval) return 0;
+        const parts = interval.split(':');
+        if (parts.length === 3) {
+          return parseInt(parts[0]) + parseInt(parts[1]) / 60 + parseInt(parts[2]) / 3600;
+        }
+        return 0;
+      };
+
+      // Montar lista de colaboradores treinados
+      const colaboradoresTreinadosList: ColaboradorTreinado[] = [];
+
+      participantesData.forEach(part => {
+        const treino = treinamentoMap.get(part.treinamento_id);
+        const colaborador = colaboradorMap.get(part.colaborador_id);
+        
+        if (treino && colaborador) {
+          colaboradoresTreinadosList.push({
+            id: `${part.treinamento_id}_${part.colaborador_id}`,
+            colaborador_id: part.colaborador_id,
+            colaborador_nome: colaborador.nome,
+            colaborador_funcao: colaborador.funcao,
+            treinamento_id: part.treinamento_id,
+            topico: treino.topico,
+            data_treinamento: treino.data,
+            carga_horaria: intervalToHours(treino.cargaHoraria),
+            tipo_treinamento: tipoMap.get(treinamentosData.find(t => t.id === part.treinamento_id)?.tipo_treinamento_id) || '',
+            status: 'CONCLUIDO'
+          });
+        }
+      });
+
+      setColaboradoresTreinados(colaboradoresTreinadosList);
+    } catch (error: any) {
+      console.error("Erro ao carregar colaboradores treinados:", error);
     }
   };
 
@@ -471,6 +594,7 @@ export const useMasterDrive = () => {
       });
 
       await carregarTreinamentos();
+      await carregarColaboradoresTreinados();
       await calcularIndicadores();
       return treinamento?.[0];
     } catch (error: any) {
@@ -551,6 +675,7 @@ export const useMasterDrive = () => {
       });
 
       await carregarTreinamentos();
+      await carregarColaboradoresTreinados();
       await calcularIndicadores();
     } catch (error: any) {
       toast({
@@ -564,7 +689,6 @@ export const useMasterDrive = () => {
 
   const excluirTreinamento = async (id: string) => {
     try {
-      // Os participantes serão deletados automaticamente pelo ON DELETE CASCADE
       const { error } = await supabase
         .from('master_treinamentos')
         .delete()
@@ -578,6 +702,7 @@ export const useMasterDrive = () => {
       });
 
       await carregarTreinamentos();
+      await carregarColaboradoresTreinados();
       await calcularIndicadores();
     } catch (error: any) {
       toast({
@@ -655,6 +780,7 @@ export const useMasterDrive = () => {
     colaboradores,
     tiposTreinamento,
     treinamentos,
+    colaboradoresTreinados,
     desvios,
     indicadores,
     filtros,
@@ -665,6 +791,7 @@ export const useMasterDrive = () => {
     adicionarDesvio,
     tratarDesvio,
     carregarTreinamentos,
+    carregarColaboradoresTreinados,
     carregarDesvios,
     carregarDadosBase
   };

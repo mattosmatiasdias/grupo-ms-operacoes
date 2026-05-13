@@ -11,7 +11,8 @@ import {
   Calendar, ClipboardCheck, Car, AlertTriangle, Building2, 
   Percent, Activity, Clock, ArrowUpRight, Users, 
   ScrollText, Loader2, Factory, Warehouse, Filter, Download,
-  Database, Heart, Leaf, Shield
+  Database, Heart, Shield, Wrench, TrafficCone, Flag, 
+  AlertCircle, Award
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect, useMemo } from 'react';
@@ -224,6 +225,7 @@ const Dashboard = () => {
     { icon: ClipboardCheck, label: 'Vistorias', path: '/vistorias', color: 'text-teal-400', bgHover: 'hover:bg-teal-500/10' },
     { icon: Car, label: 'Master Drive', path: '/master-drive', color: 'text-indigo-400', bgHover: 'hover:bg-indigo-500/10' },
     { icon: AlertTriangle, label: 'Ocorrências', path: '/ocorrencias', color: 'text-orange-400', bgHover: 'hover:bg-orange-500/10' },
+    { icon: Wrench, label: 'Dano Material', path: '/dano-material', color: 'text-red-400', bgHover: 'hover:bg-red-500/10' },
     { icon: Percent, label: 'Rateios', path: '/rateios', color: 'text-amber-400', bgHover: 'hover:bg-amber-500/10' },
     { icon: Bell, label: 'Notificações', path: '/notificacao', color: 'text-violet-400', bgHover: 'hover:bg-violet-500/10', hasNotification: hasUnread },
     { icon: Building2, label: 'RDO Santos Brasil', path: '/santos-brasil', color: 'text-red-400', bgHover: 'hover:bg-red-500/10' },
@@ -263,7 +265,7 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-blue-500/30">
+    <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-yellow-500/30">
       <style>{`body { margin: 0; background-color: #020617; }`}</style>
       
       {/* Layout Desktop */}
@@ -272,12 +274,12 @@ const Dashboard = () => {
         <div className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col flex-shrink-0">
           <div className="p-6 border-b border-slate-800">
             <div className="flex items-center gap-3">
-              <div className="bg-blue-600/20 p-2 rounded-lg">
-                <BarChart3 className="w-6 h-6 text-blue-500" />
+              <div className="bg-yellow-500/20 p-2 rounded-lg">
+                <BarChart3 className="w-6 h-6 text-yellow-500" />
               </div>
               <div>
                 <h1 className="text-lg font-bold text-white tracking-tight leading-none">Gestão Ops</h1>
-                <p className="text-xs text-slate-500 mt-1">VERSÃO: 31.5.2</p>
+                <p className="text-xs text-slate-500 mt-1">VERSÃO: 32.0</p>
               </div>
             </div>
           </div>
@@ -300,7 +302,7 @@ const Dashboard = () => {
 
           <div className="p-4 border-t border-slate-800 bg-slate-900/50">
             <div className="flex items-center gap-3 px-2 mb-4">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white font-bold text-xs shadow-lg shadow-blue-500/20">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-yellow-500 to-amber-500 flex items-center justify-center text-white font-bold text-xs shadow-lg shadow-yellow-500/20">
                 {userProfile?.full_name?.substring(0,2).toUpperCase() || 'US'}
               </div>
               <div className="flex flex-col overflow-hidden">
@@ -335,10 +337,11 @@ const Dashboard = () => {
           </div>
 
           <main className="flex-1 p-6 space-y-6">
-            {/* BANNER DAS CAMPANHAS ABRIL VERDE E ABRIL AZUL */}
+            {/* BANNER MAIO AMARELO */}
             {!bannerFechado && (
-              <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-green-900/40 via-slate-900/60 to-blue-900/40 border border-green-500/30 shadow-lg">
-                <div className="absolute inset-0 bg-[url(&quot;data:image/svg+xml,%3Csvg width=&apos;60&apos; height=&apos;60&apos; xmlns=&apos;http://www.w3.org/2000/svg&apos;%3E%3Cdefs%3E%3Cpattern id=&apos;grid&apos; width=&apos;60&apos; height=&apos;60&apos; patternUnits=&apos;userSpaceOnUse&apos;%3E%3Cpath d=&apos;M 60 0 L 0 0 0 60&apos; fill=&apos;none&apos; stroke=&apos;rgba(255,255,255,0.03)&apos; stroke-width=&apos;1&apos;/%3E%3C/pattern%3E%3C/defs%3E%3Crect width=&apos;100%25&apos; height=&apos;100%25&apos; fill=&apos;url(%23grid)&apos;/%3E%3C/svg%3E&quot;)] opacity-30"></div>
+              <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-yellow-600/30 via-amber-900/40 to-yellow-600/30 border-2 border-yellow-500/50 shadow-lg shadow-yellow-500/20">
+                <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg width=&apos;60&apos; height=&apos;60&apos; xmlns=&apos;http://www.w3.org/2000/svg&apos;%3E%3Cdefs%3E%3Cpattern id=&apos;grid&apos; width=&apos;60&apos; height=&apos;60&apos; patternUnits=&apos;userSpaceOnUse&apos;%3E%3Cpath d=&apos;M 60 0 L 0 0 0 60&apos; fill=&apos;none&apos; stroke=&apos;rgba(255,255,255,0.03)&apos; stroke-width=&apos;1&apos;/%3E%3C/pattern%3E%3C/defs%3E%3Crect width=&apos;100%25&apos; height=&apos;100%25&apos; fill=&apos;url(%23grid)&apos;/%3E%3C/svg%3E')] opacity-30"></div>
+                <div className="absolute top-0 right-0 w-64 h-64 bg-yellow-500/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
                 
                 <div className="relative p-5">
                   <button 
@@ -350,70 +353,79 @@ const Dashboard = () => {
                   
                   <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                     <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
-                      {/* Abril Verde */}
+                      {/* Ícone Principal */}
                       <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center border border-green-500/30">
-                          <Leaf className="w-6 h-6 text-green-400" />
+                        <div className="w-14 h-14 rounded-full bg-yellow-500/20 flex items-center justify-center border-2 border-yellow-500/50 animate-pulse">
+                          <TrafficCone className="w-7 h-7 text-yellow-400" />
                         </div>
                         <div>
-                          <h3 className="text-lg font-bold text-green-400">💚 ABRIL VERDE</h3>
-                          <p className="text-xs text-slate-300 max-w-xs">
-                            Mês da Segurança e Saúde no Trabalho • Prevenção de acidentes é compromisso de todos
-                          </p>
-                          <div className="flex gap-2 mt-1">
-                            <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-[10px]">
-                              Segurança em Primeiro Lugar
-                            </Badge>
-                            <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-[10px]">
-                              SST
-                            </Badge>
+                          <div className="flex items-center gap-2">
+                            <Flag className="w-5 h-5 text-yellow-400" />
+                            <h3 className="text-xl font-black text-yellow-400 tracking-wider">
+                              MAIO AMARELO 2025
+                            </h3>
                           </div>
-                        </div>
-                      </div>
-                      
-                      {/* Separador */}
-                      <div className="hidden md:block w-px h-12 bg-slate-700"></div>
-                      
-                      {/* Abril Azul */}
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center border border-blue-500/30">
-                          <Heart className="w-6 h-6 text-blue-400" />
-                        </div>
-                        <div>
-                          <h3 className="text-lg font-bold text-blue-400">💙 ABRIL AZUL</h3>
-                          <p className="text-xs text-slate-300 max-w-xs">
-                            Conscientização sobre o Transtorno do Espectro Autista • Inclusão e respeito para todos
+                          <p className="text-sm text-slate-200 font-semibold mt-1 max-w-md">
+                            🌍 Juntos Salvamos Vidas • Prevenção de Acidentes no Trânsito
                           </p>
-                          <div className="flex gap-2 mt-1">
-                            <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-[10px]">
-                              #Inclusão
+                          <p className="text-xs text-slate-300 mt-1 max-w-lg">
+                            O Maio Amarelo é um movimento internacional de conscientização para redução de acidentes de trânsito. 
+                            Sua atitude faz a diferença no trânsito e no trabalho!
+                          </p>
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px] font-semibold">
+                              🛑 Pare, Pense, Previna
                             </Badge>
-                            <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-[10px]">
-                              Respeito às Diferenças
+                            <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px] font-semibold">
+                              🚦 Trânsito Seguro
+                            </Badge>
+                            <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px] font-semibold">
+                              🚗 Sua vida importa
                             </Badge>
                           </div>
                         </div>
                       </div>
                     </div>
                     
-                    {/* Call to Action */}
-                    <div className="flex gap-2">
-                      <Button 
-                        onClick={() => window.open('https://www.gov.br/trabalho-e-emprego/pt-br/assuntos/inspecao-do-trabalho/seguranca-e-saude-no-trabalho', '_blank')}
-                        variant="outline" 
-                        className="border-green-500/50 text-green-400 hover:bg-green-500/10 hover:text-green-300 text-xs h-8"
-                      >
-                        <Shield className="mr-1 h-3 w-3" />
-                        Segurança do Trabalho
-                      </Button>
-                      <Button 
-                        onClick={() => window.open('https://www.gov.br/saude/pt-br/assuntos/saude-de-a-a-z/t/transtorno-do-espectro-autista-tea', '_blank')}
-                        variant="outline" 
-                        className="border-blue-500/50 text-blue-400 hover:bg-blue-500/10 hover:text-blue-300 text-xs h-8"
-                      >
-                        <Heart className="mr-1 h-3 w-3" />
-                        Sobre o TEA
-                      </Button>
+                    {/* Call to Action e Estatísticas */}
+                    <div className="flex flex-col gap-2">
+                      <div className="flex gap-2 justify-end">
+                        <Button 
+                          onClick={() => window.open('https://www.gov.br/transito/pt-br', '_blank')}
+                          variant="outline" 
+                          className="border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/10 hover:text-yellow-300 text-xs h-8 font-bold"
+                        >
+                          <AlertCircle className="mr-1 h-3 w-3" />
+                          Campanha Nacional
+                        </Button>
+                        <Button 
+                          onClick={() => window.open('https://maioamarelo.com.br/', '_blank')}
+                          className="bg-yellow-500 hover:bg-yellow-600 text-slate-950 font-bold text-xs h-8"
+                        >
+                          <Award className="mr-1 h-3 w-3" />
+                          Saiba Mais
+                        </Button>
+                      </div>
+                      
+                      {/* Mini-estatísticas */}
+                      <div className="bg-slate-950/60 rounded-lg p-2 border border-yellow-500/30 mt-1">
+                        <div className="flex gap-3 text-[10px]">
+                          <div className="text-center">
+                            <p className="text-yellow-400 font-bold">+35 mil</p>
+                            <p className="text-slate-400">óbitos/ano</p>
+                          </div>
+                          <div className="w-px bg-yellow-500/30"></div>
+                          <div className="text-center">
+                            <p className="text-yellow-400 font-bold">1,35 mi</p>
+                            <p className="text-slate-400">feridos graves</p>
+                          </div>
+                          <div className="w-px bg-yellow-500/30"></div>
+                          <div className="text-center">
+                            <p className="text-yellow-400 font-bold">90%</p>
+                            <p className="text-slate-400">falha humana</p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -432,7 +444,7 @@ const Dashboard = () => {
                     <Label className="text-xs text-slate-400 font-semibold uppercase">Data Final</Label>
                     <Input type="date" value={dataFinal} onChange={(e) => setDataFinal(e.target.value)} className="bg-slate-950 border-slate-700 text-white w-40" />
                   </div>
-                  <Button onClick={fetchData} disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white h-10">
+                  <Button onClick={fetchData} disabled={loading} className="bg-yellow-500 hover:bg-yellow-600 text-slate-950 font-bold h-10">
                     {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Filter className="h-4 w-4 mr-2" />}
                     Filtrar Dados
                   </Button>
@@ -532,20 +544,23 @@ const Dashboard = () => {
               </div>
               
               <div className="flex flex-col gap-6">
-                <Card className="bg-gradient-to-br from-indigo-900/30 to-slate-900/40 border border-indigo-800/30 p-6 flex-1 flex flex-col items-center justify-center text-center">
-                  <div className="w-16 h-16 bg-indigo-500/20 rounded-full flex items-center justify-center mb-4 text-indigo-400">
-                    <Ship className="w-8 h-8" />
+                <Card className="bg-gradient-to-br from-yellow-600/20 to-amber-900/30 border-2 border-yellow-500/40 p-6 flex-1 flex flex-col items-center justify-center text-center">
+                  <div className="w-16 h-16 bg-yellow-500/20 rounded-full flex items-center justify-center mb-4 text-yellow-400">
+                    <TrafficCone className="w-8 h-8" />
                   </div>
-                  <h4 className="text-slate-400 text-xs uppercase font-bold tracking-wider mb-1">Navios Operados</h4>
-                  <p className="text-4xl font-bold text-white">{loading ? '...' : qtdNaviosDistintos}</p>
-                  <p className="text-xs text-slate-500 mt-2">Navios distintos no período</p>
+                  <h4 className="text-slate-300 text-xs uppercase font-bold tracking-wider mb-1">MAIO AMARELO</h4>
+                  <p className="text-yellow-400 text-sm font-bold mb-2">#PELASVIDASNOTRÂNSITO</p>
+                  <p className="text-xs text-slate-400 mt-2">Sua atitude salva vidas!</p>
+                  <Badge className="mt-3 bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
+                    🌟 Respeito e Responsabilidade
+                  </Badge>
                 </Card>
 
                 <Card className="bg-slate-900/40 border-slate-800 p-4">
                    <h4 className="text-xs font-semibold text-slate-300 uppercase mb-3">Acesso Rápido</h4>
                    <div className="space-y-2">
                       <Button onClick={() => navigate('/novo-lancamento')} variant="ghost" className="w-full justify-start h-8 px-2 text-slate-400 hover:text-white hover:bg-slate-800 text-xs">
-                         <FileText className="mr-2 h-3.5 w-3.5 text-blue-400" /> Novo Relatório
+                         <FileText className="mr-2 h-3.5 w-3.5 text-yellow-400" /> Novo Relatório
                       </Button>
                       <Button onClick={() => navigate('/relatorio-transporte')} variant="ghost" className="w-full justify-start h-8 px-2 text-slate-400 hover:text-white hover:bg-slate-800 text-xs">
                          <Download className="mr-2 h-3.5 w-3.5 text-emerald-400" /> Baixar CSV
@@ -569,7 +584,7 @@ const Dashboard = () => {
                       <XAxis type="number" stroke="#94a3b8" fontSize={12} tickFormatter={(value) => `${value}h`} />
                       <YAxis dataKey="name" type="category" width={250} stroke="#94a3b8" fontSize={11} tick={{fill: '#cbd5e1'}} />
                       <Tooltip content={<CustomTooltip />} cursor={{fill: 'rgba(255,255,255,0.05)'}} />
-                      <Bar dataKey="horas" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
+                      <Bar dataKey="horas" fill="#fbbf24" radius={[0, 4, 4, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -590,7 +605,7 @@ const Dashboard = () => {
                       <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} tick={{fill: '#cbd5e1'}} angle={-45} textAnchor="end" height={60} />
                       <YAxis stroke="#94a3b8" fontSize={12} allowDecimals={false} />
                       <Tooltip content={<CustomTooltip />} cursor={{fill: 'rgba(255,255,255,0.05)'}} />
-                      <Bar dataKey="count" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="count" fill="#facc15" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -609,16 +624,16 @@ const Dashboard = () => {
               <Menu className="w-5 h-5" />
             </Button>
             <div className="flex items-center gap-2">
-               <BarChart3 className="text-blue-500 w-5 h-5" />
+               <BarChart3 className="text-yellow-500 w-5 h-5" />
                <h1 className="text-lg font-bold text-white leading-tight">Dashboard</h1>
             </div>
           </div>
         </div>
 
         <div className="p-4 space-y-6">
-          {/* Banner Mobile */}
+          {/* Banner Mobile - Maio Amarelo */}
           {!bannerFechado && (
-            <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-green-900/40 via-slate-900/60 to-blue-900/40 border border-green-500/30 p-4">
+            <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-yellow-600/30 via-amber-900/40 to-yellow-600/30 border-2 border-yellow-500/50 p-4">
               <button 
                 onClick={() => setBannerFechado(true)}
                 className="absolute top-2 right-2 text-slate-400 hover:text-white"
@@ -627,15 +642,16 @@ const Dashboard = () => {
               </button>
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <Leaf className="w-5 h-5 text-green-400" />
-                  <span className="text-xs font-bold text-green-400">ABRIL VERDE</span>
+                  <TrafficCone className="w-5 h-5 text-yellow-400" />
+                  <span className="text-xs font-black text-yellow-400 tracking-wide">MAIO AMARELO 2025</span>
                 </div>
-                <p className="text-[11px] text-slate-300">Prevenção de acidentes e doenças no trabalho • Segurança em primeiro lugar</p>
-                <div className="flex items-center gap-2">
-                  <Heart className="w-5 h-5 text-blue-400" />
-                  <span className="text-xs font-bold text-blue-400">ABRIL AZUL</span>
+                <p className="text-[11px] text-slate-200 font-semibold">🌍 Juntos Salvamos Vidas</p>
+                <p className="text-[10px] text-slate-300">Prevenção de Acidentes no Trânsito • Sua atitude faz a diferença</p>
+                <div className="flex flex-wrap gap-1 pt-1">
+                  <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[9px]">🛑 Pare e Pense</Badge>
+                  <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[9px]">🚦 Respeito</Badge>
+                  <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[9px]">🚗 Responsabilidade</Badge>
                 </div>
-                <p className="text-[11px] text-slate-300">Conscientização sobre o TEA • Inclusão e respeito para todos</p>
               </div>
             </div>
           )}
@@ -650,7 +666,7 @@ const Dashboard = () => {
                   <Label className="text-xs text-slate-400">Fim</Label>
                   <Input type="date" value={dataFinal} onChange={(e) => setDataFinal(e.target.value)} className="bg-slate-950 border-slate-700 text-white mt-1" />
                </div>
-               <Button onClick={fetchData} className="w-full bg-blue-600 hover:bg-blue-700">Filtrar</Button>
+               <Button onClick={fetchData} className="w-full bg-yellow-500 hover:bg-yellow-600 text-slate-950 font-bold">Filtrar</Button>
             </CardContent>
           </Card>
 

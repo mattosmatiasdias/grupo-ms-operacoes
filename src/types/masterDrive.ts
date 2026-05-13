@@ -86,3 +86,17 @@ export interface Indicadores {
   evolucaoMensal: Array<{ mes: string; horas: number; desvios: number }>;
   rankingColaboradores: Array<{ nome: string; horas: number }>;
 }
+
+// NOVA INTERFACE: ColaboradorTreinado para o Relatório Geral
+export interface ColaboradorTreinado {
+  id: string;
+  colaborador_id: string;
+  colaborador_nome: string;
+  colaborador_funcao: string;
+  treinamento_id: string;
+  topico: string;
+  data_treinamento: string;
+  carga_horaria: number;
+  tipo_treinamento: string;
+  status: string;
+}
