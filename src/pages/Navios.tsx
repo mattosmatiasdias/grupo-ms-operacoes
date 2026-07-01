@@ -1,19 +1,24 @@
 // src/pages/Navios.tsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { 
-  Menu, X, LogOut, Bell, Ship, Calendar, Package, Anchor, 
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import {
+  Menu, X, LogOut, Bell, Ship, Calendar, Package, Anchor,
   BarChart3, Plus, Pencil, ArrowLeft, Loader2, Home, Activity,
-  Search, Filter, XCircle
+  Search, Filter, XCircle, Save, Trash2, ChevronDown
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface Viagem {
   id: string;
@@ -29,20 +34,59 @@ interface Viagem {
   created_at: string;
 }
 
+interface ProducaoDia {
+  data: string;
+  total_tons: number;
+}
+
+const tiposCarga = [
+  "HIDRATO", "CARVAO", "BAUXITA", "COQUE", "PICHE", "FLUORETO", "LINGOTE"
+];
+
 const Navios = () => {
   const { userProfile, signOut } = useAuth();
   const { hasUnread } = useNotifications();
+  const { toast } = useToast();
   const navigate = useNavigate();
+
+  // Estados gerais
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [viagens, setViagens] = useState<Viagem[]>([]);
   const [filteredViagens, setFilteredViagens] = useState<Viagem[]>([]);
   const [loading, setLoading] = useState(true);
-  
-  // Estados para os filtros
+
+  // Filtros
   const [filtroNome, setFiltroNome] = useState('');
   const [filtroCarga, setFiltroCarga] = useState('');
   const [cargasUnicas, setCargasUnicas] = useState<string[]>([]);
 
+  // Navio selecionado
+  const [selectedNavioId, setSelectedNavioId] = useState<string | null>(null);
+  const [navioData, setNavioData] = useState<Viagem | null>(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+
+  // Formulário de edição do navio
+  const [editForm, setEditForm] = useState({
+    nome_navio: '',
+    carga: '',
+    berco: '',
+    quantidade_prevista: '',
+    cbs_total: '',
+    media_cb: '',
+    inicio_operacao: '',
+    final_operacao: '',
+    concluido: false
+  });
+  const [cargaDropdownOpen, setCargaDropdownOpen] = useState(false);
+  const [isSavingNavio, setIsSavingNavio] = useState(false);
+
+  // Produção diária do navio selecionado
+  const [producaoPorDia, setProducaoPorDia] = useState<ProducaoDia[]>([]);
+  const [loadingProd, setLoadingProd] = useState(false);
+  const [dataGlobal, setDataGlobal] = useState(new Date().toISOString().split('T')[0]);
+  const [isSavingProd, setIsSavingProd] = useState(false);
+
+  // Efeito inicial: carregar lista de navios
   useEffect(() => {
     const fetchViagens = async () => {
       setLoading(true);
@@ -50,16 +94,14 @@ const Navios = () => {
         .from('navios')
         .select('*')
         .order('created_at', { ascending: false });
-      
+
       if (!error && data) {
         setViagens(data);
         setFilteredViagens(data);
-        
-        // Extrair cargas únicas para o filtro
         const cargas = data
           .map(v => v.carga)
-          .filter((carga): carga is string => carga !== null && carga !== '')
-          .filter((value, index, self) => self.indexOf(value) === index)
+          .filter((c): c is string => c !== null && c !== '')
+          .filter((v, i, s) => s.indexOf(v) === i)
           .sort();
         setCargasUnicas(cargas);
       }
@@ -68,20 +110,17 @@ const Navios = () => {
     fetchViagens();
   }, []);
 
-  // Efeito para aplicar os filtros
+  // Aplicar filtros
   useEffect(() => {
     let filtered = [...viagens];
-    
     if (filtroNome) {
-      filtered = filtered.filter(v => 
+      filtered = filtered.filter(v =>
         v.nome_navio.toLowerCase().includes(filtroNome.toLowerCase())
       );
     }
-    
     if (filtroCarga) {
       filtered = filtered.filter(v => v.carga === filtroCarga);
     }
-    
     setFilteredViagens(filtered);
   }, [filtroNome, filtroCarga, viagens]);
 
@@ -90,75 +129,212 @@ const Navios = () => {
     setFiltroCarga('');
   };
 
-  const formatDate = (dateString: string | null) => 
+  // Carregar detalhes do navio selecionado
+  const carregarDetalhesNavio = useCallback(async (id: string) => {
+    setLoadingDetails(true);
+    setLoadingProd(true);
+    try {
+      const { data, error } = await supabase
+        .from('navios')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (error) throw error;
+      setNavioData(data);
+      setEditForm({
+        nome_navio: data.nome_navio || '',
+        carga: data.carga || '',
+        berco: data.berco || '',
+        quantidade_prevista: data.quantidade_prevista?.toString() || '',
+        cbs_total: data.cbs_total?.toString() || '',
+        media_cb: data.media_cb?.toString() || '',
+        inicio_operacao: data.inicio_operacao || '',
+        final_operacao: data.final_operacao || '',
+        concluido: data.concluido || false
+      });
+
+      // Carregar produção
+      const { data: prodData, error: prodError } = await supabase
+        .from('registros_producao')
+        .select('data, tons_total')
+        .eq('navio_id', id)
+        .order('data', { ascending: true });
+
+      if (prodError) throw prodError;
+
+      if (prodData && prodData.length > 0) {
+        const agrupado = prodData.reduce((acc: ProducaoDia[], curr) => {
+          const idx = acc.findIndex(item => item.data === curr.data);
+          if (idx !== -1) {
+            acc[idx].total_tons += curr.tons_total || 0;
+          } else {
+            acc.push({ data: curr.data, total_tons: curr.tons_total || 0 });
+          }
+          return acc;
+        }, []);
+        setProducaoPorDia(agrupado.reverse());
+        setDataGlobal(agrupado[0]?.data || new Date().toISOString().split('T')[0]);
+      } else {
+        setProducaoPorDia([]);
+        setDataGlobal(new Date().toISOString().split('T')[0]);
+      }
+    } catch (err) {
+      console.error('Erro ao carregar detalhes:', err);
+      toast({ title: 'Erro', description: 'Falha ao carregar dados do navio.', variant: 'destructive' });
+    } finally {
+      setLoadingDetails(false);
+      setLoadingProd(false);
+    }
+  }, [toast]);
+
+  // Selecionar navio
+  const handleSelectNavio = (id: string) => {
+    setSelectedNavioId(id);
+    carregarDetalhesNavio(id);
+  };
+
+  // Salvar alterações do navio
+  const handleSaveNavio = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedNavioId || !userProfile) return;
+    setIsSavingNavio(true);
+    try {
+      const updateData = {
+        nome_navio: editForm.nome_navio,
+        carga: editForm.carga,
+        berco: editForm.berco,
+        quantidade_prevista: editForm.quantidade_prevista ? Number(editForm.quantidade_prevista) : 0,
+        cbs_total: editForm.cbs_total ? Number(editForm.cbs_total) : 0,
+        media_cb: editForm.media_cb ? Number(editForm.media_cb) : 0,
+        inicio_operacao: editForm.inicio_operacao || null,
+        final_operacao: editForm.final_operacao || null,
+        concluido: editForm.concluido
+      };
+
+      const { error } = await supabase
+        .from('navios')
+        .update(updateData)
+        .eq('id', selectedNavioId);
+
+      if (error) throw error;
+
+      // Atualiza a lista principal
+      setViagens(prev => prev.map(v => v.id === selectedNavioId ? { ...v, ...updateData, id: selectedNavioId, created_at: v.created_at } : v));
+      setNavioData(prev => prev ? { ...prev, ...updateData } : null);
+      toast({ title: 'Sucesso!', description: 'Dados do navio atualizados.' });
+    } catch (error: any) {
+      toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsSavingNavio(false);
+    }
+  };
+
+  // Funções de produção diária
+  const handleProdChange = (index: number, field: 'data' | 'total_tons', value: string) => {
+    setProducaoPorDia(prev => {
+      const newList = [...prev];
+      if (field === 'data') {
+        newList[index] = { ...newList[index], data: value };
+      } else {
+        const numValue = value === '' ? 0 : Number(value);
+        newList[index] = { ...newList[index], total_tons: numValue };
+      }
+      return newList;
+    });
+  };
+
+  const addProdLinha = () => {
+    const ultimaData = producaoPorDia.length > 0
+      ? producaoPorDia[producaoPorDia.length - 1].data
+      : dataGlobal;
+    const novaData = new Date(new Date(ultimaData).getTime() + 86400000).toISOString().split('T')[0];
+    setProducaoPorDia(prev => [...prev, { data: novaData, total_tons: 0 }]);
+  };
+
+  const removeProdLinha = (index: number) => {
+    if (producaoPorDia.length > 1) {
+      setProducaoPorDia(prev => prev.filter((_, i) => i !== index));
+    } else {
+      toast({ title: 'Aviso', description: 'É necessário manter pelo menos um registro.' });
+    }
+  };
+
+  const handleAplicarDataGlobal = () => {
+    setProducaoPorDia(prev => prev.map(r => ({ ...r, data: dataGlobal })));
+    try {
+      const dataFormatada = format(new Date(dataGlobal), 'dd/MM/yyyy', { locale: ptBR });
+      toast({ title: 'Datas Atualizadas', description: `Todos os registros definidos para ${dataFormatada}` });
+    } catch { }
+  };
+
+  const handleSaveProd = async () => {
+    if (!selectedNavioId || !userProfile) return;
+    setIsSavingProd(true);
+    try {
+      // Primeiro remove todos os registros existentes e insere os novos (ou faz upsert)
+      // Para simplificar, deletamos todos e reinserimos
+      await supabase.from('registros_producao').delete().eq('navio_id', selectedNavioId);
+
+      if (producaoPorDia.length > 0) {
+        const inserts = producaoPorDia.map(reg => ({
+          navio_id: selectedNavioId,
+          user_id: userProfile.id,
+          data: reg.data,
+          tons_total: reg.total_tons
+        }));
+        const { error: insertError } = await supabase.from('registros_producao').insert(inserts);
+        if (insertError) throw insertError;
+      }
+
+      toast({ title: 'Sucesso!', description: 'Produção diária salva.' });
+      // Recarrega para garantir
+      await carregarDetalhesNavio(selectedNavioId);
+    } catch (error: any) {
+      toast({ title: 'Erro ao salvar produção', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsSavingProd(false);
+    }
+  };
+
+  const totalGeralTons = producaoPorDia.reduce((sum, dia) => sum + (dia.total_tons || 0), 0);
+
+  // Formatações
+  const formatDate = (dateString: string | null) =>
     dateString ? new Date(dateString).toLocaleDateString('pt-BR') : 'N/A';
 
-  const getStatusColor = (concluido: boolean) => 
-    concluido 
-      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+  const getStatusColor = (concluido: boolean) =>
+    concluido
+      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
       : 'bg-blue-500/10 text-blue-400 border-blue-500/20';
 
   const calcularDiasOperacao = (inicio: string | null, final: string | null) => {
     if (!inicio) return 0;
     const inicioDate = new Date(inicio);
     const finalDate = final ? new Date(final) : new Date();
-    const diffTime = Math.abs(finalDate.getTime() - inicioDate.getTime());
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return Math.ceil(Math.abs(finalDate.getTime() - inicioDate.getTime()) / (1000 * 60 * 60 * 24));
   };
 
   const handleSignOut = async () => {
     await signOut();
   };
 
-  const menuItems = [
-    {
-      icon: Ship,
-      label: 'Lista de Navios',
-      path: '/navios',
-      color: 'text-purple-400',
-      bgHover: 'hover:bg-purple-500/10',
-    }
-  ];
-
-  // Dados para Cards de Resumo
+  // Stats com base nos filtrados
   const statsData = [
-    { 
-      label: 'Total Viagens', 
-      value: filteredViagens.length, 
-      icon: Ship, 
-      color: 'text-blue-400', 
-      bg: 'bg-blue-500/10' 
-    },
-    { 
-      label: 'Em Andamento', 
-      value: filteredViagens.filter(v => !v.concluido).length, 
-      icon: Activity, 
-      color: 'text-green-400', 
-      bg: 'bg-green-500/10' 
-    },
-    { 
-      label: 'Concluídas', 
-      value: filteredViagens.filter(v => v.concluido).length, 
-      icon: Package, 
-      color: 'text-slate-400', 
-      bg: 'bg-slate-700/20' 
-    },
-    { 
-      label: 'Média CBs', 
-      value: filteredViagens.length > 0 
-        ? Math.round(filteredViagens.reduce((acc, v) => acc + (v.media_cb || 0), 0) / filteredViagens.length)
-        : 0,
-      icon: BarChart3, 
-      color: 'text-amber-400', 
-      bg: 'bg-amber-500/10' 
-    }
+    { label: 'Total Viagens', value: filteredViagens.length, icon: Ship, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+    { label: 'Em Andamento', value: filteredViagens.filter(v => !v.concluido).length, icon: Activity, color: 'text-green-400', bg: 'bg-green-500/10' },
+    { label: 'Concluídas', value: filteredViagens.filter(v => v.concluido).length, icon: Package, color: 'text-slate-400', bg: 'bg-slate-700/20' },
+    { label: 'Média CBs', value: filteredViagens.length > 0
+      ? Math.round(filteredViagens.reduce((acc, v) => acc + (v.media_cb || 0), 0) / filteredViagens.length)
+      : 0,
+      icon: BarChart3, color: 'text-amber-400', bg: 'bg-amber-500/10' }
   ];
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-blue-500/30">
       {/* Layout Desktop */}
       <div className="hidden lg:flex min-h-screen">
-        {/* Sidebar Desktop */}
+        {/* Sidebar (menu lateral) */}
         <div className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col flex-shrink-0">
           <div className="p-6 border-b border-slate-800">
             <div className="flex items-center gap-3">
@@ -184,23 +360,20 @@ const Navios = () => {
               <ArrowLeft className="mr-3 h-4 w-4" />
               <span className="text-sm font-medium">Voltar ao Dashboard</span>
             </Button>
-            {menuItems.map((item) => (
-              <Button
-                key={item.path}
-                onClick={() => navigate(item.path)}
-                variant="ghost"
-                className={`w-full justify-start h-10 px-3 text-slate-400 hover:text-white hover:bg-slate-800 ${item.bgHover}`}
-              >
-                <item.icon className={`mr-3 h-4 w-4 ${item.color}`} />
-                <span className="text-sm font-medium">{item.label}</span>
-              </Button>
-            ))}
+            <Button
+              onClick={() => navigate('/novo-navio')}
+              variant="ghost"
+              className="w-full justify-start h-10 px-3 text-slate-400 hover:text-white hover:bg-slate-800"
+            >
+              <Plus className="mr-3 h-4 w-4" />
+              <span className="text-sm font-medium">Novo Navio</span>
+            </Button>
           </div>
 
           <div className="p-4 border-t border-slate-800 bg-slate-900/50">
             <div className="flex items-center gap-3 px-2 mb-4">
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white font-bold text-xs shadow-lg shadow-blue-500/20">
-                {userProfile?.full_name?.substring(0,2).toUpperCase() || 'US'}
+                {userProfile?.full_name?.substring(0, 2).toUpperCase() || 'US'}
               </div>
               <div className="flex flex-col overflow-hidden">
                 <span className="text-sm font-medium text-white truncate leading-tight">{userProfile?.full_name || 'Usuário'}</span>
@@ -218,408 +391,513 @@ const Navios = () => {
           </div>
         </div>
 
-        {/* Main Content Desktop */}
-        <div className="flex-1 flex flex-col min-w-0 bg-slate-950/50">
-          {/* Sticky Header */}
-          <div className="sticky top-0 z-20 bg-slate-950/80 backdrop-blur-md border-b border-slate-800/50 px-8 py-4 flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-bold text-white">Gestão de Navios</h2>
-              <p className="text-xs text-slate-400">Sistema de monitoramento de viagens e cargas</p>
+        {/* Conteúdo principal: lista + detalhes */}
+        <div className="flex-1 flex min-w-0">
+          {/* Coluna da lista (centro) */}
+          <div className="flex-1 flex flex-col min-w-0 bg-slate-950/50 border-r border-slate-800/50">
+            <div className="sticky top-0 z-20 bg-slate-950/80 backdrop-blur-md border-b border-slate-800/50 px-6 py-4">
+              <h2 className="text-lg font-bold text-white">Navios</h2>
             </div>
-            <div className="flex items-center gap-3">
-              <Button onClick={() => navigate('/novo-navio')} className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm shadow-blue-900/20 h-9 px-4">
-                <Plus className="h-4 w-4 mr-2" />
-                <span className="text-sm">Novo Navio</span>
-              </Button>
-            </div>
-          </div>
-
-          <main className="flex-1 overflow-y-auto p-6 space-y-6">
-            {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {statsData.map((stat, idx) => (
-                <Card key={idx} className="bg-slate-900/40 border-slate-800 p-4 flex items-center justify-between hover:border-slate-700 transition-colors">
-                  <div className="flex items-center gap-4">
-                    <div className={`p-2.5 rounded-lg ${stat.bg} ${stat.color}`}>
-                      <stat.icon className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">{stat.label}</p>
-                      <p className="text-xl font-bold text-white mt-0.5">{stat.value}</p>
-                    </div>
-                  </div>
-                </Card>
-              ))}
-            </div>
-
-            {/* Filtros */}
-            <Card className="bg-slate-900/40 border-slate-800">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-4 flex-wrap">
-                  <div className="flex items-center gap-2">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {/* Filtros */}
+              <Card className="bg-slate-900/40 border-slate-800">
+                <CardContent className="p-3">
+                  <div className="flex items-center gap-3 flex-wrap">
                     <Filter className="h-4 w-4 text-slate-400" />
-                    <span className="text-sm text-slate-300">Filtros:</span>
-                  </div>
-                  
-                  <div className="flex-1 min-w-[200px]">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-500" />
+                    <div className="flex-1 min-w-[150px] relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                       <Input
-                        placeholder="Filtrar por nome do navio..."
+                        placeholder="Filtrar nome..."
                         value={filtroNome}
                         onChange={(e) => setFiltroNome(e.target.value)}
-                        className="pl-9 bg-slate-950 border-slate-700 text-slate-200 placeholder:text-slate-500 focus-visible:ring-blue-500"
+                        className="pl-9 bg-slate-950 border-slate-700 text-slate-200 h-9 text-sm"
                       />
                     </div>
-                  </div>
-
-                  <div className="w-48">
                     <select
                       value={filtroCarga}
                       onChange={(e) => setFiltroCarga(e.target.value)}
-                      className="w-full h-10 px-3 rounded-md bg-slate-950 border border-slate-700 text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="h-9 px-3 rounded-md bg-slate-950 border border-slate-700 text-slate-200 text-sm"
                     >
-                      <option value="">Todas as cargas</option>
-                      {cargasUnicas.map((carga) => (
-                        <option key={carga} value={carga}>{carga}</option>
+                      <option value="">Todas cargas</option>
+                      {cargasUnicas.map((c) => (
+                        <option key={c} value={c}>{c}</option>
                       ))}
                     </select>
+                    {(filtroNome || filtroCarga) && (
+                      <Button variant="ghost" size="sm" onClick={limparFiltros} className="text-slate-400 h-8">
+                        <XCircle className="h-4 w-4 mr-1" /> Limpar
+                      </Button>
+                    )}
+                    <span className="text-xs text-slate-400 ml-auto">{filteredViagens.length} resultados</span>
                   </div>
+                </CardContent>
+              </Card>
 
-                  {(filtroNome || filtroCarga) && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={limparFiltros}
-                      className="text-slate-400 hover:text-white hover:bg-slate-800"
-                    >
-                      <XCircle className="h-4 w-4 mr-1" />
-                      Limpar filtros
-                    </Button>
-                  )}
-
-                  <div className="text-sm text-slate-400 ml-auto">
-                    {filteredViagens.length} {filteredViagens.length === 1 ? 'resultado' : 'resultados'}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Table Card */}
-            <Card className="bg-slate-900/40 border-slate-800 shadow-sm flex flex-col">
-              <CardHeader className="bg-slate-800/30 border-b border-slate-800/50 p-4 flex flex-row items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Ship className="h-5 w-5 text-blue-400" />
-                  <CardTitle className="text-slate-100 text-base font-medium">Viagens Registradas</CardTitle>
-                </div>
-                <Badge variant="outline" className="bg-slate-950 border-slate-700 text-slate-400 text-xs px-2 py-0.5">
-                  {filteredViagens.length} de {viagens.length} Total
-                </Badge>
-              </CardHeader>
-              <CardContent className="p-0 overflow-x-auto">
-                <Table>
-                  <TableHeader className="bg-slate-950">
-                    <TableRow className="hover:bg-slate-950 border-slate-800">
-                      <TableHead className="text-[11px] font-semibold text-slate-400 uppercase py-3 pl-4">Navio</TableHead>
-                      <TableHead className="text-[11px] font-semibold text-slate-400 uppercase py-3">Carga</TableHead>
-                      <TableHead className="text-[11px] font-semibold text-slate-400 uppercase py-3">Berço</TableHead>
-                      <TableHead className="text-[11px] font-semibold text-slate-400 uppercase py-3">Qtd</TableHead>
-                      <TableHead className="text-[11px] font-semibold text-slate-400 uppercase py-3">CBs</TableHead>
-                      <TableHead className="text-[11px] font-semibold text-slate-400 uppercase py-3">Início</TableHead>
-                      <TableHead className="text-[11px] font-semibold text-slate-400 uppercase py-3">Dias</TableHead>
-                      <TableHead className="text-[11px] font-semibold text-slate-400 uppercase py-3">Status</TableHead>
-                      <TableHead className="text-[11px] font-semibold text-slate-400 uppercase py-3 text-right pr-4">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {loading ? (
-                      <TableRow>
-                        <TableCell colSpan={9} className="text-center py-12 text-slate-500">
-                          <Loader2 className="h-6 w-6 animate-spin mx-auto text-blue-500 mb-2" />
-                          <p className="text-sm">Carregando dados...</p>
-                        </TableCell>
+              {/* Tabela de navios */}
+              <Card className="bg-slate-900/40 border-slate-800 shadow-sm">
+                <CardContent className="p-0 overflow-x-auto">
+                  <Table>
+                    <TableHeader className="bg-slate-950">
+                      <TableRow className="hover:bg-slate-950 border-slate-800">
+                        <TableHead className="text-[11px] font-semibold text-slate-400 uppercase py-2 pl-3">Navio</TableHead>
+                        <TableHead className="text-[11px] font-semibold text-slate-400 uppercase py-2">Carga</TableHead>
+                        <TableHead className="text-[11px] font-semibold text-slate-400 uppercase py-2">Status</TableHead>
                       </TableRow>
-                    ) : filteredViagens.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={9} className="text-center py-16 text-slate-500">
-                          <div className="flex flex-col items-center justify-center space-y-3">
-                            <div className="p-3 bg-slate-800 rounded-full">
-                              <Ship className="h-6 w-6 text-slate-400" />
-                            </div>
-                            <div className="space-y-1">
-                              <p className="text-sm font-medium text-slate-300">
-                                {viagens.length === 0 ? 'Nenhuma viagem registrada' : 'Nenhum resultado encontrado'}
-                              </p>
-                              <p className="text-xs text-slate-500">
-                                {viagens.length === 0 
-                                  ? 'Inicie o cadastro para começar' 
-                                  : 'Tente ajustar os filtros para ver mais resultados'}
-                              </p>
-                            </div>
-                            {viagens.length === 0 ? (
-                              <Button onClick={() => navigate('/novo-navio')} variant="outline" size="sm" className="border-slate-700 text-slate-300 hover:bg-slate-800">
-                                <Plus className="h-3 w-3 mr-1" /> Cadastrar Viagem
-                              </Button>
-                            ) : (
-                              <Button onClick={limparFiltros} variant="outline" size="sm" className="border-slate-700 text-slate-300 hover:bg-slate-800">
-                                <XCircle className="h-3 w-3 mr-1" /> Limpar filtros
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      filteredViagens.map((viagem) => {
-                        const diasOperacao = calcularDiasOperacao(viagem.inicio_operacao, viagem.final_operacao);
-                        
-                        return (
-                          <TableRow key={viagem.id} className="hover:bg-slate-800/20 transition-colors border-slate-800">
-                            <TableCell className="py-3 pl-4">
-                              <div className="flex items-center gap-3">
-                                <div className="p-1.5 rounded bg-blue-500/10 text-blue-400">
-                                  <Ship className="h-4 w-4" />
-                                </div>
+                    </TableHeader>
+                    <TableBody>
+                      {loading ? (
+                        <TableRow>
+                          <TableCell colSpan={3} className="text-center py-8 text-slate-500">
+                            <Loader2 className="h-5 w-5 animate-spin mx-auto text-blue-500 mb-2" />
+                            Carregando...
+                          </TableCell>
+                        </TableRow>
+                      ) : filteredViagens.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={3} className="text-center py-8 text-slate-500">
+                            Nenhum navio encontrado.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        filteredViagens.map((viagem) => (
+                          <TableRow
+                            key={viagem.id}
+                            className={`cursor-pointer transition-colors border-slate-800 ${
+                              selectedNavioId === viagem.id
+                                ? 'bg-blue-500/10 hover:bg-blue-500/20'
+                                : 'hover:bg-slate-800/40'
+                            }`}
+                            onClick={() => handleSelectNavio(viagem.id)}
+                          >
+                            <TableCell className="py-2 pl-3">
+                              <div className="flex items-center gap-2">
+                                <Ship className="h-4 w-4 text-blue-400" />
                                 <div>
                                   <div className="text-sm font-medium text-white">{viagem.nome_navio}</div>
-                                  <div className="text-[10px] text-slate-500 font-mono">{viagem.id.substring(0,8)}</div>
+                                  <div className="text-[10px] text-slate-500">{viagem.berco || '-'}</div>
                                 </div>
                               </div>
                             </TableCell>
-                            <TableCell className="py-3 text-sm text-slate-300">
+                            <TableCell className="py-2">
                               <Badge variant="secondary" className="bg-slate-800 text-slate-300 border-slate-700 text-[10px] px-1.5 py-0 h-5">
                                 {viagem.carga || 'N/A'}
                               </Badge>
                             </TableCell>
-                            <TableCell className="py-3 text-sm text-slate-300">
-                              <div className="flex items-center gap-1.5">
-                                <Anchor className="h-3 w-3 text-slate-500" />
-                                <span className="text-xs">{viagem.berco || '-'}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell className="py-3 text-sm font-mono text-slate-300">
-                              {viagem.quantidade_prevista?.toLocaleString('pt-BR') || '-'}
-                            </TableCell>
-                            <TableCell className="py-3">
-                              <span className="text-xs font-bold text-slate-200 bg-slate-800 px-2 py-1 rounded border border-slate-700">
-                                {viagem.cbs_total || 0} CBs
-                              </span>
-                            </TableCell>
-                            <TableCell className="py-3 text-sm text-slate-300">
-                              {formatDate(viagem.inicio_operacao)}
-                            </TableCell>
-                            <TableCell className="py-3">
-                              <Badge variant="outline" className="bg-purple-500/5 text-purple-400 border-purple-500/20 text-[10px] h-5 px-1.5">
-                                {diasOperacao} dias
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="py-3">
+                            <TableCell className="py-2">
                               <Badge className={getStatusColor(viagem.concluido) + " text-[10px] h-5 px-2 font-medium"}>
                                 {viagem.concluido ? 'Concluído' : 'Em andamento'}
                               </Badge>
                             </TableCell>
-                            <TableCell className="py-3 text-right pr-4 space-x-1">
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                onClick={() => navigate(`/navio/${viagem.id}/editar`)}
-                                className="h-8 w-8 text-slate-400 hover:text-blue-400 hover:bg-blue-500/10"
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="icon"
-                                onClick={() => navigate(`/navio/${viagem.id}/producao`)}
-                                className="h-8 w-8 text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10"
-                              >
-                                <Plus className="h-3.5 w-3.5" />
-                              </Button>
-                            </TableCell>
                           </TableRow>
-                        );
-                      })
-                    )}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </main>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+
+          {/* Painel de detalhes (direita) */}
+          <div className="w-[480px] flex flex-col bg-slate-900/30 overflow-y-auto">
+            {selectedNavioId ? (
+              <div className="flex-1 p-4 space-y-4">
+                <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                  <Pencil className="h-4 w-4 text-blue-400" /> Detalhes do Navio
+                </h3>
+
+                {/* Formulário de edição */}
+                <form onSubmit={handleSaveNavio} className="space-y-4">
+                  <Card className="bg-slate-900/40 border-slate-800">
+                    <CardContent className="p-4 space-y-3">
+                      <div>
+                        <Label className="text-xs text-slate-400">Nome do Navio</Label>
+                        <Input
+                          value={editForm.nome_navio}
+                          onChange={(e) => setEditForm(prev => ({ ...prev, nome_navio: e.target.value }))}
+                          className="bg-slate-950 border-slate-700 text-white h-9 text-sm"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-xs text-slate-400">Carga</Label>
+                          <div className="relative">
+                            <Input
+                              value={editForm.carga}
+                              onChange={(e) => setEditForm(prev => ({ ...prev, carga: e.target.value }))}
+                              className="bg-slate-950 border-slate-700 text-white h-9 text-sm pr-10"
+                              placeholder="Selecione"
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="absolute right-0 top-0 h-9 px-2"
+                              onClick={() => setCargaDropdownOpen(!cargaDropdownOpen)}
+                            >
+                              <ChevronDown className={`h-4 w-4 transition-transform ${cargaDropdownOpen ? 'rotate-180' : ''}`} />
+                            </Button>
+                          </div>
+                          {cargaDropdownOpen && (
+                            <div className="absolute z-50 w-48 mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-xl">
+                              <div className="p-1">
+                                {tiposCarga.map((tipo) => (
+                                  <button
+                                    key={tipo}
+                                    type="button"
+                                    onClick={() => {
+                                      setEditForm(prev => ({ ...prev, carga: tipo }));
+                                      setCargaDropdownOpen(false);
+                                    }}
+                                    className={`w-full text-left px-3 py-1.5 text-sm rounded-md ${
+                                      editForm.carga === tipo ? 'bg-blue-500/20 text-blue-300' : 'text-slate-400 hover:bg-slate-700'
+                                    }`}
+                                  >
+                                    {tipo}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <Label className="text-xs text-slate-400">Berço</Label>
+                          <select
+                            value={editForm.berco}
+                            onChange={(e) => setEditForm(prev => ({ ...prev, berco: e.target.value }))}
+                            className="w-full bg-slate-950 border border-slate-700 text-white h-9 rounded-md text-sm"
+                          >
+                            <option value="">Selecione...</option>
+                            {['101','102','103','104','201','202','203','204'].map(b => (
+                              <option key={b} value={b}>{b}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-xs text-slate-400">Quantidade (T)</Label>
+                          <Input
+                            type="number"
+                            step="0.001"
+                            value={editForm.quantidade_prevista}
+                            onChange={(e) => setEditForm(prev => ({ ...prev, quantidade_prevista: e.target.value }))}
+                            className="bg-slate-950 border-slate-700 text-white h-9 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs text-slate-400">Total CBs</Label>
+                          <Input
+                            type="number"
+                            step="0.001"
+                            value={editForm.cbs_total}
+                            onChange={(e) => setEditForm(prev => ({ ...prev, cbs_total: e.target.value }))}
+                            className="bg-slate-950 border-slate-700 text-white h-9 text-sm"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-xs text-slate-400">Média CB</Label>
+                          <Input
+                            type="number"
+                            step="0.0001"
+                            value={editForm.media_cb}
+                            onChange={(e) => setEditForm(prev => ({ ...prev, media_cb: e.target.value }))}
+                            className="bg-slate-950 border-slate-700 text-white h-9 text-sm"
+                          />
+                        </div>
+                        <div className="flex items-end">
+                          <div className="flex items-center gap-2 h-9">
+                            <Switch
+                              checked={editForm.concluido}
+                              onCheckedChange={(checked) => setEditForm(prev => ({ ...prev, concluido: checked }))}
+                            />
+                            <Label className="text-xs text-slate-400">
+                              {editForm.concluido ? 'Concluído' : 'Em andamento'}
+                            </Label>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-xs text-slate-400">Início Operação</Label>
+                          <Input
+                            type="datetime-local"
+                            value={editForm.inicio_operacao || ''}
+                            onChange={(e) => setEditForm(prev => ({ ...prev, inicio_operacao: e.target.value }))}
+                            className="bg-slate-950 border-slate-700 text-white h-9 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs text-slate-400">Fim Operação</Label>
+                          <Input
+                            type="datetime-local"
+                            value={editForm.final_operacao || ''}
+                            onChange={(e) => setEditForm(prev => ({ ...prev, final_operacao: e.target.value }))}
+                            className="bg-slate-950 border-slate-700 text-white h-9 text-sm"
+                          />
+                        </div>
+                      </div>
+                      <Button
+                        type="submit"
+                        disabled={isSavingNavio}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white h-9 text-sm"
+                      >
+                        {isSavingNavio ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                        Salvar Navio
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </form>
+
+                {/* Produção Diária */}
+                <h3 className="text-sm font-semibold text-white flex items-center gap-2 pt-2">
+                  <BarChart3 className="h-4 w-4 text-emerald-400" /> Produção Diária
+                  <span className="text-xs text-slate-400 font-normal">Total: {totalGeralTons.toFixed(3)} T</span>
+                </h3>
+
+                <Card className="bg-slate-900/40 border-slate-800">
+                  <CardContent className="p-4 space-y-3">
+                    {/* Data Global */}
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-slate-400" />
+                      <Label className="text-xs text-slate-400">Data Global</Label>
+                      <Input
+                        type="date"
+                        value={dataGlobal}
+                        onChange={(e) => setDataGlobal(e.target.value)}
+                        className="h-8 w-36 bg-slate-950 border-slate-700 text-white text-xs"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleAplicarDataGlobal}
+                        className="h-8 border-slate-700 text-slate-300 text-xs"
+                      >
+                        Aplicar
+                      </Button>
+                    </div>
+
+                    {/* Lista de registros */}
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {producaoPorDia.map((registro, idx) => (
+                        <div key={idx} className="flex items-center gap-2 bg-slate-950/50 rounded p-2 border border-slate-800/50">
+                          <Input
+                            type="date"
+                            value={registro.data}
+                            onChange={(e) => handleProdChange(idx, 'data', e.target.value)}
+                            className="h-8 bg-slate-950 border-slate-700 text-white text-xs w-32"
+                          />
+                          <div className="relative flex-1">
+                            <Input
+                              type="number"
+                              step="0.001"
+                              value={registro.total_tons === 0 ? '' : registro.total_tons}
+                              onChange={(e) => handleProdChange(idx, 'total_tons', e.target.value)}
+                              className="h-8 bg-slate-950 border-slate-700 text-white text-sm pr-10"
+                              placeholder="0.000"
+                            />
+                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-500">T</span>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-slate-500 hover:text-red-400"
+                            onClick={() => removeProdLinha(idx)}
+                            disabled={producaoPorDia.length <= 1}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={addProdLinha}
+                        className="border-slate-700 text-slate-300 hover:bg-slate-800 h-8 text-xs"
+                      >
+                        <Plus className="h-3.5 w-3.5 mr-1" /> Nova Linha
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleSaveProd}
+                        disabled={isSavingProd}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white h-8 text-xs"
+                      >
+                        {isSavingProd ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Save className="h-3.5 w-3.5 mr-1" />}
+                        Salvar Produção
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            ) : (
+              <div className="flex-1 flex items-center justify-center text-slate-500 p-8">
+                <div className="text-center">
+                  <Ship className="h-12 w-12 mx-auto mb-3 text-slate-700" />
+                  <p className="text-sm">Selecione um navio para ver detalhes</p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Mobile Layout */}
+      {/* Mobile Layout (simplificado, empilhado) */}
       <div className="lg:hidden flex flex-col min-h-screen bg-slate-950">
-        {/* Header Mobile */}
-        <div className="bg-slate-900 border-b border-slate-800 p-4 sticky top-0 z-30 flex items-center justify-between shadow-md">
+        <div className="bg-slate-900 border-b border-slate-800 p-4 flex items-center justify-between sticky top-0 z-30">
           <div className="flex items-center gap-3">
-            <Button onClick={() => setSidebarOpen(true)} variant="ghost" size="icon" className="text-white hover:bg-slate-800">
+            <Button onClick={() => setSidebarOpen(true)} variant="ghost" size="icon" className="text-white">
               <Menu className="w-5 h-5" />
             </Button>
-            <div className="flex items-center gap-2">
-               <Ship className="text-purple-400 w-5 h-5" />
-               <h1 className="text-lg font-bold text-white leading-tight">Navios</h1>
-            </div>
+            <Ship className="text-purple-400 w-5 h-5" />
+            <h1 className="text-lg font-bold text-white">Navios</h1>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="relative text-slate-400 hover:text-white">
-              <Bell className="h-5 w-5" />
-              {hasUnread && (
-                <span className="absolute top-2 right-2 h-2 w-2 bg-red-500 rounded-full border border-slate-900"></span>
-              )}
-            </Button>
-            <Button onClick={handleSignOut} variant="ghost" size="icon" className="text-slate-400 hover:text-red-400 hover:bg-red-500/10">
-              <LogOut className="h-5 w-5" />
-            </Button>
-          </div>
+          <Button onClick={handleSignOut} variant="ghost" size="icon" className="text-slate-400">
+            <LogOut className="h-5 w-5" />
+          </Button>
         </div>
 
-        {/* Sidebar Mobile Overlay */}
         {sidebarOpen && (
-          <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-sm">
             <div className="flex justify-between items-center p-4 border-b border-slate-800">
-              <h2 className="text-white font-bold text-lg">Menu de Navegação</h2>
-              <Button onClick={() => setSidebarOpen(false)} variant="ghost" size="icon" className="text-white hover:bg-slate-800">
+              <h2 className="text-white font-bold">Menu</h2>
+              <Button onClick={() => setSidebarOpen(false)} variant="ghost" size="icon" className="text-white">
                 <X className="w-6 h-6" />
               </Button>
             </div>
             <div className="p-4 space-y-2">
-              <Button onClick={() => navigate('/dashboard')} variant="outline" className="w-full justify-start border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white h-12 px-4">
-                <ArrowLeft className="mr-3 h-4 w-4" /> Voltar ao Dashboard
+              <Button onClick={() => navigate('/dashboard')} variant="outline" className="w-full justify-start border-slate-700 text-slate-300 h-12">
+                <ArrowLeft className="mr-3 h-4 w-4" /> Dashboard
               </Button>
-              {menuItems.map((item) => (
-                <Button
-                  key={item.path}
-                  onClick={() => { navigate(item.path); setSidebarOpen(false); }}
-                  className={`w-full justify-start h-12 px-4 ${item.bgHover} bg-slate-900 text-slate-300 hover:text-white border border-slate-800 rounded-lg transition-all`}
-                >
-                  <item.icon className={`mr-3 h-5 w-5 ${item.color}`} />
-                  <span className="text-sm font-medium">{item.label}</span>
-                </Button>
-              ))}
+              <Button onClick={() => navigate('/novo-navio')} variant="outline" className="w-full justify-start border-slate-700 text-slate-300 h-12">
+                <Plus className="mr-3 h-4 w-4" /> Novo Navio
+              </Button>
             </div>
           </div>
         )}
 
-        {/* Mobile Content */}
-        <div className="p-4 space-y-6 pb-20">
-           {/* Mobile Stats */}
-           <div className="grid grid-cols-2 gap-3">
-              {statsData.map((stat, idx) => (
-                 <div key={idx} className="bg-slate-900 border border-slate-800 p-3 rounded-lg flex items-center gap-3">
-                    <div className={`p-2 rounded-md ${stat.bg} ${stat.color}`}>
-                      <stat.icon className="w-5 h-5" />
+        <div className="p-4 space-y-4">
+          {/* Filtros mobile */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+            <Input
+              placeholder="Buscar navio..."
+              value={filtroNome}
+              onChange={(e) => setFiltroNome(e.target.value)}
+              className="pl-9 bg-slate-900 border-slate-700 text-slate-200"
+            />
+          </div>
+
+          {/* Lista mobile */}
+          <div className="space-y-2">
+            {filteredViagens.map((viagem) => (
+              <Card
+                key={viagem.id}
+                className={`bg-slate-900 border-slate-800 cursor-pointer ${
+                  selectedNavioId === viagem.id ? 'ring-2 ring-blue-500' : ''
+                }`}
+                onClick={() => handleSelectNavio(viagem.id)}
+              >
+                <CardContent className="p-3 flex justify-between items-center">
+                  <div>
+                    <p className="text-sm font-medium text-white">{viagem.nome_navio}</p>
+                    <p className="text-xs text-slate-400">{viagem.carga || 'N/A'} • {viagem.berco || '-'}</p>
+                  </div>
+                  <Badge className={getStatusColor(viagem.concluido)}>
+                    {viagem.concluido ? 'Concluído' : 'Em andamento'}
+                  </Badge>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Detalhes mobile (abaixo da lista) */}
+          {selectedNavioId && (
+            <div className="space-y-4 mt-6 border-t border-slate-800 pt-4">
+              <h3 className="text-white font-bold">Detalhes</h3>
+              {/* Versão simplificada mobile: apenas campos essenciais e produção */}
+              <Card className="bg-slate-900 border-slate-800">
+                <CardContent className="p-4 space-y-3">
+                  <div>
+                    <Label className="text-xs text-slate-400">Nome</Label>
+                    <Input
+                      value={editForm.nome_navio}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, nome_navio: e.target.value }))}
+                      className="bg-slate-950 border-slate-700 text-white h-9"
+                    />
+                  </div>
+                  <Button
+                    onClick={handleSaveNavio}
+                    disabled={isSavingNavio}
+                    className="w-full bg-blue-600 hover:bg-blue-700 h-9"
+                  >
+                    {isSavingNavio ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Salvar Navio'}
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* Produção mobile */}
+              <Card className="bg-slate-900 border-slate-800">
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-slate-400" />
+                    <Input
+                      type="date"
+                      value={dataGlobal}
+                      onChange={(e) => setDataGlobal(e.target.value)}
+                      className="h-8 w-36 bg-slate-950 border-slate-700 text-white text-xs"
+                    />
+                    <Button variant="outline" size="sm" onClick={handleAplicarDataGlobal} className="h-8 text-xs">
+                      Aplicar
+                    </Button>
+                  </div>
+                  {producaoPorDia.map((reg, idx) => (
+                    <div key={idx} className="flex gap-2 items-center">
+                      <Input
+                        type="date"
+                        value={reg.data}
+                        onChange={(e) => handleProdChange(idx, 'data', e.target.value)}
+                        className="h-8 bg-slate-950 border-slate-700 text-xs w-32"
+                      />
+                      <Input
+                        type="number"
+                        step="0.001"
+                        value={reg.total_tons === 0 ? '' : reg.total_tons}
+                        onChange={(e) => handleProdChange(idx, 'total_tons', e.target.value)}
+                        className="h-8 bg-slate-950 border-slate-700 text-xs flex-1"
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => removeProdLinha(idx)}
+                        disabled={producaoPorDia.length <= 1}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
                     </div>
-                    <div>
-                       <p className="text-[10px] text-slate-500 uppercase font-semibold">{stat.label}</p>
-                       <p className="text-lg font-bold text-white">{stat.value}</p>
-                    </div>
-                 </div>
-              ))}
-           </div>
-
-           {/* Mobile Filters */}
-           <div className="space-y-3">
-             <div className="relative">
-               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-500" />
-               <Input
-                 placeholder="Buscar navio..."
-                 value={filtroNome}
-                 onChange={(e) => setFiltroNome(e.target.value)}
-                 className="pl-9 bg-slate-900 border-slate-700 text-slate-200 placeholder:text-slate-500"
-               />
-             </div>
-             
-             <div className="flex gap-2">
-               <select
-                 value={filtroCarga}
-                 onChange={(e) => setFiltroCarga(e.target.value)}
-                 className="flex-1 h-10 px-3 rounded-md bg-slate-900 border border-slate-700 text-slate-200 text-sm"
-               >
-                 <option value="">Todas cargas</option>
-                 {cargasUnicas.map((carga) => (
-                   <option key={carga} value={carga}>{carga}</option>
-                 ))}
-               </select>
-               
-               {(filtroNome || filtroCarga) && (
-                 <Button
-                   variant="outline"
-                   size="icon"
-                   onClick={limparFiltros}
-                   className="border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800"
-                 >
-                   <XCircle className="h-4 w-4" />
-                 </Button>
-               )}
-             </div>
-           </div>
-
-           {/* Mobile Table Card */}
-           <div className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden shadow-lg">
-              <div className="p-3 border-b border-slate-800 bg-slate-800/30 flex justify-between items-center">
-                 <span className="text-sm font-semibold text-white">Viagens</span>
-                 <span className="text-xs text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
-                   {filteredViagens.length} de {viagens.length}
-                 </span>
-              </div>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader className="bg-slate-950">
-                    <TableRow className="hover:bg-slate-950 border-slate-800">
-                      <TableHead className="text-[10px] uppercase text-slate-400 font-semibold py-2 pl-3">Navio</TableHead>
-                      <TableHead className="text-[10px] uppercase text-slate-400 font-semibold py-2">Status</TableHead>
-                      <TableHead className="text-[10px] uppercase text-slate-400 font-semibold py-2 text-right pr-3">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody className="divide-y divide-slate-800">
-                    {loading ? (
-                       <TableRow>
-                         <TableCell colSpan={3} className="py-6 text-center text-slate-500">
-                           <Loader2 className="h-4 w-4 animate-spin mx-auto text-blue-500 mb-1" />
-                           <p className="text-[10px]">Carregando...</p>
-                         </TableCell>
-                       </TableRow>
-                    ) : filteredViagens.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={3} className="py-8 text-center text-slate-500">
-                          <p className="text-xs">
-                            {viagens.length === 0 ? 'Nenhum registro' : 'Nenhum resultado'}
-                          </p>
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      filteredViagens.map((viagem) => (
-                        <TableRow key={viagem.id} className="hover:bg-slate-800/30 border-slate-800">
-                          <TableCell className="py-3 pl-3">
-                            <div className="flex flex-col">
-                              <span className="text-xs font-medium text-white truncate max-w-[120px]">{viagem.nome_navio}</span>
-                              <span className="text-[10px] text-slate-500">{viagem.carga || 'Sem carga'}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="py-3">
-                            <Badge className={getStatusColor(viagem.concluido) + " text-[10px] h-5 px-2 font-medium"}>
-                              {viagem.concluido ? 'Concluído' : 'Em andamento'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="py-3 text-right pr-3 space-x-1">
-                             <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:bg-slate-700" onClick={() => navigate(`/navio/${viagem.id}/editar`)}>
-                               <Pencil className="h-3 w-3" />
-                             </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-           </div>
-
-           {/* Floating Action Button for New Ship */}
-           <div className="fixed bottom-4 right-4 lg:hidden">
-              <Button onClick={() => navigate('/novo-navio')} className="bg-blue-600 hover:bg-blue-700 text-white h-12 w-12 rounded-full shadow-lg shadow-blue-900/40 flex items-center justify-center p-0">
-                <Plus className="h-6 w-6" />
-              </Button>
-           </div>
+                  ))}
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={addProdLinha} className="h-8 text-xs">
+                      <Plus className="h-3 w-3 mr-1" /> Linha
+                    </Button>
+                    <Button size="sm" onClick={handleSaveProd} disabled={isSavingProd} className="h-8 text-xs bg-emerald-600">
+                      Salvar Prod
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </div>
       </div>
     </div>

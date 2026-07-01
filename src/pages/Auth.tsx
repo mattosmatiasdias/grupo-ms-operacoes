@@ -104,14 +104,14 @@ const Auth = () => {
 
         <div className="relative z-10">
           <h1 className="font-display text-5xl font-bold leading-tight text-white drop-shadow-md">
-            Controle total das <span className="text-orange-500">Operações</span>.
+            Controle de <span className="text-orange-500">Operações</span>.
           </h1>
           <p className="mt-4 max-w-md text-slate-300 text-lg drop-shadow-sm">
-            Visualize e exporte relatórios em um único painel — projetado por Mattos Mias
+            Visualize e exporte relatórios em um único painel — projetado por Mattos Matias
           </p>
         </div>
 
-        <p className="text-xs text-slate-500 relative z-10">© Mattos Matias Dias</p>
+        <p className="text-xs text-slate-500 relative z-10">© Contato: mattos@matiasdias.com</p>
       </div>
 
       {/* Área do formulário */}
